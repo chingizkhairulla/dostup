@@ -28,6 +28,7 @@ interface SlotCreationWizardProps {
     title?: string;
     description?: string;
     imageUrl?: string;
+    location?: string;
   }) => void;
   isPending?: boolean;
 }
@@ -60,6 +61,7 @@ export default function SlotCreationWizard({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [location, setLocation] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Reset state on open
@@ -80,15 +82,15 @@ export default function SlotCreationWizard({
       setTitle("");
       setDescription("");
       setImageUrl("");
+      setLocation("");
       setDetailsOpen(false);
     }
   }, [open]);
 
   const dict = {
     ru: {
-      step1: "Выбор времени",
-      step2: "Повторение",
-      step3: "Настройки",
+      step1: "Добавление слотов",
+      step2: "Настройки",
       showLateHours: "Показать поздние часы",
       hideLateHours: "Скрыть поздние часы",
       timeRange: "Диапазон часов",
@@ -111,6 +113,7 @@ export default function SlotCreationWizard({
       title: "Название",
       description: "Описание",
       imageUrl: "Ссылка на обложку",
+      location: "Местоположение",
       ready: "Готово",
       time: "Время",
       repeat: "Повтор",
@@ -120,9 +123,8 @@ export default function SlotCreationWizard({
       repeatSummary: "Слоты будут созданы на следующие дни:",
     },
     kk: {
-      step1: "Уақытты таңдау",
-      step2: "Қайталау",
-      step3: "Баптаулар",
+      step1: "Слоттар қосу",
+      step2: "Баптаулар",
       showLateHours: "Кешкі сағаттарды көрсету",
       hideLateHours: "Кешкі сағаттарды жасыру",
       timeRange: "Сағат аралығы",
@@ -145,6 +147,7 @@ export default function SlotCreationWizard({
       title: "Атауы",
       description: "Сипаттамасы",
       imageUrl: "Мұқаба сілтемесі",
+      location: "Орналасу жері",
       ready: "Дайын",
       time: "Уақыт",
       repeat: "Қайталау",
@@ -307,6 +310,7 @@ export default function SlotCreationWizard({
       title: title.trim() || undefined,
       description: description.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
+      location: location.trim() || undefined,
     });
   };
 
@@ -322,7 +326,7 @@ export default function SlotCreationWizard({
           {/* Step Title (left) - with padding, no left cross */}
           <div className="pl-1 sm:pl-2">
             <h2 className="text-base sm:text-lg font-semibold text-foreground">
-              {step === 1 ? t.step1 : step === 2 ? t.step2 : t.step3}
+              {step === 1 ? t.step1 : t.step2}
             </h2>
           </div>
 
@@ -393,171 +397,170 @@ export default function SlotCreationWizard({
 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto overflow-x-auto pb-28">
-          {/* STEP 1: Google Calendar Week Grid */}
+          {/* STEP 1: Grid + Summary side by side */}
           {step === 1 && (
-            <div className="min-w-[650px] max-w-5xl mx-auto p-2 sm:p-4">
-              {/* Weekly Calendar Table */}
-              <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
-                {/* Header Row: Days of the week (sticky) */}
-                <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
-                  <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-border/60 flex items-center justify-center">
-                    {t.timezone}
-                  </div>
-                  {t.weekDays.map((dayName, idx) => {
-                    const date = weekDates[idx];
-                    const isCur = isSameDay(date, new Date());
-                    const countForDay = Array.from(selectedCells).filter((id) => id.startsWith(`${idx}_`)).length;
+            <div className="flex gap-4 p-2 sm:p-4 min-w-[650px]">
+              {/* Left: Calendar grid */}
+              <div className="flex-1 min-w-0">
+                <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
+                  {/* Header Row */}
+                  <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-border/60 flex items-center justify-center">
+                      {t.timezone}
+                    </div>
+                    {t.weekDays.map((dayName, idx) => {
+                      const date = weekDates[idx];
+                      const isCur = isSameDay(date, new Date());
+                      const countForDay = Array.from(selectedCells).filter((id) => id.startsWith(`${idx}_`)).length;
 
-                    return (
-                      <div
-                        key={idx}
-                        className={cn(
-                          "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
-                          countForDay > 0 && "bg-primary/5"
-                        )}
-                      >
-                        <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
+                      return (
                         <div
+                          key={idx}
                           className={cn(
-                            "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
-                            isCur
-                              ? "bg-primary text-primary-foreground"
-                              : countForDay > 0
-                              ? "bg-primary/20 text-primary"
-                              : "text-foreground"
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            countForDay > 0 && "bg-primary/5"
                           )}
                         >
-                          {format(date, "d")}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 15-min top spacer row so 09:00 sits on its own line below the dates header */}
-                <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/10">
-                  <div className="border-r border-border/60 h-4 sm:h-5" />
-                  {Array.from({ length: 7 }).map((_, idx) => (
-                    <div key={idx} className="border-r last:border-r-0 border-border/60 h-4 sm:h-5" />
-                  ))}
-                </div>
-
-                {/* 15-min Time Grid Rows */}
-                <div className="bg-card">
-                  {displayHours.map((h) => {
-                    const hourStr = String(h).padStart(2, "0");
-                    const quarters = [0, 15, 30, 45];
-
-                    return (
-                      <div key={h} className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-                        {/* Time Label on left: positioned on the dividing line */}
-                        <div className="relative border-r border-border/60 select-none">
-                          <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
-                            {hourStr}:00
-                          </span>
-                        </div>
-
-                        {/* 7 Day Columns */}
-                        {Array.from({ length: 7 }).map((_, dayIdx) => (
-                          <div key={dayIdx} className="border-r last:border-r-0 border-border/60 flex flex-col">
-                            {quarters.map((m) => {
-                              const minuteStr = String(m).padStart(2, "0");
-                              const cellId = `${dayIdx}_${hourStr}:${minuteStr}`;
-                              const isSelected = selectedCells.has(cellId);
-
-                              return (
-                                <button
-                                  key={m}
-                                  type="button"
-                                  onMouseDown={(e) => handleCellMouseDown(cellId, e)}
-                                  onMouseEnter={() => handleCellMouseEnter(cellId)}
-                                  onTouchStart={() => toggleCell(cellId)}
-                                  className={cn(
-                                    "h-5 sm:h-6 w-full transition-colors cursor-pointer select-none",
-                                    m === 0 && "border-t border-border/70",
-                                    m === 30 && "border-t border-border/25 border-dashed",
-                                    (m === 15 || m === 45) && "border-t border-border/10",
-                                    isSelected
-                                      ? "bg-primary border-primary"
-                                      : "hover:bg-primary/20 active:bg-primary/30"
-                                  )}
-                                  title={`${t.weekDaysFull[dayIdx]} ${hourStr}:${minuteStr}`}
-                                />
-                              );
-                            })}
+                          <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
+                          <div
+                            className={cn(
+                              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
+                              isCur
+                                ? "bg-primary text-primary-foreground"
+                                : countForDay > 0
+                                ? "bg-primary/20 text-primary"
+                                : "text-foreground"
+                            )}
+                          >
+                            {format(date, "d")}
                           </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  {/* Closing line at the bottom */}
-                  <div className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-                    <div className="relative border-r border-border/60 h-3 select-none">
-                      <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
-                        {closingHourStr}
-                      </span>
-                    </div>
-                    {Array.from({ length: 7 }).map((_, dayIdx) => (
-                      <div key={dayIdx} className="border-r last:border-r-0 border-border/60 border-t border-border/70 h-3" />
+                  {/* 15-min top spacer */}
+                  <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/10">
+                    <div className="border-r border-border/60 h-2 sm:h-2.5" />
+                    {Array.from({ length: 7 }).map((_, idx) => (
+                      <div key={idx} className="border-r last:border-r-0 border-border/60 h-2 sm:h-2.5" />
                     ))}
                   </div>
+
+                  {/* 15-min Time Grid */}
+                  <div className="bg-card">
+                    {displayHours.map((h) => {
+                      const hourStr = String(h).padStart(2, "0");
+                      const quarters = [0, 15, 30, 45];
+
+                      return (
+                        <div key={h} className="grid grid-cols-[70px_repeat(7,1fr)] relative">
+                          <div className="relative border-r border-border/60 select-none">
+                            <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
+                              {hourStr}:00
+                            </span>
+                          </div>
+                          {Array.from({ length: 7 }).map((_, dayIdx) => (
+                            <div key={dayIdx} className="border-r last:border-r-0 border-border/60 flex flex-col">
+                              {quarters.map((m) => {
+                                const minuteStr = String(m).padStart(2, "0");
+                                const cellId = `${dayIdx}_${hourStr}:${minuteStr}`;
+                                const isSelected = selectedCells.has(cellId);
+
+                                return (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onMouseDown={(e) => handleCellMouseDown(cellId, e)}
+                                    onMouseEnter={() => handleCellMouseEnter(cellId)}
+                                    onTouchStart={() => toggleCell(cellId)}
+                                    className={cn(
+                                      "h-5 sm:h-6 w-full transition-colors cursor-pointer select-none",
+                                      m === 0 && "border-t border-border/70",
+                                      m === 30 && "border-t border-border/25 border-dashed",
+                                      (m === 15 || m === 45) && "border-t border-border/10",
+                                      isSelected
+                                        ? "bg-primary border-primary"
+                                        : "hover:bg-primary/20 active:bg-primary/30"
+                                    )}
+                                  />
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+
+                    {/* Closing line */}
+                    <div className="grid grid-cols-[70px_repeat(7,1fr)] relative">
+                      <div className="relative border-r border-border/60 h-3 select-none">
+                        <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
+                          {closingHourStr}
+                        </span>
+                      </div>
+                      {Array.from({ length: 7 }).map((_, dayIdx) => (
+                        <div key={dayIdx} className="border-r last:border-r-0 border-border/60 border-t border-border/70 h-3" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Late hours toggle */}
+                <div className="flex justify-center mt-3 mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLateHours(!showLateHours)}
+                    className="text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full px-4 py-1.5 border-dashed"
+                  >
+                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showLateHours && "rotate-180")} />
+                    <span>
+                      {showLateHours ? t.hideLateHours : t.showLateHours}
+                    </span>
+                  </Button>
                 </div>
               </div>
 
-              {/* Late hours toggle button centered at the bottom of all slots */}
-              <div className="flex justify-center mt-3 mb-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowLateHours(!showLateHours)}
-                  className="text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full px-4 py-1.5 border-dashed"
-                >
-                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showLateHours && "rotate-180")} />
-                  <span>
-                    {showLateHours ? t.hideLateHours : t.showLateHours}
-                  </span>
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: Repetition */}
-          {step === 2 && (
-            <div className="max-w-xl mx-auto p-4 sm:p-6 space-y-6 animate-in slide-in-from-right-4">
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">{t.repeatSummary}</Label>
-                <div className="space-y-2">
-                  {activeDays.length === 0 ? (
-                    <div className="p-4 border rounded-xl text-center text-sm text-muted-foreground">
-                      {t.noSlotsWarning}
-                    </div>
-                  ) : (
-                    activeDays.map((dayIdx) => (
-                      <div
-                        key={dayIdx}
-                        className="flex items-center justify-between p-3 rounded-xl border border-border bg-card shadow-sm"
-                      >
-                        <div className="flex items-center gap-2.5">
+              {/* Right: Summary panel */}
+              <div className="w-56 sm:w-64 flex-none">
+                <div className="sticky top-4 space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t.repeatSummary}</p>
+                  <div className="space-y-2">
+                    {activeDays.length === 0 ? (
+                      <div className="p-3 border rounded-xl text-center text-xs text-muted-foreground border-dashed">
+                        {t.noSlotsWarning}
+                      </div>
+                    ) : (
+                      activeDays.map((dayIdx) => (
+                        <div
+                          key={dayIdx}
+                          className="p-2.5 rounded-xl border border-border bg-card shadow-sm space-y-1.5"
+                        >
                           <Badge variant="outline" className="text-xs font-semibold px-2 py-0.5">
                             {t.weekDaysFull[dayIdx]}
                           </Badge>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-1">
                             {selectedIntervalsByDay[dayIdx]?.map((interval, i) => (
-                              <Badge key={i} variant="secondary" className="text-xs font-mono">
+                              <Badge key={i} variant="secondary" className="text-[10px] font-mono">
                                 {interval.start} – {interval.end}
                               </Badge>
                             ))}
                           </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Weekly repetition toggle */}
-              <div className="space-y-4 pt-4 border-t">
+          {/* STEP 2: Settings (was Step 3) */}
+          {step === 2 && (
+            <div className="max-w-xl mx-auto p-4 sm:p-6 space-y-6 animate-in slide-in-from-right-4">
+              {/* Repetition */}
+              <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-card">
                   <div>
                     <Label htmlFor="repeat-switch" className="text-sm font-semibold cursor-pointer">
@@ -610,12 +613,7 @@ export default function SlotCreationWizard({
                   </div>
                 )}
               </div>
-            </div>
-          )}
 
-          {/* STEP 3: Settings */}
-          {step === 3 && (
-            <div className="max-w-xl mx-auto p-4 sm:p-6 space-y-6 animate-in slide-in-from-right-4">
               {/* Duration */}
               <div className="space-y-3">
                 <Label className="text-sm font-semibold">{t.lessonDuration}</Label>
@@ -658,10 +656,7 @@ export default function SlotCreationWizard({
                     type="button"
                     variant={maxParticipants === 1 ? "default" : "outline"}
                     size="sm"
-                    onClick={() => {
-                      setMaxParticipants(1);
-                      setCustomMaxParticipants("");
-                    }}
+                    onClick={() => { setMaxParticipants(1); setCustomMaxParticipants(""); }}
                     className={cn(maxParticipants === 1 && "bg-primary text-primary-foreground font-semibold")}
                   >
                     1 ({t.individual})
@@ -670,10 +665,7 @@ export default function SlotCreationWizard({
                     type="button"
                     variant={maxParticipants === 5 ? "default" : "outline"}
                     size="sm"
-                    onClick={() => {
-                      setMaxParticipants(5);
-                      setCustomMaxParticipants("");
-                    }}
+                    onClick={() => { setMaxParticipants(5); setCustomMaxParticipants(""); }}
                     className={cn(maxParticipants === 5 && "bg-primary text-primary-foreground font-semibold")}
                   >
                     5 ({t.group})
@@ -682,10 +674,7 @@ export default function SlotCreationWizard({
                     type="button"
                     variant={maxParticipants === 10 ? "default" : "outline"}
                     size="sm"
-                    onClick={() => {
-                      setMaxParticipants(10);
-                      setCustomMaxParticipants("");
-                    }}
+                    onClick={() => { setMaxParticipants(10); setCustomMaxParticipants(""); }}
                     className={cn(maxParticipants === 10 && "bg-primary text-primary-foreground font-semibold")}
                   >
                     10 ({t.group})
@@ -715,9 +704,7 @@ export default function SlotCreationWizard({
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-3 pt-3">
                   <div className="space-y-1">
-                    <Label htmlFor="wiz-title" className="text-xs">
-                      {t.title}
-                    </Label>
+                    <Label htmlFor="wiz-title" className="text-xs">{t.title}</Label>
                     <Input
                       id="wiz-title"
                       value={title}
@@ -727,9 +714,7 @@ export default function SlotCreationWizard({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="wiz-desc" className="text-xs">
-                      {t.description}
-                    </Label>
+                    <Label htmlFor="wiz-desc" className="text-xs">{t.description}</Label>
                     <Input
                       id="wiz-desc"
                       value={description}
@@ -739,9 +724,17 @@ export default function SlotCreationWizard({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="wiz-img" className="text-xs">
-                      {t.imageUrl}
-                    </Label>
+                    <Label htmlFor="wiz-location" className="text-xs">{t.location}</Label>
+                    <Input
+                      id="wiz-location"
+                      value={location}
+                      placeholder={language === "ru" ? "Например: Zoom, г. Алматы, ул. Абая 1" : "Мысалы: Zoom, Алматы қ."}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="wiz-img" className="text-xs">{t.imageUrl}</Label>
                     <Input
                       id="wiz-img"
                       type="url"
@@ -757,8 +750,9 @@ export default function SlotCreationWizard({
           )}
         </div>
 
+
         {/* Bottom Navigation Bar */}
-        <div className="fixed bottom-0 left-0 right-0 px-4 sm:px-6 py-3 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
+        <div className="fixed bottom-0 left-0 right-0 px-4 sm:px-6 py-3 bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
           <div className="w-full flex items-center justify-between">
             {/* Left: Back button */}
             <div className="w-20 sm:w-24 flex items-center justify-start">
@@ -769,9 +763,9 @@ export default function SlotCreationWizard({
               )}
             </div>
 
-            {/* Center: Stepper (strictly ends at step 3) + Next button */}
+            {/* Center: 2-step Stepper + Next button */}
             <div className="flex items-center justify-center gap-2">
-              <div className="flex items-center justify-center w-52 sm:w-64">
+              <div className="flex items-center justify-center w-40 sm:w-52">
                 {/* Step 1 */}
                 <div className="flex flex-col items-center gap-0.5 flex-none">
                   <button
@@ -796,7 +790,7 @@ export default function SlotCreationWizard({
                   </span>
                 </div>
 
-                {/* Segment 1 -> 2 (strictly stops at step 2) */}
+                {/* Segment 1 -> 2 */}
                 <div className="flex-1 h-[2px] mx-2 -mt-3.5 bg-muted overflow-hidden">
                   <div className={cn("h-full bg-primary transition-all duration-300", step >= 2 ? "w-full" : "w-0")} />
                 </div>
@@ -823,44 +817,13 @@ export default function SlotCreationWizard({
                       step === 2 ? "text-primary font-bold" : "text-muted-foreground font-medium"
                     )}
                   >
-                    {t.repeat}
-                  </span>
-                </div>
-
-                {/* Segment 2 -> 3 (strictly stops at step 3) */}
-                <div className="flex-1 h-[2px] mx-2 -mt-3.5 bg-muted overflow-hidden">
-                  <div className={cn("h-full bg-primary transition-all duration-300", step >= 3 ? "w-full" : "w-0")} />
-                </div>
-
-                {/* Step 3 (END OF LINE) */}
-                <div className="flex flex-col items-center gap-0.5 flex-none">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedCells.size > 0) setStep(3);
-                    }}
-                    className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all",
-                      step >= 3
-                        ? "bg-primary text-primary-foreground ring-4 ring-background shadow-sm"
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    3
-                  </button>
-                  <span
-                    className={cn(
-                      "text-[10px] tracking-wider uppercase transition-colors select-none",
-                      step === 3 ? "text-primary font-bold" : "text-muted-foreground font-medium"
-                    )}
-                  >
                     {t.settings}
                   </span>
                 </div>
               </div>
 
-              {/* Next arrow right after Step 3 */}
-              {step < 3 ? (
+              {/* Next arrow */}
+              {step < 2 ? (
                 <Button
                   variant="outline"
                   size="icon"
@@ -875,7 +838,7 @@ export default function SlotCreationWizard({
               )}
             </div>
 
-            {/* Right: "Готово" button pinned directly to far-right corner */}
+            {/* Right: Готово button */}
             <div className="w-20 sm:w-24 flex items-center justify-end">
               <Button
                 size="sm"

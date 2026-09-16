@@ -818,6 +818,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       title?: string;
       description?: string;
       imageUrl?: string;
+      location?: string;
     }) => {
       const scheduleId = schedules[0]?.id || (await ensureScheduleId());
       const today = new Date();
@@ -878,6 +879,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                 title: params.title || null,
                 description: params.description || null,
                 image_url: params.imageUrl || null,
+                location: params.location || null,
               });
             }
 
@@ -1459,7 +1461,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-4 h-4" />
-            {language === "ru" ? "Добавить слоты" : "Слоттар қосу"}
+            {language === "ru" ? "+ Слоты" : "+ Слоттар"}
           </Button>
           <Button
             variant="outline"
@@ -1608,7 +1610,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-base flex items-center gap-2 capitalize">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Users className="w-4 h-4 text-primary" />
                 {language === "ru" ? "Записи на " : ""}{(() => {
                   const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: ru });
@@ -1761,9 +1763,12 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       <Dialog open={isDayScheduleDialogOpen} onOpenChange={setIsDayScheduleDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2 capitalize">
+            <DialogTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
-              {language === "ru" ? "Записи на " : ""}{selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: ru })}
+              {language === "ru" ? "Записи на " : ""}{selectedDate && (() => {
+                const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: ru });
+                return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
+              })()}
             </DialogTitle>
           </DialogHeader>
           <div className="pt-2">
