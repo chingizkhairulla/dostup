@@ -1466,7 +1466,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-4 h-4" />
-            {language === "ru" ? "+ Слоты" : "+ Слоттар"}
+            {language === "ru" ? "Слоты" : "Слоттар"}
           </Button>
           <Button
             variant="outline"
