@@ -33,55 +33,20 @@ interface SlotCreationWizardProps {
   isPending?: boolean;
 }
 
-// Inline-editable time span (allows any value like 16:10)
+// Time input like in time range: protects colon, changes only hours and minutes
 function EditableTime({ time, onChange }: { time: string; onChange: (t: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(time);
-
-  useEffect(() => {
-    setValue(time);
-  }, [time]);
-
-  const commit = () => {
-    setEditing(false);
-    const trimmed = value.trim();
-    if (trimmed !== time && /^\d{1,2}:\d{2}$/.test(trimmed)) {
-      const [h, m] = trimmed.split(":");
-      const formatted = `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
-      onChange(formatted);
-    } else {
-      setValue(time);
-    }
-  };
-
-  if (editing) {
-    return (
-      <input
-        type="text"
-        value={value}
-        autoFocus
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") {
-            setEditing(false);
-            setValue(time);
-          }
-        }}
-        className="w-[52px] text-xs sm:text-sm font-mono bg-background border rounded px-1 py-0.5 outline-none text-foreground text-center"
-      />
-    );
-  }
-
   return (
-    <span
-      className="cursor-pointer hover:underline hover:text-primary transition-colors px-1 py-0.5 rounded hover:bg-muted/60"
-      onClick={() => setEditing(true)}
-      title="Нажмите, чтобы изменить время"
-    >
-      {time}
-    </span>
+    <input
+      type="time"
+      value={time}
+      onChange={(e) => {
+        if (e.target.value) {
+          onChange(e.target.value);
+        }
+      }}
+      className="w-[66px] h-6 text-xs sm:text-sm font-mono bg-background/90 hover:bg-background border border-border/80 rounded px-1 py-0 outline-none text-foreground text-center cursor-pointer focus:cursor-text focus:border-primary focus:ring-1 focus:ring-primary/20 transition-colors"
+      title="Нажмите, чтобы изменить часы и минуты"
+    />
   );
 }
 
@@ -188,7 +153,7 @@ export default function SlotCreationWizard({
       cancel: "Отмена",
       confirm: "Очистить",
       noSlotsWarning: "Выберите хотя бы одну клетку",
-      repeatSummary: "Слоты будут созданы на следующие дни:",
+      repeatSummary: "Расписание:",
     },
     kk: {
       wizTitle: "Слоттар қосу",
@@ -223,7 +188,7 @@ export default function SlotCreationWizard({
       cancel: "Болдырмау",
       confirm: "Тазарту",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
-      repeatSummary: "Слоттар келесі күндерге жасалады:",
+      repeatSummary: "Кесте:",
     },
   };
   const t = dict[language];
@@ -250,11 +215,23 @@ export default function SlotCreationWizard({
     return hours;
   }, [workingHours]);
 
-  // Late hours: extended evening hours up to 01:00 (22, 23, 0) if not already included
+  // Late hours: continuous from workingHours.end up to 01:00 AM without missing any hours
   const lateHoursArr = useMemo(() => {
-    const candidates = [22, 23, 0];
-    return candidates.filter((h) => !baseHours.includes(h));
-  }, [baseHours]);
+    const e = parseInt(workingHours.end.split(":")[0], 10) || 22;
+    const targetEnd = 1; // 01:00 AM
+    if (e === targetEnd) return [];
+
+    const hours: number[] = [];
+    let cur = e;
+    while (cur !== targetEnd) {
+      if (!baseHours.includes(cur)) {
+        hours.push(cur);
+      }
+      cur = (cur + 1) % 24;
+      if (hours.length >= 24) break;
+    }
+    return hours;
+  }, [workingHours.end, baseHours]);
 
   const displayHours = useMemo(() => {
     if (showLateHours && lateHoursArr.length > 0) {
@@ -273,7 +250,6 @@ export default function SlotCreationWizard({
 
   const toggleCell = (cellId: string) => {
     const dayIdx = parseInt(cellId.split("_")[0], 10);
-    // Reset custom override for this day when user clicks on grid
     if (customDayIntervals[dayIdx]) {
       setCustomDayIntervals((prev) => {
         const copy = { ...prev };
@@ -332,12 +308,12 @@ export default function SlotCreationWizard({
     });
   };
 
-  // Group grid cells into continuous 15-min intervals
+  // Group 30-minute grid cells into continuous intervals
   const gridIntervalsByDay = useMemo(() => {
     const byDay: Record<number, { start: string; end: string }[]> = {};
-    const add15 = (time: string) => {
+    const add30 = (time: string) => {
       let [h, m] = time.split(":").map(Number);
-      m += 15;
+      m += 30;
       if (m >= 60) {
         h = (h + 1) % 24;
         m -= 60;
@@ -361,20 +337,20 @@ export default function SlotCreationWizard({
       let curEnd = dayTimes[0];
 
       for (let i = 1; i < dayTimes.length; i++) {
-        if (dayTimes[i] === add15(curEnd)) {
+        if (dayTimes[i] === add30(curEnd)) {
           curEnd = dayTimes[i];
         } else {
-          intervals.push({ start: curStart, end: add15(curEnd) });
+          intervals.push({ start: curStart, end: add30(curEnd) });
           curStart = curEnd = dayTimes[i];
         }
       }
-      intervals.push({ start: curStart, end: add15(curEnd) });
+      intervals.push({ start: curStart, end: add30(curEnd) });
       byDay[day] = intervals;
     }
     return byDay;
   }, [selectedCells]);
 
-  // Effective intervals: custom overrides take precedence so manual inputs (like 16:10) are preserved
+  // Effective intervals: manual edits take precedence
   const effectiveIntervalsByDay = useMemo(() => {
     const res: Record<number, { start: string; end: string }[]> = {};
     for (let day = 0; day < 7; day++) {
@@ -389,7 +365,7 @@ export default function SlotCreationWizard({
 
   const activeDays = useMemo(() => Object.keys(effectiveIntervalsByDay).map(Number), [effectiveIntervalsByDay]);
 
-  // Update interval time directly from manual input (preserves exact minute like 16:10)
+  // Update interval time directly from manual input
   const updateIntervalTime = (
     dayIdx: number,
     intervalIndex: number,
@@ -431,7 +407,6 @@ export default function SlotCreationWizard({
   const handleToggleLateHours = () => {
     if (showLateHours) {
       setShowLateHours(false);
-      // Smoothly scroll back to where the user was before expanding late hours
       setTimeout(() => {
         scrollContainerRef.current?.scrollTo({
           top: savedScrollTopRef.current,
@@ -444,8 +419,11 @@ export default function SlotCreationWizard({
     }
   };
 
+  // Renders a single hour row with two 30-minute cells (00 and 30)
   const renderHourRow = (h: number) => {
     const hourStr = String(h).padStart(2, "0");
+    const halfHours = [0, 30];
+
     return (
       <div key={h} className="grid grid-cols-[70px_repeat(7,1fr)] relative">
         <div className="relative border-r border-border/60 select-none">
@@ -455,7 +433,7 @@ export default function SlotCreationWizard({
         </div>
         {Array.from({ length: 7 }).map((_, dayIdx) => (
           <div key={dayIdx} className="border-r last:border-r-0 border-border/60 flex flex-col">
-            {[0, 15, 30, 45].map((m) => {
+            {halfHours.map((m) => {
               const minuteStr = String(m).padStart(2, "0");
               const cellId = `${dayIdx}_${hourStr}:${minuteStr}`;
               const isSelected = selectedCells.has(cellId);
@@ -482,7 +460,8 @@ export default function SlotCreationWizard({
     );
   };
 
-  const lateMaxHeight = lateHoursArr.length * 4 * 24 + 32;
+  // 2 cells per hour * 24px + padding
+  const lateMaxHeight = lateHoursArr.length * 2 * 24 + 32;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -526,7 +505,7 @@ export default function SlotCreationWizard({
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
-                      const hasSlots = (effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
+                      const hasSlots = Boolean(effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
                       return (
                         <div
                           key={idx}
@@ -661,13 +640,13 @@ export default function SlotCreationWizard({
                     </Popover>
                   </div>
 
-                  {/* Center: Toggle late hours */}
+                  {/* Center: Toggle late hours — clear contrast on hover */}
                   {lateHoursArr.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleToggleLateHours}
-                      className="text-xs text-muted-foreground hover:text-white hover:bg-primary hover:border-primary gap-1.5 rounded-full px-4 py-1.5 border-dashed transition-all"
+                      className="text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/40 gap-1.5 rounded-full px-4 py-1.5 border-dashed transition-all"
                     >
                       <ChevronDown
                         className={cn(
@@ -724,7 +703,7 @@ export default function SlotCreationWizard({
                 </div>
               </div>
 
-              {/* Right: Summary panel — made wider with bigger text */}
+              {/* Right: Summary panel — "Расписание:" */}
               <div className="w-72 sm:w-80 md:w-96 flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <p className="text-xs sm:text-sm font-bold text-foreground uppercase tracking-wide">
@@ -749,7 +728,7 @@ export default function SlotCreationWizard({
                               <Badge
                                 key={i}
                                 variant="secondary"
-                                className="text-xs sm:text-sm font-mono gap-0.5 px-2.5 py-1 cursor-default bg-muted hover:bg-muted/80"
+                                className="text-xs sm:text-sm font-mono gap-0.5 px-2 py-1 cursor-default bg-muted hover:bg-muted/80 items-center flex"
                               >
                                 <EditableTime
                                   time={interval.start}
@@ -757,7 +736,7 @@ export default function SlotCreationWizard({
                                     updateIntervalTime(dayIdx, i, newTime, interval.end)
                                   }
                                 />
-                                <span className="mx-1 text-muted-foreground">–</span>
+                                <span className="mx-0.5 text-muted-foreground">–</span>
                                 <EditableTime
                                   time={interval.end}
                                   onChange={(newTime) =>
