@@ -226,14 +226,14 @@ export default function SlotCreationWizard({
       oneMonth: "1 месяц",
       twoMonths: "2 месяца",
       custom: "Свой",
-      everyWeek: "Повторять каждую неделю",
+      everyWeek: "Повторять расписание",
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
       repeatUntilLabel: "Повторять до даты:",
       lessonDuration: "Длительность урока",
       min: "мин",
       participants: "Количество участников",
-      details: "Детали",
+      details: "Детали урока",
       cover: "Обложка",
       titleLabel: "Название",
       description: "Описание",
@@ -265,14 +265,14 @@ export default function SlotCreationWizard({
       oneMonth: "1 ай",
       twoMonths: "2 ай",
       custom: "Өзгерту",
-      everyWeek: "Әр апта сайын қайталау",
+      everyWeek: "Кестені қайталау",
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
       repeatUntilLabel: "Күнге дейін қайталау:",
       lessonDuration: "Сабақ ұзақтығы",
       min: "мин",
       participants: "Қатысушылар саны",
-      details: "Мәліметтер",
+      details: "Сабақ мәліметтері",
       cover: "Мұқаба",
       titleLabel: "Атауы",
       description: "Сипаттамасы",
@@ -737,12 +737,12 @@ export default function SlotCreationWizard({
 
           {/* Center on desktop: 2-step switcher strictly in center */}
           <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center pointer-events-auto">
-            <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-full border border-border/50">
+            <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-full border border-border/50">
               <button
                 type="button"
                 onClick={() => handleStepChange(1)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
+                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer",
                   step === 1
                     ? "bg-background text-foreground shadow-sm border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
@@ -750,8 +750,8 @@ export default function SlotCreationWizard({
               >
                 <span
                   className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center text-[10px]",
-                    step === 1 ? "bg-primary text-primary-foreground font-bold" : "bg-muted-foreground/20 text-muted-foreground"
+                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
+                    step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
                   )}
                 >
                   1
@@ -764,7 +764,7 @@ export default function SlotCreationWizard({
                 onClick={() => handleStepChange(2)}
                 disabled={activeDays.length === 0}
                 className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
                   step === 2
                     ? "bg-background text-foreground shadow-sm border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
@@ -772,8 +772,8 @@ export default function SlotCreationWizard({
               >
                 <span
                   className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center text-[10px]",
-                    step === 2 ? "bg-primary text-primary-foreground font-bold" : "bg-muted-foreground/20 text-muted-foreground"
+                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
+                    step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
                   )}
                 >
                   2
@@ -899,9 +899,9 @@ export default function SlotCreationWizard({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border hover:bg-muted shadow-sm"
+                          className="text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border text-foreground bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm transition-colors group"
                         >
-                          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary-foreground transition-colors" />
                           <span>{t.timeRange}</span>
                         </Button>
                       </PopoverTrigger>
@@ -1202,14 +1202,14 @@ export default function SlotCreationWizard({
                         {t.lessonDuration}
                         <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <input
                           type="number"
                           placeholder={t.custom}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
                           className={cn(
-                            "h-8 text-xs sm:text-sm font-medium w-32 sm:w-36 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-9 text-xs sm:text-sm font-medium w-1/2 text-center rounded-md border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-1 focus:ring-primary/20",
                             currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
@@ -1222,7 +1222,7 @@ export default function SlotCreationWizard({
                             }
                           }}
                         />
-                        {[50, 60, 90].map((dur) => {
+                        {[60, 90].map((dur) => {
                           const isActive = currentPanelSettings?.slotDuration === dur && !currentPanelSettings?.customDuration;
 
                           return (
@@ -1237,7 +1237,7 @@ export default function SlotCreationWizard({
                                 updateSelectedSlotsField("slotDuration", dur);
                               }}
                               className={cn(
-                                "h-8 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
+                                "h-9 flex-1 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1254,14 +1254,14 @@ export default function SlotCreationWizard({
                         {t.participants}
                         <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
                         <input
                           type="number"
                           placeholder={t.custom}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customParticipants || ""}
                           className={cn(
-                            "h-8 text-xs sm:text-sm font-medium w-20 sm:w-24 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-9 text-xs sm:text-sm font-medium w-20 sm:w-24 text-center rounded-md border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-1 focus:ring-primary/20",
                             currentPanelSettings?.customParticipants && "border-primary font-semibold text-primary"
@@ -1289,7 +1289,7 @@ export default function SlotCreationWizard({
                                 updateSelectedSlotsField("maxParticipants", count);
                               }}
                               className={cn(
-                                "h-8 px-3 text-xs sm:text-sm transition-all",
+                                "h-9 flex-1 px-2 text-xs sm:text-sm transition-all",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1300,19 +1300,19 @@ export default function SlotCreationWizard({
                       </div>
                     </div>
 
-                    {/* Lesson Details Dialog Button with gray plus */}
+                    {/* Lesson Details Dialog Button with gray pencil */}
                     <div className="pt-0.5">
                       <Button
                         type="button"
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-9 px-3.5 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
+                        className="w-full justify-between h-9 px-3.5 border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
                       >
-                        <span className="text-foreground font-medium">
+                        <span className="text-xs sm:text-sm font-semibold text-foreground">
                           {t.details}
                         </span>
-                        <Plus className="w-4 h-4 text-muted-foreground" />
+                        <Pencil className="w-4 h-4 text-muted-foreground" />
                       </Button>
                     </div>
                   </div>
@@ -1399,8 +1399,23 @@ export default function SlotCreationWizard({
                             <Label className="text-xs sm:text-sm font-semibold text-foreground">{t.repeatUntilLabel}</Label>
                             <Input
                               type="date"
+                              min={format(new Date(), "yyyy-MM-dd")}
+                              max="9999-12-31"
                               value={repeatUntil}
-                              onChange={(e) => setRepeatUntil(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) {
+                                  setRepeatUntil("");
+                                  return;
+                                }
+                                const parts = val.split("-");
+                                if (parts[0] && parts[0].length > 4) {
+                                  parts[0] = parts[0].slice(0, 4);
+                                  setRepeatUntil(parts.join("-"));
+                                } else {
+                                  setRepeatUntil(val);
+                                }
+                              }}
                               className="h-9 text-xs sm:text-sm bg-background rounded-lg"
                             />
                           </div>
@@ -1568,27 +1583,43 @@ export default function SlotCreationWizard({
 
         {/* Mobile bottom bar for step switching */}
         <div className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center gap-2 bg-muted/70 p-1 rounded-full border border-border/50">
+          <div className="flex items-center gap-2 bg-muted/70 p-1.5 rounded-full border border-border/50">
             <button
               type="button"
               onClick={() => handleStepChange(1)}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all",
+                "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all",
                 step === 1 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              <span>1. {t.step1}</span>
+              <span
+                className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
+                  step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
+                )}
+              >
+                1
+              </span>
+              <span>{t.step1}</span>
             </button>
             <button
               type="button"
               onClick={() => handleStepChange(2)}
               disabled={activeDays.length === 0}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-40",
+                "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all disabled:opacity-40",
                 step === 2 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
               )}
             >
-              <span>2. {t.step2}</span>
+              <span
+                className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
+                  step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
+                )}
+              >
+                2
+              </span>
+              <span>{t.step2}</span>
             </button>
           </div>
         </div>
