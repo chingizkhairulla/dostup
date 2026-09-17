@@ -7,15 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, X, Trash2, Check } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 
 interface SlotSettings {
-  slotDuration: number;
+  slotDuration?: number;
   customDuration?: string;
-  maxParticipants: number;
+  maxParticipants?: number;
   customParticipants?: string;
   title: string;
   description: string;
@@ -157,12 +157,12 @@ export default function SlotCreationWizard({
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
       repeatUntilLabel: "Повторять до даты:",
-      lessonDuration: "Длительность одного урока",
+      lessonDuration: "Длительность урока",
       min: "мин",
-      participants: "Количество участников в слоте",
+      participants: "Количество участников",
       individual: "Индивидуально",
       group: "Группа",
-      details: "Детали урока (необязательно)",
+      details: "Детали урока",
       titleLabel: "Название",
       description: "Описание",
       imageUrl: "Ссылка на обложку",
@@ -176,8 +176,6 @@ export default function SlotCreationWizard({
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
-      configureSelected: "Настройки для выбранных слотов",
-      selectSlotPrompt: "Нажмите на группу слотов слева, чтобы настроить её",
     },
     kk: {
       wizTitle: "Слоттар қосу",
@@ -200,12 +198,12 @@ export default function SlotCreationWizard({
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
       repeatUntilLabel: "Күнге дейін қайталау:",
-      lessonDuration: "Бір сабақтың ұзақтығы",
+      lessonDuration: "Сабақ ұзақтығы",
       min: "мин",
-      participants: "Слоттағы қатысушылар саны",
+      participants: "Қатысушылар саны",
       individual: "Жеке",
       group: "Топ",
-      details: "Сабақ туралы мәлімет (міндетті емес)",
+      details: "Сабақ туралы мәлімет",
       titleLabel: "Атауы",
       description: "Сипаттамасы",
       imageUrl: "Мұқаба сілтемесі",
@@ -219,8 +217,6 @@ export default function SlotCreationWizard({
       repeatSummary: "Кесте:",
       selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
-      configureSelected: "Таңдалған слоттардың баптаулары",
-      selectSlotPrompt: "Баптау үшін сол жақтағы слоттарды басыңыз",
     },
   };
   const t = dict[language];
@@ -230,7 +226,7 @@ export default function SlotCreationWizard({
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
   }, []);
 
-  // Compute base hours between start and end (handles rollover like 09:00 -> 01:00)
+  // Compute base hours between start and end
   const baseHours = useMemo(() => {
     const s = parseInt(workingHours.start.split(":")[0], 10) || 9;
     const e = parseInt(workingHours.end.split(":")[0], 10) || 21;
@@ -382,7 +378,7 @@ export default function SlotCreationWizard({
     return byDay;
   }, [selectedCells]);
 
-  // Effective intervals: manual edits take precedence
+  // Effective intervals
   const effectiveIntervalsByDay = useMemo(() => {
     const res: Record<number, { start: string; end: string }[]> = {};
     for (let day = 0; day < 7; day++) {
@@ -408,8 +404,8 @@ export default function SlotCreationWizard({
     return keys;
   }, [activeDays, effectiveIntervalsByDay]);
 
-  // Default settings helper for any slot key
-  const getDefaultSettings = (): SlotSettings => ({
+  // Default initial settings for when a slot is first clicked
+  const createDefaultSlotSettings = (): SlotSettings => ({
     slotDuration: 60,
     maxParticipants: 1,
     title: "",
@@ -418,13 +414,10 @@ export default function SlotCreationWizard({
     location: "",
   });
 
-  // When switching to step 2, initialize repeatDays and auto-select all slots if none selected
+  // When switching to step 2: by default nothing is selected!
   const handleStepChange = (newStep: 1 | 2) => {
     if (newStep === 2) {
       if (activeDays.length === 0) return;
-      if (selectedSlotKeys.size === 0) {
-        setSelectedSlotKeys(new Set(allSlotKeys));
-      }
       setRepeatDays(activeDays);
     }
     setStep(newStep);
@@ -450,8 +443,20 @@ export default function SlotCreationWizard({
     }));
   };
 
+  // Helper to ensure slot settings exist with 60 min & 1 person default when chosen
+  const ensureSlotInitialized = (key: string, currentMap: Record<string, SlotSettings>) => {
+    if (!currentMap[key]) {
+      return {
+        ...currentMap,
+        [key]: createDefaultSlotSettings(),
+      };
+    }
+    return currentMap;
+  };
+
   // Toggle selection of a specific slot key in Step 2
   const toggleSlotSelection = (key: string) => {
+    setSlotSettingsMap((prev) => ensureSlotInitialized(key, prev));
     setSelectedSlotKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -467,6 +472,14 @@ export default function SlotCreationWizard({
     );
     const allSelected = dayKeys.every((k) => selectedSlotKeys.has(k));
 
+    setSlotSettingsMap((prev) => {
+      let map = { ...prev };
+      dayKeys.forEach((k) => {
+        map = ensureSlotInitialized(k, map);
+      });
+      return map;
+    });
+
     setSelectedSlotKeys((prev) => {
       const next = new Set(prev);
       if (allSelected) {
@@ -476,6 +489,18 @@ export default function SlotCreationWizard({
       }
       return next;
     });
+  };
+
+  // Select all slots across all days
+  const handleSelectAllSlots = () => {
+    setSlotSettingsMap((prev) => {
+      let map = { ...prev };
+      allSlotKeys.forEach((k) => {
+        map = ensureSlotInitialized(k, map);
+      });
+      return map;
+    });
+    setSelectedSlotKeys(new Set(allSlotKeys));
   };
 
   // Check if a day has all its slots selected
@@ -491,10 +516,11 @@ export default function SlotCreationWizard({
     field: K,
     value: SlotSettings[K]
   ) => {
+    if (selectedSlotKeys.size === 0) return;
     setSlotSettingsMap((prev) => {
       const copy = { ...prev };
       selectedSlotKeys.forEach((key) => {
-        const current = copy[key] || getDefaultSettings();
+        const current = copy[key] || createDefaultSlotSettings();
         copy[key] = {
           ...current,
           [field]: value,
@@ -504,11 +530,11 @@ export default function SlotCreationWizard({
     });
   };
 
-  // Values displayed in settings panel (shows first selected slot's value or default)
-  const currentPanelSettings = useMemo((): SlotSettings => {
+  // Current values to show in right panel: if nothing selected, empty!
+  const currentPanelSettings = useMemo((): SlotSettings | null => {
+    if (selectedSlotKeys.size === 0) return null;
     const firstKey = Array.from(selectedSlotKeys)[0];
-    if (!firstKey) return getDefaultSettings();
-    return slotSettingsMap[firstKey] || getDefaultSettings();
+    return slotSettingsMap[firstKey] || createDefaultSlotSettings();
   }, [selectedSlotKeys, slotSettingsMap]);
 
   const handleReady = () => {
@@ -533,12 +559,12 @@ export default function SlotCreationWizard({
       const intervals = effectiveIntervalsByDay[dayIdx] || [];
       daySlotsPayload[dayIdx] = intervals.map((interval) => {
         const key = `${dayIdx}_${interval.start}_${interval.end}`;
-        const settings = slotSettingsMap[key] || getDefaultSettings();
+        const settings = slotSettingsMap[key] || createDefaultSlotSettings();
         return {
           start: interval.start,
           end: interval.end,
-          slotDuration: settings.slotDuration,
-          maxParticipants: settings.maxParticipants,
+          slotDuration: settings.slotDuration || 60,
+          maxParticipants: settings.maxParticipants || 1,
           title: settings.title.trim() || undefined,
           description: settings.description.trim() || undefined,
           imageUrl: settings.imageUrl.trim() || undefined,
@@ -548,7 +574,6 @@ export default function SlotCreationWizard({
     });
 
     const allIntervals = Object.values(effectiveIntervalsByDay).flat();
-    const fallbackSettings = currentPanelSettings;
 
     onCreateSlots({
       daySlots: daySlotsPayload,
@@ -557,12 +582,12 @@ export default function SlotCreationWizard({
       repeatWeekly,
       repeatPeriod: repeatWeekly ? repeatPeriod : null,
       repeatUntil: repeatWeekly && repeatPeriod === "custom" ? repeatUntil : null,
-      slotDuration: fallbackSettings.slotDuration,
-      maxParticipants: fallbackSettings.maxParticipants,
-      title: fallbackSettings.title.trim() || undefined,
-      description: fallbackSettings.description.trim() || undefined,
-      imageUrl: fallbackSettings.imageUrl.trim() || undefined,
-      location: fallbackSettings.location.trim() || undefined,
+      slotDuration: currentPanelSettings?.slotDuration || 60,
+      maxParticipants: currentPanelSettings?.maxParticipants || 1,
+      title: currentPanelSettings?.title.trim() || undefined,
+      description: currentPanelSettings?.description.trim() || undefined,
+      imageUrl: currentPanelSettings?.imageUrl.trim() || undefined,
+      location: currentPanelSettings?.location.trim() || undefined,
     });
   };
 
@@ -634,7 +659,7 @@ export default function SlotCreationWizard({
           <DialogTitle>Slot Creation Wizard</DialogTitle>
         </VisuallyHidden>
 
-        {/* Top Header: Title (left) | Step Switcher (center on desktop) | Ready & Close (right) */}
+        {/* Top Header: Title (left) | Step Switcher (center on desktop) | Ready (far right, no cross) */}
         <header className="flex-none flex items-center justify-between px-4 sm:px-6 py-3 border-b bg-card gap-2">
           {/* Left: Wizard title */}
           <div className="flex items-center gap-3">
@@ -643,14 +668,14 @@ export default function SlotCreationWizard({
             </h2>
           </div>
 
-          {/* Center on desktop: 2-step stepper by direct click */}
+          {/* Center on desktop: 2-step switcher by direct click */}
           <div className="hidden sm:flex items-center justify-center">
             <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-full border border-border/50">
               <button
                 type="button"
                 onClick={() => handleStepChange(1)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
+                  "flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
                   step === 1
                     ? "bg-background text-foreground shadow-sm border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
@@ -672,7 +697,7 @@ export default function SlotCreationWizard({
                 onClick={() => handleStepChange(2)}
                 disabled={activeDays.length === 0}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+                  "flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
                   step === 2
                     ? "bg-background text-foreground shadow-sm border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
@@ -691,59 +716,21 @@ export default function SlotCreationWizard({
             </div>
           </div>
 
-          {/* Right: "Готово" button and close icon */}
-          <div className="flex items-center gap-2">
+          {/* Right: "Готово" button pinned strictly to the far right corner */}
+          <div className="flex items-center justify-end">
             <Button
               size="sm"
-              className="h-8 sm:h-9 px-4 text-xs sm:text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+              className="h-8 sm:h-9 px-4 sm:px-5 text-xs sm:text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
               onClick={handleReady}
               disabled={isPending || activeDays.length === 0}
             >
               {isPending ? "..." : t.ready}
             </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="Закрыть"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </header>
 
-        {/* Mobile step switcher bar */}
-        <div className="flex sm:hidden items-center justify-center py-2 px-4 border-b bg-card/60">
-          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-full border border-border/50">
-            <button
-              type="button"
-              onClick={() => handleStepChange(1)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all",
-                step === 1 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-              )}
-            >
-              <span>1. {t.step1}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleStepChange(2)}
-              disabled={activeDays.length === 0}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all disabled:opacity-40",
-                step === 2 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-              )}
-            >
-              <span>2. {t.step2}</span>
-            </button>
-          </div>
-        </div>
-
         {/* Scrollable Area */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-auto pb-12">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-auto pb-20 sm:pb-8">
           {/* STEP 1: Time Selection */}
           {step === 1 && (
             <div className="flex gap-5 p-2 sm:p-4 min-w-[750px]">
@@ -958,23 +945,13 @@ export default function SlotCreationWizard({
                 </div>
               </div>
 
-              {/* Right: Summary panel — "Расписание:" (lowercase, no uppercase) */}
+              {/* Right: Summary panel — "Расписание:" */}
               <div className="w-72 sm:w-80 md:w-96 flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-foreground">
                       {t.repeatSummary}
                     </p>
-                    {activeDays.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleStepChange(2)}
-                        className="text-xs text-primary hover:text-primary hover:bg-primary/10 h-7 px-2.5"
-                      >
-                        {t.step2} →
-                      </Button>
-                    )}
                   </div>
                   <div className="space-y-2.5">
                     {activeDays.length === 0 ? (
@@ -1024,40 +1001,14 @@ export default function SlotCreationWizard({
 
           {/* STEP 2: Configure Slot Groups */}
           {step === 2 && (
-            <div className="max-w-5xl mx-auto p-4 sm:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-6 items-start">
-                {/* Left: Day & Slot Groups List with circles and orange selection */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-2 pb-1 border-b">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {t.repeatSummary}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {t.selectSlotPrompt}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedSlotKeys(new Set(allSlotKeys))}
-                        className="text-xs h-7 px-2.5 text-muted-foreground hover:text-foreground"
-                      >
-                        {t.selectAll}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedSlotKeys(new Set())}
-                        className="text-xs h-7 px-2.5 text-muted-foreground hover:text-foreground"
-                      >
-                        {t.unselectAll}
-                      </Button>
-                    </div>
+            <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 items-start">
+                {/* Left: Day & Slot Groups List */}
+                <div className="space-y-3.5">
+                  <div className="pb-1 border-b">
+                    <h3 className="text-base font-semibold text-foreground">
+                      {t.repeatSummary}
+                    </h3>
                   </div>
 
                   <div className="space-y-3">
@@ -1090,12 +1041,12 @@ export default function SlotCreationWizard({
                                 {isFullDay && <Check className="w-3 h-3 stroke-[3]" />}
                               </div>
 
-                              <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <span className="text-sm sm:text-base font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {t.weekDaysFull[dayIdx]}
                               </span>
                             </div>
 
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground font-mono">
                               {dayKeys.filter((k) => selectedSlotKeys.has(k)).length} / {dayKeys.length}
                             </span>
                           </div>
@@ -1105,7 +1056,7 @@ export default function SlotCreationWizard({
                             {effectiveIntervalsByDay[dayIdx]?.map((interval) => {
                               const key = `${dayIdx}_${interval.start}_${interval.end}`;
                               const isSelected = selectedSlotKeys.has(key);
-                              const settings = slotSettingsMap[key] || getDefaultSettings();
+                              const settings = slotSettingsMap[key];
 
                               return (
                                 <button
@@ -1113,7 +1064,7 @@ export default function SlotCreationWizard({
                                   type="button"
                                   onClick={() => toggleSlotSelection(key)}
                                   className={cn(
-                                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all border cursor-pointer select-none text-left",
+                                    "flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-mono transition-all border cursor-pointer select-none text-left",
                                     isSelected
                                       ? "bg-primary text-primary-foreground border-primary font-semibold shadow-sm ring-2 ring-primary/20 scale-[1.02]"
                                       : "bg-muted/60 text-foreground border-border/80 hover:bg-muted hover:border-border"
@@ -1122,7 +1073,7 @@ export default function SlotCreationWizard({
                                   {/* Small circle indicator */}
                                   <span
                                     className={cn(
-                                      "w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-none",
+                                      "w-4 h-4 rounded-full border flex items-center justify-center flex-none",
                                       isSelected
                                         ? "border-primary-foreground bg-primary-foreground text-primary"
                                         : "border-muted-foreground/50 bg-background"
@@ -1135,17 +1086,19 @@ export default function SlotCreationWizard({
                                     {interval.start} – {interval.end}
                                   </span>
 
-                                  {/* Mini badge showing duration and participants */}
-                                  <span
-                                    className={cn(
-                                      "text-[10px] px-1.5 py-0.5 rounded font-sans",
-                                      isSelected
-                                        ? "bg-primary-foreground/20 text-primary-foreground"
-                                        : "bg-background text-muted-foreground border border-border/40"
-                                    )}
-                                  >
-                                    {settings.slotDuration} {t.min} • {settings.maxParticipants} чел
-                                  </span>
+                                  {/* Mini badge showing settings if configured */}
+                                  {settings?.slotDuration && (
+                                    <span
+                                      className={cn(
+                                        "text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-sans",
+                                        isSelected
+                                          ? "bg-primary-foreground/20 text-primary-foreground"
+                                          : "bg-background text-muted-foreground border border-border/40"
+                                      )}
+                                    >
+                                      {settings.slotDuration} {t.min} • {settings.maxParticipants || 1} чел
+                                    </span>
+                                  )}
                                 </button>
                               );
                             })}
@@ -1154,46 +1107,77 @@ export default function SlotCreationWizard({
                       );
                     })}
                   </div>
+
+                  {/* Buttons under schedule: Select all (left) | Deselect (right) */}
+                  <div className="flex items-center justify-end gap-2.5 pt-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSelectAllSlots}
+                      className="text-xs sm:text-sm h-8 px-3.5 bg-primary text-white hover:bg-primary/90 shadow-sm font-medium"
+                    >
+                      {t.selectAll}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedSlotKeys(new Set())}
+                      className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium"
+                    >
+                      {t.unselectAll}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Right: Settings panel for selected slot groups */}
-                <div className="sticky top-4 space-y-5 bg-card border border-border p-4 sm:p-5 rounded-2xl shadow-sm">
-                  {/* Selected count banner */}
-                  <div className="flex items-center justify-between pb-3 border-b">
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">
-                        {t.configureSelected}
-                      </h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Выбрано: {selectedSlotKeys.size} из {allSlotKeys.length}
-                      </p>
-                    </div>
-                  </div>
-
+                <div className="sticky top-4 space-y-6 bg-card border border-border p-5 rounded-2xl shadow-sm">
                   {/* Duration */}
-                  <div className="space-y-2.5">
-                    <Label className="text-xs font-semibold text-foreground">{t.lessonDuration}</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[15, 30, 45, 50, 60, 90].map((dur) => (
-                        <Button
-                          key={dur}
-                          type="button"
-                          variant={currentPanelSettings.slotDuration === dur ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => updateSelectedSlotsField("slotDuration", dur)}
-                          className={cn(
-                            "h-7 px-2.5 text-xs",
-                            currentPanelSettings.slotDuration === dur && "bg-primary text-primary-foreground font-semibold"
-                          )}
-                        >
-                          {dur} {t.min}
-                        </Button>
-                      ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-foreground">
+                        {t.lessonDuration}
+                      </Label>
+                      {selectedSlotKeys.size > 0 && currentPanelSettings?.slotDuration === 60 && (
+                        <span className="text-primary text-xs font-bold flex items-center gap-1">
+                          ★ по умолчанию
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[15, 30, 45, 50, 60, 90].map((dur) => {
+                        const isActive = currentPanelSettings?.slotDuration === dur;
+                        const isDefault = dur === 60;
+
+                        return (
+                          <Button
+                            key={dur}
+                            type="button"
+                            disabled={selectedSlotKeys.size === 0}
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => updateSelectedSlotsField("slotDuration", dur)}
+                            className={cn(
+                              "h-8 px-3 text-xs sm:text-sm transition-all",
+                              isActive && "bg-primary text-primary-foreground font-semibold shadow-sm",
+                              !isActive && isDefault && selectedSlotKeys.size > 0 && "border-primary/40 text-primary"
+                            )}
+                          >
+                            <span>{dur} {t.min}</span>
+                            {isDefault && (
+                              <span className={cn("ml-1 font-bold", isActive ? "text-primary-foreground" : "text-primary")}>
+                                ★
+                              </span>
+                            )}
+                          </Button>
+                        );
+                      })}
                       <Input
                         type="number"
                         placeholder={t.custom}
-                        value={currentPanelSettings.customDuration || ""}
-                        className="h-7 text-xs max-w-[75px]"
+                        disabled={selectedSlotKeys.size === 0}
+                        value={currentPanelSettings?.customDuration || ""}
+                        className="h-8 text-xs sm:text-sm max-w-[80px]"
                         onChange={(e) => {
                           const val = e.target.value;
                           updateSelectedSlotsField("customDuration", val);
@@ -1206,33 +1190,55 @@ export default function SlotCreationWizard({
                   </div>
 
                   {/* Participants */}
-                  <div className="space-y-2.5">
-                    <Label className="text-xs font-semibold text-foreground">{t.participants}</Label>
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-foreground">
+                        {t.participants}
+                      </Label>
+                      {selectedSlotKeys.size > 0 && currentPanelSettings?.maxParticipants === 1 && (
+                        <span className="text-primary text-xs font-bold flex items-center gap-1">
+                          ★ по умолчанию
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       {[
                         { v: 1, label: `1 (${t.individual})` },
                         { v: 5, label: `5 (${t.group})` },
                         { v: 10, label: `10 (${t.group})` },
-                      ].map(({ v, label }) => (
-                        <Button
-                          key={v}
-                          type="button"
-                          variant={currentPanelSettings.maxParticipants === v ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => updateSelectedSlotsField("maxParticipants", v)}
-                          className={cn(
-                            "h-7 px-2.5 text-xs",
-                            currentPanelSettings.maxParticipants === v && "bg-primary text-primary-foreground font-semibold"
-                          )}
-                        >
-                          {label}
-                        </Button>
-                      ))}
+                      ].map(({ v, label }) => {
+                        const isActive = currentPanelSettings?.maxParticipants === v;
+                        const isDefault = v === 1;
+
+                        return (
+                          <Button
+                            key={v}
+                            type="button"
+                            disabled={selectedSlotKeys.size === 0}
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => updateSelectedSlotsField("maxParticipants", v)}
+                            className={cn(
+                              "h-8 px-3 text-xs sm:text-sm transition-all",
+                              isActive && "bg-primary text-primary-foreground font-semibold shadow-sm",
+                              !isActive && isDefault && selectedSlotKeys.size > 0 && "border-primary/40 text-primary"
+                            )}
+                          >
+                            <span>{label}</span>
+                            {isDefault && (
+                              <span className={cn("ml-1 font-bold", isActive ? "text-primary-foreground" : "text-primary")}>
+                                ★
+                              </span>
+                            )}
+                          </Button>
+                        );
+                      })}
                       <Input
                         type="number"
                         placeholder={t.custom}
-                        value={currentPanelSettings.customParticipants || ""}
-                        className="h-7 text-xs max-w-[75px]"
+                        disabled={selectedSlotKeys.size === 0}
+                        value={currentPanelSettings?.customParticipants || ""}
+                        className="h-8 text-xs sm:text-sm max-w-[80px]"
                         onChange={(e) => {
                           const val = e.target.value;
                           updateSelectedSlotsField("customParticipants", val);
@@ -1244,158 +1250,189 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
 
-                  {/* Optional Details Collapsible */}
+                  {/* Details Collapsible */}
                   <Collapsible
                     open={detailsOpen}
                     onOpenChange={setDetailsOpen}
-                    className="border rounded-xl p-3 bg-muted/20"
+                    className="border rounded-xl p-3.5 bg-muted/20"
                   >
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
-                        <span className="text-xs font-semibold text-foreground">{t.details}</span>
+                        <span className="text-sm font-semibold text-foreground">{t.details}</span>
                         <ChevronDown className={cn("w-4 h-4 transition-transform", detailsOpen && "rotate-180")} />
                       </Button>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2.5 pt-3">
+                    <CollapsibleContent className="space-y-3 pt-3">
                       <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">{t.titleLabel}</Label>
+                        <Label className="text-xs text-muted-foreground">{t.titleLabel}</Label>
                         <Input
-                          value={currentPanelSettings.title}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.title || ""}
                           placeholder={language === "ru" ? "Например: Английский для начинающих" : "Сабақ атауы"}
                           onChange={(e) => updateSelectedSlotsField("title", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-9 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">{t.description}</Label>
+                        <Label className="text-xs text-muted-foreground">{t.description}</Label>
                         <Input
-                          value={currentPanelSettings.description}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.description || ""}
                           placeholder={language === "ru" ? "Краткое описание урока..." : "Сабақ сипаттамасы..."}
                           onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-9 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">{t.location}</Label>
+                        <Label className="text-xs text-muted-foreground">{t.location}</Label>
                         <Input
-                          value={currentPanelSettings.location}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.location || ""}
                           placeholder={language === "ru" ? "Например: Zoom, ул. Абая 1" : "Мысалы: Zoom"}
                           onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-9 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[11px] text-muted-foreground">{t.imageUrl}</Label>
+                        <Label className="text-xs text-muted-foreground">{t.imageUrl}</Label>
                         <Input
                           type="url"
-                          value={currentPanelSettings.imageUrl}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.imageUrl || ""}
                           placeholder="https://..."
                           onChange={(e) => updateSelectedSlotsField("imageUrl", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-9 text-sm"
                         />
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
+                </div>
+              </div>
 
-                  {/* SEPARATE REPETITION SECTION AT THE BOTTOM */}
-                  <div className="pt-4 border-t space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="repeat-switch" className="text-xs font-semibold cursor-pointer text-foreground">
-                          {t.everyWeek}
-                        </Label>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {language === "ru" ? "Повторять расписание на период" : "Кестені мерзімге қайталау"}
-                        </p>
+              {/* SEPARATE REPETITION CARD BELOW (NOT INSIDE SETTINGS CARD) */}
+              <div className="p-5 rounded-2xl border border-border bg-card shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="repeat-switch" className="text-sm font-semibold cursor-pointer text-foreground">
+                      {t.everyWeek}
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {language === "ru" ? "Повторять расписание на выбранный период" : "Кестені мерзімге қайталау"}
+                    </p>
+                  </div>
+                  <Switch
+                    id="repeat-switch"
+                    checked={repeatWeekly}
+                    onCheckedChange={setRepeatWeekly}
+                  />
+                </div>
+
+                {repeatWeekly && (
+                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 animate-in fade-in zoom-in-95">
+                    {/* Day circles */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-foreground">
+                        {t.repeatDaysLabel}
+                      </Label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {dict[language].weekDays.map((dayName, idx) => {
+                          const isDaySelected = repeatDays.includes(idx);
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setRepeatDays((prev) =>
+                                  prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
+                                );
+                              }}
+                              className={cn(
+                                "w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all cursor-pointer",
+                                isDaySelected
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
+                              )}
+                            >
+                              {dayName}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <Switch
-                        id="repeat-switch"
-                        checked={repeatWeekly}
-                        onCheckedChange={setRepeatWeekly}
-                      />
                     </div>
 
-                    {repeatWeekly && (
-                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
-                        {/* Day circles (Пн, Вт, Ср, etc.) */}
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] font-semibold text-foreground">
-                            {t.repeatDaysLabel}
-                          </Label>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {dict[language].weekDays.map((dayName, idx) => {
-                              const isDaySelected = repeatDays.includes(idx);
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => {
-                                    setRepeatDays((prev) =>
-                                      prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
-                                    );
-                                  }}
-                                  className={cn(
-                                    "w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center transition-all cursor-pointer",
-                                    isDaySelected
-                                      ? "bg-primary text-primary-foreground shadow-sm"
-                                      : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
-                                  )}
-                                >
-                                  {dayName}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                    {/* Repeat period buttons */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold text-foreground">
+                        {t.repeatPeriodLabel}
+                      </Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
+                          <Button
+                            key={period}
+                            type="button"
+                            variant={repeatPeriod === period ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setRepeatPeriod(period)}
+                            className={cn(
+                              "h-8 text-xs sm:text-sm",
+                              repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
+                            )}
+                          >
+                            {period === "2weeks"
+                              ? t.twoWeeks
+                              : period === "1month"
+                              ? t.oneMonth
+                              : period === "2months"
+                              ? t.twoMonths
+                              : t.custom}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
 
-                        {/* Repeat period buttons */}
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] font-semibold text-foreground">
-                            {t.repeatPeriodLabel}
-                          </Label>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
-                              <Button
-                                key={period}
-                                type="button"
-                                variant={repeatPeriod === period ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setRepeatPeriod(period)}
-                                className={cn(
-                                  "h-7 text-xs",
-                                  repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
-                                )}
-                              >
-                                {period === "2weeks"
-                                  ? t.twoWeeks
-                                  : period === "1month"
-                                  ? t.oneMonth
-                                  : period === "2months"
-                                  ? t.twoMonths
-                                  : t.custom}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {repeatPeriod === "custom" && (
-                          <div className="space-y-1 pt-1">
-                            <Label className="text-[11px] text-muted-foreground">{t.repeatUntilLabel}</Label>
-                            <Input
-                              type="date"
-                              value={repeatUntil}
-                              onChange={(e) => setRepeatUntil(e.target.value)}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
-                        )}
+                    {repeatPeriod === "custom" && (
+                      <div className="space-y-1.5 pt-1 max-w-xs">
+                        <Label className="text-xs text-muted-foreground">{t.repeatUntilLabel}</Label>
+                        <Input
+                          type="date"
+                          value={repeatUntil}
+                          onChange={(e) => setRepeatUntil(e.target.value)}
+                          className="h-9 text-sm bg-background"
+                        />
                       </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
+        </div>
+
+        {/* Mobile bottom bar for step switching */}
+        <div className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <div className="flex items-center gap-2 bg-muted/70 p-1 rounded-full border border-border/50">
+            <button
+              type="button"
+              onClick={() => handleStepChange(1)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all",
+                step === 1 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <span>1. {t.step1}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStepChange(2)}
+              disabled={activeDays.length === 0}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-40",
+                step === 2 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <span>2. {t.step2}</span>
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
