@@ -853,23 +853,27 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           : [];
 
         for (const interval of intervalsForDay) {
-          const duration = (interval as any).slotDuration || params.slotDuration;
-          const maxPart = (interval as any).maxParticipants || params.maxParticipants;
+          const duration = (interval as any).slotDuration || params.slotDuration || 60;
+          const maxPart = (interval as any).maxParticipants || params.maxParticipants || 1;
           const slotTitle = (interval as any).title ?? params.title;
           const slotDesc = (interval as any).description ?? params.description;
           const slotImg = (interval as any).imageUrl ?? params.imageUrl;
           const slotLoc = (interval as any).location ?? params.location;
 
-          let [startH, startM] = interval.start.split(":").map(Number);
+          const [startH, startM] = interval.start.split(":").map(Number);
           const [endH, endM] = interval.end.split(":").map(Number);
           const endMinutes = endH * 60 + endM;
 
-          while (true) {
-            const currentMinutes = startH * 60 + startM;
-            const slotEndMinutes = currentMinutes + duration;
-            if (slotEndMinutes > endMinutes) break;
+          let currentMinutes = startH * 60 + startM;
+          while (currentMinutes < endMinutes) {
+            const remaining = endMinutes - currentMinutes;
+            const currentSlotDur = remaining >= duration ? duration : remaining;
+            const slotEndMinutes = currentMinutes + currentSlotDur;
 
-            const slotStart = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}:00`;
+            const slotStartH = Math.floor(currentMinutes / 60) % 24;
+            const slotStartM = currentMinutes % 60;
+            const slotStart = `${String(slotStartH).padStart(2, "0")}:${String(slotStartM).padStart(2, "0")}:00`;
+
             const slotEndH = Math.floor(slotEndMinutes / 60) % 24;
             const slotEndM = slotEndMinutes % 60;
             const slotEnd = `${String(slotEndH).padStart(2, "0")}:${String(slotEndM).padStart(2, "0")}:00`;
@@ -890,8 +894,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
               });
             }
 
-            startH = Math.floor(slotEndMinutes / 60);
-            startM = slotEndMinutes % 60;
+            currentMinutes = slotEndMinutes;
           }
         }
 
@@ -1788,6 +1791,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         open={isWizardOpen}
         onOpenChange={setIsWizardOpen}
         language={language as "ru" | "kk"}
+        existingSlots={timeSlots}
         onCreateSlots={(params) => createWizardSlots.mutate(params)}
         isPending={createWizardSlots.isPending}
       />

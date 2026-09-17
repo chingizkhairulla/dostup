@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import CoverCropEditor from "@/components/creator/CoverCropEditor";
+import { useCoverCrop } from "@/hooks/useCoverCrop";
 
 const ReqStar = () => (
   <span className="text-primary font-bold ml-1 text-sm sm:text-base inline-block -translate-y-0.5 select-none leading-none" aria-hidden="true">
@@ -33,6 +35,17 @@ interface SlotCreationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   language: "ru" | "kk";
+  existingSlots?: {
+    date: string;
+    start_time: string;
+    end_time: string;
+    slot_duration?: number;
+    max_participants?: number;
+    title?: string | null;
+    description?: string | null;
+    image_url?: string | null;
+    location?: string | null;
+  }[];
   onCreateSlots: (params: {
     daySlots?: Record<
       number,
@@ -83,6 +96,7 @@ export default function SlotCreationWizard({
   open,
   onOpenChange,
   language,
+  existingSlots,
   onCreateSlots,
   isPending,
 }: SlotCreationWizardProps) {
@@ -94,6 +108,10 @@ export default function SlotCreationWizard({
   const [isRangeOpen, setIsRangeOpen] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
 
+  // Cover cropper
+  const coverCrop = useCoverCrop();
+  const [cropSaving, setCropSaving] = useState(false);
+
   // Custom manual time edits in Step 1
   const [customDayIntervals, setCustomDayIntervals] = useState<Record<number, { start: string; end: string }[]>>({});
 
@@ -103,10 +121,10 @@ export default function SlotCreationWizard({
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  // Step 2: Global repetition settings (enabled by default for 1 month)
+  // Step 2: Global repetition settings (default: 2 weeks)
   const [repeatWeekly, setRepeatWeekly] = useState(true);
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
-  const [repeatPeriod, setRepeatPeriod] = useState<"2weeks" | "1month" | "2months" | "custom" | null>("1month");
+  const [repeatPeriod, setRepeatPeriod] = useState<"2weeks" | "1month" | "2months" | "custom" | null>("2weeks");
   const [repeatUntil, setRepeatUntil] = useState("");
 
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -115,10 +133,58 @@ export default function SlotCreationWizard({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const savedScrollTopRef = useRef<number>(0);
 
+  const weekDates = useMemo(() => {
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }, []);
+
+  const handleSaveCrop = async () => {
+    if (!coverCrop.source || cropSaving) return;
+    setCropSaving(true);
+    try {
+      const result = await coverCrop.cropResult();
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          updateSelectedSlotsField("imageUrl", reader.result);
+        }
+      };
+      reader.readAsDataURL(result.file);
+      coverCrop.resetCrop();
+    } catch {
+      // ignore
+    } finally {
+      setCropSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (open) {
       setStep(1);
-      setSelectedCells(new Set());
+      const initialCells = new Set<string>();
+
+      if (existingSlots && existingSlots.length > 0) {
+        weekDates.forEach((date, dayIdx) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const dayExisting = existingSlots.filter((s) => s.date === dateStr);
+          dayExisting.forEach((s) => {
+            const startStr = s.start_time.slice(0, 5);
+            const endStr = s.end_time.slice(0, 5);
+            const [sh, sm] = startStr.split(":").map(Number);
+            const [eh, em] = endStr.split(":").map(Number);
+            const startM = sh * 60 + sm;
+            const endM = eh * 60 + em;
+            for (let m = startM; m < endM; m += 30) {
+              const ch = Math.floor(m / 60);
+              const cm = m % 60;
+              const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
+              initialCells.add(cellId);
+            }
+          });
+        });
+      }
+
+      setSelectedCells(initialCells);
       setCustomDayIntervals({});
       setSlotSettingsMap({});
       setSelectedSlotKeys(new Set());
@@ -129,11 +195,12 @@ export default function SlotCreationWizard({
       setIsRangeOpen(false);
       setIsConfirmClearOpen(false);
       setRepeatWeekly(true);
-      setRepeatPeriod("1month");
+      setRepeatPeriod("2weeks");
       setRepeatUntil("");
       setIsDetailsDialogOpen(false);
+      coverCrop.resetCrop();
     }
-  }, [open]);
+  }, [open, existingSlots, weekDates]);
 
   useEffect(() => {
     const up = () => setIsMouseDown(false);
@@ -222,11 +289,6 @@ export default function SlotCreationWizard({
     },
   };
   const t = dict[language];
-
-  const weekDates = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, []);
 
   // Compute base hours between start and end
   const baseHours = useMemo(() => {
@@ -1147,7 +1209,7 @@ export default function SlotCreationWizard({
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
                           className={cn(
-                            "h-8 text-xs sm:text-sm font-medium w-20 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-8 text-xs sm:text-sm font-medium w-32 sm:w-36 text-center rounded-md border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-1 focus:ring-primary/20",
                             currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
@@ -1160,7 +1222,7 @@ export default function SlotCreationWizard({
                             }
                           }}
                         />
-                        {[15, 30, 45, 50, 60, 90].map((dur) => {
+                        {[50, 60, 90].map((dur) => {
                           const isActive = currentPanelSettings?.slotDuration === dur && !currentPanelSettings?.customDuration;
 
                           return (
@@ -1175,7 +1237,7 @@ export default function SlotCreationWizard({
                                 updateSelectedSlotsField("slotDuration", dur);
                               }}
                               className={cn(
-                                "h-8 px-2 sm:px-2.5 text-xs transition-all",
+                                "h-8 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1199,7 +1261,7 @@ export default function SlotCreationWizard({
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customParticipants || ""}
                           className={cn(
-                            "h-8 text-xs sm:text-sm font-medium w-16 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-8 text-xs sm:text-sm font-medium w-20 sm:w-24 text-center rounded-md border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-1 focus:ring-primary/20",
                             currentPanelSettings?.customParticipants && "border-primary font-semibold text-primary"
@@ -1270,13 +1332,13 @@ export default function SlotCreationWizard({
                     </div>
 
                     {repeatWeekly && (
-                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
+                      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
                         {/* Day circles */}
                         <div className="space-y-1.5">
                           <Label className="text-xs sm:text-sm font-semibold text-foreground">
                             {t.repeatDaysLabel}
                           </Label>
-                          <div className="flex items-center gap-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {dict[language].weekDays.map((dayName, idx) => {
                               const isDaySelected = repeatDays.includes(idx);
                               return (
@@ -1289,7 +1351,7 @@ export default function SlotCreationWizard({
                                     );
                                   }}
                                   className={cn(
-                                    "w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all cursor-pointer",
+                                    "w-8 h-8 sm:w-9 sm:h-9 rounded-full text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer",
                                     isDaySelected
                                       ? "bg-primary text-primary-foreground shadow-sm"
                                       : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
@@ -1307,7 +1369,7 @@ export default function SlotCreationWizard({
                           <Label className="text-xs sm:text-sm font-semibold text-foreground">
                             {t.repeatPeriodLabel}
                           </Label>
-                          <div className="grid grid-cols-2 gap-1.5">
+                          <div className="grid grid-cols-2 gap-2">
                             {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
                               <Button
                                 key={period}
@@ -1316,7 +1378,7 @@ export default function SlotCreationWizard({
                                 size="sm"
                                 onClick={() => setRepeatPeriod(period)}
                                 className={cn(
-                                  "h-7 text-xs",
+                                  "h-9 text-xs sm:text-sm font-semibold",
                                   repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
                                 )}
                               >
@@ -1339,7 +1401,7 @@ export default function SlotCreationWizard({
                               type="date"
                               value={repeatUntil}
                               onChange={(e) => setRepeatUntil(e.target.value)}
-                              className="h-8 text-xs bg-background rounded-lg"
+                              className="h-9 text-xs sm:text-sm bg-background rounded-lg"
                             />
                           </div>
                         )}
@@ -1373,61 +1435,66 @@ export default function SlotCreationWizard({
             </div>
 
             <div className="space-y-3.5">
-              {/* 1. Cover Area (Photos only, with plus icon only when empty) */}
+              {/* 1. Cover Area (Photos only, with cropper when selecting) */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm sm:text-base font-semibold text-foreground">
-                    {t.cover}
-                  </Label>
-                  {currentPanelSettings?.imageUrl && (
-                    <button
-                      type="button"
-                      onClick={() => updateSelectedSlotsField("imageUrl", "")}
-                      className="text-xs text-destructive hover:underline"
-                    >
-                      {language === "ru" ? "Удалить" : "Жою"}
-                    </button>
-                  )}
-                </div>
+                <Label className="text-sm sm:text-base font-semibold text-foreground">
+                  {t.cover}
+                </Label>
 
-                {currentPanelSettings?.imageUrl ? (
+                {Boolean(coverCrop.source) ? (
+                  <div className="py-1">
+                    <CoverCropEditor
+                      source={coverCrop.source!}
+                      mediaType={coverCrop.mediaType}
+                      previewStyle={coverCrop.previewStyle}
+                      zoom={coverCrop.zoom}
+                      onZoom={coverCrop.setZoom}
+                      onPointerDown={coverCrop.onPointerDown}
+                      onPointerMove={coverCrop.onPointerMove}
+                      onPointerUp={coverCrop.onPointerUp}
+                      saving={cropSaving}
+                      onCancel={() => {
+                        coverCrop.resetCrop();
+                      }}
+                      onSave={() => void handleSaveCrop()}
+                    />
+                  </div>
+                ) : currentPanelSettings?.imageUrl ? (
                   <div className="relative rounded-2xl overflow-hidden border border-border h-40 sm:h-44 w-full bg-muted/30 group">
                     <img
                       src={currentPanelSettings.imageUrl}
                       alt="Cover"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <label className="cursor-pointer bg-background/90 hover:bg-background text-foreground text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm transition-all">
-                        <span>{language === "ru" ? "Заменить" : "Ауыстыру"}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = () => {
-                                if (typeof reader.result === "string") {
-                                  updateSelectedSlotsField("imageUrl", reader.result);
-                                }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="h-8 px-2.5 text-xs"
-                        onClick={() => updateSelectedSlotsField("imageUrl", "")}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {/* Replace in bottom-left corner */}
+                    <label
+                      className="absolute bottom-2 left-2 cursor-pointer bg-background/90 hover:bg-background text-foreground h-8 w-8 rounded-lg shadow-md flex items-center justify-center border border-border/80 transition-all hover:border-primary/50"
+                      title={language === "ru" ? "Заменить" : "Ауыстыру"}
+                    >
+                      <Pencil className="w-4 h-4 text-foreground" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            coverCrop.loadFile(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    {/* Trash in bottom-right corner */}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute bottom-2 right-2 h-8 w-8 rounded-lg shadow-md"
+                      onClick={() => updateSelectedSlotsField("imageUrl", "")}
+                      title={language === "ru" ? "Удалить" : "Жою"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 ) : (
                   <label className="flex items-center justify-center h-40 sm:h-44 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl cursor-pointer hover:bg-muted/30 transition-all">
@@ -1441,13 +1508,7 @@ export default function SlotCreationWizard({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            if (typeof reader.result === "string") {
-                              updateSelectedSlotsField("imageUrl", reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
+                          coverCrop.loadFile(file);
                         }
                       }}
                     />
