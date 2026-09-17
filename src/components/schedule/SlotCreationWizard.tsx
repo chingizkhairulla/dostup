@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
@@ -95,13 +94,13 @@ export default function SlotCreationWizard({
   // Key format: `${dayIdx}_${start}_${end}`
   const [slotSettingsMap, setSlotSettingsMap] = useState<Record<string, SlotSettings>>({});
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  // Step 2: Global repetition settings
-  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  // Step 2: Global repetition settings (enabled by default for 1 month)
+  const [repeatWeekly, setRepeatWeekly] = useState(true);
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
   const [repeatPeriod, setRepeatPeriod] = useState<"2weeks" | "1month" | "2months" | "custom" | null>("1month");
   const [repeatUntil, setRepeatUntil] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
@@ -122,10 +121,10 @@ export default function SlotCreationWizard({
       setTempWorkingHours({ start: "09:00", end: "21:00" });
       setIsRangeOpen(false);
       setIsConfirmClearOpen(false);
-      setRepeatWeekly(false);
+      setRepeatWeekly(true);
       setRepeatPeriod("1month");
       setRepeatUntil("");
-      setDetailsOpen(false);
+      setIsDetailsDialogOpen(false);
     }
   }, [open]);
 
@@ -152,7 +151,7 @@ export default function SlotCreationWizard({
       twoWeeks: "2 недели",
       oneMonth: "1 месяц",
       twoMonths: "2 месяца",
-      custom: "Свой срок",
+      custom: "Свой",
       everyWeek: "Повторять каждую неделю",
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
@@ -160,8 +159,6 @@ export default function SlotCreationWizard({
       lessonDuration: "Длительность урока",
       min: "мин",
       participants: "Количество участников",
-      individual: "Индивидуально",
-      group: "Группа",
       details: "Детали урока",
       titleLabel: "Название",
       description: "Описание",
@@ -176,6 +173,7 @@ export default function SlotCreationWizard({
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
+      save: "Сохранить",
     },
     kk: {
       wizTitle: "Слоттар қосу",
@@ -193,7 +191,7 @@ export default function SlotCreationWizard({
       twoWeeks: "2 апта",
       oneMonth: "1 ай",
       twoMonths: "2 ай",
-      custom: "Өз мерзімі",
+      custom: "Өзгерту",
       everyWeek: "Әр апта сайын қайталау",
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
@@ -201,8 +199,6 @@ export default function SlotCreationWizard({
       lessonDuration: "Сабақ ұзақтығы",
       min: "мин",
       participants: "Қатысушылар саны",
-      individual: "Жеке",
-      group: "Топ",
       details: "Сабақ туралы мәлімет",
       titleLabel: "Атауы",
       description: "Сипаттамасы",
@@ -217,6 +213,7 @@ export default function SlotCreationWizard({
       repeatSummary: "Кесте:",
       selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
+      save: "Сақтау",
     },
   };
   const t = dict[language];
@@ -1013,9 +1010,6 @@ export default function SlotCreationWizard({
 
                   <div className="space-y-3">
                     {activeDays.map((dayIdx) => {
-                      const dayKeys = (effectiveIntervalsByDay[dayIdx] || []).map(
-                        (it) => `${dayIdx}_${it.start}_${it.end}`
-                      );
                       const isFullDay = isDayFullySelected(dayIdx);
 
                       return (
@@ -1045,10 +1039,6 @@ export default function SlotCreationWizard({
                                 {t.weekDaysFull[dayIdx]}
                               </span>
                             </div>
-
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {dayKeys.filter((k) => selectedSlotKeys.has(k)).length} / {dayKeys.length}
-                            </span>
                           </div>
 
                           {/* Slot intervals list */}
@@ -1130,283 +1120,283 @@ export default function SlotCreationWizard({
                   </div>
                 </div>
 
-                {/* Right: Settings panel for selected slot groups */}
-                <div className="sticky top-4 space-y-6 bg-card border border-border p-5 rounded-2xl shadow-sm">
-                  {/* Duration */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-foreground">
+                {/* Right Column: Settings Card + Repetition Card (both in sticky container) */}
+                <div className="sticky top-4 space-y-4">
+                  {/* Settings Card for selected slot groups */}
+                  <div className="bg-card border border-border p-5 rounded-2xl shadow-sm space-y-5">
+                    {/* Duration with orange asterisk */}
+                    <div className="space-y-2.5">
+                      <Label className="text-sm font-semibold text-foreground flex items-center">
                         {t.lessonDuration}
+                        <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
                       </Label>
-                      {selectedSlotKeys.size > 0 && currentPanelSettings?.slotDuration === 60 && (
-                        <span className="text-primary text-xs font-bold flex items-center gap-1">
-                          ★ по умолчанию
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[15, 30, 45, 50, 60, 90].map((dur) => {
-                        const isActive = currentPanelSettings?.slotDuration === dur;
-                        const isDefault = dur === 60;
+                      <div className="flex flex-wrap gap-2">
+                        {[15, 30, 45, 50, 60, 90].map((dur) => {
+                          const isActive = currentPanelSettings?.slotDuration === dur;
 
-                        return (
-                          <Button
-                            key={dur}
-                            type="button"
-                            disabled={selectedSlotKeys.size === 0}
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => updateSelectedSlotsField("slotDuration", dur)}
-                            className={cn(
-                              "h-8 px-3 text-xs sm:text-sm transition-all",
-                              isActive && "bg-primary text-primary-foreground font-semibold shadow-sm",
-                              !isActive && isDefault && selectedSlotKeys.size > 0 && "border-primary/40 text-primary"
-                            )}
-                          >
-                            <span>{dur} {t.min}</span>
-                            {isDefault && (
-                              <span className={cn("ml-1 font-bold", isActive ? "text-primary-foreground" : "text-primary")}>
-                                ★
-                              </span>
-                            )}
-                          </Button>
-                        );
-                      })}
-                      <Input
-                        type="number"
-                        placeholder={t.custom}
-                        disabled={selectedSlotKeys.size === 0}
-                        value={currentPanelSettings?.customDuration || ""}
-                        className="h-8 text-xs sm:text-sm max-w-[80px]"
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateSelectedSlotsField("customDuration", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("slotDuration", Number(val));
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Participants */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-foreground">
-                        {t.participants}
-                      </Label>
-                      {selectedSlotKeys.size > 0 && currentPanelSettings?.maxParticipants === 1 && (
-                        <span className="text-primary text-xs font-bold flex items-center gap-1">
-                          ★ по умолчанию
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { v: 1, label: `1 (${t.individual})` },
-                        { v: 5, label: `5 (${t.group})` },
-                        { v: 10, label: `10 (${t.group})` },
-                      ].map(({ v, label }) => {
-                        const isActive = currentPanelSettings?.maxParticipants === v;
-                        const isDefault = v === 1;
-
-                        return (
-                          <Button
-                            key={v}
-                            type="button"
-                            disabled={selectedSlotKeys.size === 0}
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => updateSelectedSlotsField("maxParticipants", v)}
-                            className={cn(
-                              "h-8 px-3 text-xs sm:text-sm transition-all",
-                              isActive && "bg-primary text-primary-foreground font-semibold shadow-sm",
-                              !isActive && isDefault && selectedSlotKeys.size > 0 && "border-primary/40 text-primary"
-                            )}
-                          >
-                            <span>{label}</span>
-                            {isDefault && (
-                              <span className={cn("ml-1 font-bold", isActive ? "text-primary-foreground" : "text-primary")}>
-                                ★
-                              </span>
-                            )}
-                          </Button>
-                        );
-                      })}
-                      <Input
-                        type="number"
-                        placeholder={t.custom}
-                        disabled={selectedSlotKeys.size === 0}
-                        value={currentPanelSettings?.customParticipants || ""}
-                        className="h-8 text-xs sm:text-sm max-w-[80px]"
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateSelectedSlotsField("customParticipants", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("maxParticipants", Number(val));
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Details Collapsible */}
-                  <Collapsible
-                    open={detailsOpen}
-                    onOpenChange={setDetailsOpen}
-                    className="border rounded-xl p-3.5 bg-muted/20"
-                  >
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
-                        <span className="text-sm font-semibold text-foreground">{t.details}</span>
-                        <ChevronDown className={cn("w-4 h-4 transition-transform", detailsOpen && "rotate-180")} />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-3 pt-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t.titleLabel}</Label>
-                        <Input
-                          disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.title || ""}
-                          placeholder={language === "ru" ? "Например: Английский для начинающих" : "Сабақ атауы"}
-                          onChange={(e) => updateSelectedSlotsField("title", e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t.description}</Label>
-                        <Input
-                          disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.description || ""}
-                          placeholder={language === "ru" ? "Краткое описание урока..." : "Сабақ сипаттамасы..."}
-                          onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t.location}</Label>
-                        <Input
-                          disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.location || ""}
-                          placeholder={language === "ru" ? "Например: Zoom, ул. Абая 1" : "Мысалы: Zoom"}
-                          onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">{t.imageUrl}</Label>
-                        <Input
-                          type="url"
-                          disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.imageUrl || ""}
-                          placeholder="https://..."
-                          onChange={(e) => updateSelectedSlotsField("imageUrl", e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-              </div>
-
-              {/* SEPARATE REPETITION CARD BELOW (NOT INSIDE SETTINGS CARD) */}
-              <div className="p-5 rounded-2xl border border-border bg-card shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="repeat-switch" className="text-sm font-semibold cursor-pointer text-foreground">
-                      {t.everyWeek}
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {language === "ru" ? "Повторять расписание на выбранный период" : "Кестені мерзімге қайталау"}
-                    </p>
-                  </div>
-                  <Switch
-                    id="repeat-switch"
-                    checked={repeatWeekly}
-                    onCheckedChange={setRepeatWeekly}
-                  />
-                </div>
-
-                {repeatWeekly && (
-                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 animate-in fade-in zoom-in-95">
-                    {/* Day circles */}
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-foreground">
-                        {t.repeatDaysLabel}
-                      </Label>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {dict[language].weekDays.map((dayName, idx) => {
-                          const isDaySelected = repeatDays.includes(idx);
                           return (
-                            <button
-                              key={idx}
+                            <Button
+                              key={dur}
                               type="button"
-                              onClick={() => {
-                                setRepeatDays((prev) =>
-                                  prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
-                                );
-                              }}
+                              disabled={selectedSlotKeys.size === 0}
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => updateSelectedSlotsField("slotDuration", dur)}
                               className={cn(
-                                "w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all cursor-pointer",
-                                isDaySelected
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
+                                "h-8 px-3 text-xs sm:text-sm transition-all",
+                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
-                              {dayName}
-                            </button>
+                              <span>{dur} {t.min}</span>
+                            </Button>
                           );
                         })}
-                      </div>
-                    </div>
-
-                    {/* Repeat period buttons */}
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-foreground">
-                        {t.repeatPeriodLabel}
-                      </Label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
-                          <Button
-                            key={period}
-                            type="button"
-                            variant={repeatPeriod === period ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setRepeatPeriod(period)}
-                            className={cn(
-                              "h-8 text-xs sm:text-sm",
-                              repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
-                            )}
-                          >
-                            {period === "2weeks"
-                              ? t.twoWeeks
-                              : period === "1month"
-                              ? t.oneMonth
-                              : period === "2months"
-                              ? t.twoMonths
-                              : t.custom}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {repeatPeriod === "custom" && (
-                      <div className="space-y-1.5 pt-1 max-w-xs">
-                        <Label className="text-xs text-muted-foreground">{t.repeatUntilLabel}</Label>
                         <Input
-                          type="date"
-                          value={repeatUntil}
-                          onChange={(e) => setRepeatUntil(e.target.value)}
-                          className="h-9 text-sm bg-background"
+                          type="number"
+                          placeholder={t.custom}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.customDuration || ""}
+                          className="h-8 text-xs sm:text-sm w-16 text-center"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateSelectedSlotsField("customDuration", val);
+                            if (val && Number(val) > 0) {
+                              updateSelectedSlotsField("slotDuration", Number(val));
+                            }
+                          }}
                         />
+                      </div>
+                    </div>
+
+                    {/* Participants with orange asterisk: 1, 3, 5, 10, свой */}
+                    <div className="space-y-2.5">
+                      <Label className="text-sm font-semibold text-foreground flex items-center">
+                        {t.participants}
+                        <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {[1, 3, 5, 10].map((count) => {
+                          const isActive = currentPanelSettings?.maxParticipants === count;
+
+                          return (
+                            <Button
+                              key={count}
+                              type="button"
+                              disabled={selectedSlotKeys.size === 0}
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => updateSelectedSlotsField("maxParticipants", count)}
+                              className={cn(
+                                "h-8 px-3.5 text-xs sm:text-sm transition-all",
+                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
+                              )}
+                            >
+                              <span>{count}</span>
+                            </Button>
+                          );
+                        })}
+                        <Input
+                          type="number"
+                          placeholder={t.custom}
+                          disabled={selectedSlotKeys.size === 0}
+                          value={currentPanelSettings?.customParticipants || ""}
+                          className="h-8 text-xs sm:text-sm w-16 text-center"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateSelectedSlotsField("customParticipants", val);
+                            if (val && Number(val) > 0) {
+                              updateSelectedSlotsField("maxParticipants", Number(val));
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Lesson Details Dialog Button */}
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={selectedSlotKeys.size === 0}
+                        onClick={() => setIsDetailsDialogOpen(true)}
+                        className="w-full justify-between h-10 px-3.5 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
+                      >
+                        <span className="flex items-center gap-2 text-foreground">
+                          <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
+                          <span>{t.details}</span>
+                        </span>
+                        <span className="text-xs text-primary font-semibold">
+                          {currentPanelSettings?.title ? "Изменить ✓" : "Настроить →"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Separate Repetition Card under Settings Card (moves with it on scroll) */}
+                  <div className="p-5 rounded-2xl border border-border bg-card shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="repeat-switch" className="text-sm font-semibold cursor-pointer text-foreground flex items-center">
+                          {t.everyWeek}
+                          <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {language === "ru" ? "Повторять расписание на выбранный период" : "Кестені мерзімге қайталау"}
+                        </p>
+                      </div>
+                      <Switch
+                        id="repeat-switch"
+                        checked={repeatWeekly}
+                        onCheckedChange={setRepeatWeekly}
+                      />
+                    </div>
+
+                    {repeatWeekly && (
+                      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
+                        {/* Day circles */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-foreground">
+                            {t.repeatDaysLabel}
+                          </Label>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {dict[language].weekDays.map((dayName, idx) => {
+                              const isDaySelected = repeatDays.includes(idx);
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setRepeatDays((prev) =>
+                                      prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
+                                    );
+                                  }}
+                                  className={cn(
+                                    "w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all cursor-pointer",
+                                    isDaySelected
+                                      ? "bg-primary text-primary-foreground shadow-sm"
+                                      : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
+                                  )}
+                                >
+                                  {dayName}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Repeat period buttons */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-foreground">
+                            {t.repeatPeriodLabel}
+                          </Label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
+                              <Button
+                                key={period}
+                                type="button"
+                                variant={repeatPeriod === period ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setRepeatPeriod(period)}
+                                className={cn(
+                                  "h-8 text-xs sm:text-sm",
+                                  repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
+                                )}
+                              >
+                                {period === "2weeks"
+                                  ? t.twoWeeks
+                                  : period === "1month"
+                                  ? t.oneMonth
+                                  : period === "2months"
+                                  ? t.twoMonths
+                                  : t.custom}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {repeatPeriod === "custom" && (
+                          <div className="space-y-1 pt-1">
+                            <Label className="text-xs text-muted-foreground">{t.repeatUntilLabel}</Label>
+                            <Input
+                              type="date"
+                              value={repeatUntil}
+                              onChange={(e) => setRepeatUntil(e.target.value)}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* Lesson Details Dialog (Modal like in product creation) */}
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="max-w-md w-full p-5 rounded-2xl bg-card border border-border space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-base font-semibold text-foreground">
+                {t.details}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-foreground">{t.titleLabel}</Label>
+                <Input
+                  value={currentPanelSettings?.title || ""}
+                  placeholder={language === "ru" ? "Например: Английский для начинающих" : "Сабақ атауы"}
+                  onChange={(e) => updateSelectedSlotsField("title", e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-foreground">{t.description}</Label>
+                <Input
+                  value={currentPanelSettings?.description || ""}
+                  placeholder={language === "ru" ? "Краткое описание урока..." : "Сабақ сипаттамасы..."}
+                  onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-foreground">{t.location}</Label>
+                <Input
+                  value={currentPanelSettings?.location || ""}
+                  placeholder={language === "ru" ? "Например: Zoom, ул. Абая 1" : "Мысалы: Zoom"}
+                  onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-foreground">{t.imageUrl}</Label>
+                <Input
+                  type="url"
+                  value={currentPanelSettings?.imageUrl || ""}
+                  placeholder="https://..."
+                  onChange={(e) => updateSelectedSlotsField("imageUrl", e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                className="w-full sm:w-auto h-8 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => setIsDetailsDialogOpen(false)}
+              >
+                {t.save}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Mobile bottom bar for step switching */}
         <div className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
