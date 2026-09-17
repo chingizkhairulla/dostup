@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
@@ -129,7 +129,36 @@ export default function SlotCreationWizard({
   const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "1month" | "2months" | "custom" | null>("1week");
   const [repeatUntil, setRepeatUntil] = useState("");
   const [isCustomRepeatDialogOpen, setIsCustomRepeatDialogOpen] = useState(false);
-  const [customRepeatDateInput, setCustomRepeatDateInput] = useState("");
+  const [repeatDay, setRepeatDay] = useState("");
+  const [repeatMonth, setRepeatMonth] = useState("");
+  const [repeatYear, setRepeatYear] = useState("");
+  const dayInputRef = useRef<HTMLInputElement>(null);
+  const monthInputRef = useRef<HTMLInputElement>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
+
+  const updateRepeatUntilFromParts = (d: string, m: string, y: string) => {
+    if (d && m && y && y.length === 4) {
+      const dayNum = parseInt(d, 10);
+      const monthNum = parseInt(m, 10);
+      const yearNum = parseInt(y, 10);
+      if (
+        monthNum >= 1 &&
+        monthNum <= 12 &&
+        dayNum >= 1 &&
+        dayNum <= 31 &&
+        yearNum >= 2024 &&
+        yearNum <= 2099
+      ) {
+        const testDate = new Date(yearNum, monthNum - 1, dayNum);
+        if (isValid(testDate) && testDate.getDate() === dayNum) {
+          const iso = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+          setRepeatUntil(iso);
+          return;
+        }
+      }
+    }
+    setRepeatUntil("");
+  };
 
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
@@ -202,7 +231,9 @@ export default function SlotCreationWizard({
       setRepeatPeriod("1week");
       setRepeatUntil("");
       setIsCustomRepeatDialogOpen(false);
-      setCustomRepeatDateInput("");
+      setRepeatDay("");
+      setRepeatMonth("");
+      setRepeatYear("");
       setIsDetailsDialogOpen(false);
       coverCrop.resetCrop();
     }
@@ -232,6 +263,7 @@ export default function SlotCreationWizard({
       oneMonth: "1 месяц",
       twoMonths: "2 месяца",
       custom: "Свой",
+      customValue: "Своё",
       everyWeek: "Повторять расписание",
       repeatScheduleTitle: "Повторение расписания",
       slotParams: "Параметры слотов",
@@ -273,6 +305,7 @@ export default function SlotCreationWizard({
       oneMonth: "1 ай",
       twoMonths: "2 ай",
       custom: "Өзгерту",
+      customValue: "Өзім",
       everyWeek: "Кестені қайталау",
       repeatScheduleTitle: "Кестені қайталау",
       slotParams: "Слот баптаулары",
@@ -1279,14 +1312,15 @@ export default function SlotCreationWizard({
                   >
                     {/* Duration with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
-                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
-                        {t.lessonDuration}
+                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.lessonDuration}</span>
                         <ReqStar />
                       </Label>
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          placeholder={t.custom}
+                          placeholder={t.customValue}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
                           className={cn(
@@ -1319,7 +1353,9 @@ export default function SlotCreationWizard({
                               }}
                               className={cn(
                                 "h-11 min-h-[44px] flex-1 px-2.5 sm:px-3 text-xs sm:text-sm transition-all rounded-lg",
-                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                isActive
+                                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                  : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                               )}
                             >
                               <span>{dur} {t.min}</span>
@@ -1331,14 +1367,15 @@ export default function SlotCreationWizard({
 
                     {/* Participants with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
-                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
-                        {t.participants}
+                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.participants}</span>
                         <ReqStar />
                       </Label>
                       <div className="flex items-center gap-1.5">
                         <input
                           type="number"
-                          placeholder={t.custom}
+                          placeholder={t.customValue}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customParticipants || ""}
                           className={cn(
@@ -1371,7 +1408,9 @@ export default function SlotCreationWizard({
                               }}
                               className={cn(
                                 "h-11 min-h-[44px] flex-1 px-1.5 sm:px-2 text-xs sm:text-sm transition-all rounded-lg",
-                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                isActive
+                                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                  : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                               )}
                             >
                               <span>{count}</span>
@@ -1388,7 +1427,7 @@ export default function SlotCreationWizard({
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/50 hover:bg-muted/50 transition-all rounded-lg"
+                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
                       >
                         <span className="text-xs sm:text-sm font-semibold text-foreground">
                           {t.details}
@@ -1408,8 +1447,9 @@ export default function SlotCreationWizard({
                   {/* Separate Repetition Card under Settings Card */}
                   <div className="p-4 sm:p-4.5 rounded-2xl border border-border bg-card shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="repeat-switch" className="text-xs sm:text-sm font-semibold cursor-pointer text-foreground flex items-center">
-                        {t.everyWeek}
+                      <Label htmlFor="repeat-switch" className="text-xs sm:text-sm font-semibold cursor-pointer text-foreground flex items-center gap-1.5">
+                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.everyWeek}</span>
                         <ReqStar />
                       </Label>
                       <Switch
@@ -1442,7 +1482,7 @@ export default function SlotCreationWizard({
                                     "w-8 h-8 sm:w-9 sm:h-9 rounded-full text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer",
                                     isDaySelected
                                       ? "bg-primary text-primary-foreground shadow-sm"
-                                      : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
+                                      : "bg-background text-muted-foreground border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                                   )}
                                 >
                                   {dayName}
@@ -1467,18 +1507,31 @@ export default function SlotCreationWizard({
                                 onClick={() => {
                                   setRepeatPeriod(period);
                                   if (period === "custom") {
-                                    if (repeatUntil) {
+                                    if (!repeatUntil) {
+                                      const today = new Date();
+                                      const defY = format(today, "yyyy");
+                                      const defM = format(today, "MM");
+                                      const defD = format(today, "dd");
+                                      setRepeatYear(defY);
+                                      setRepeatMonth(defM);
+                                      setRepeatDay(defD);
+                                      setRepeatUntil(`${defY}-${defM}-${defD}`);
+                                    } else {
                                       const parts = repeatUntil.split("-");
                                       if (parts.length === 3) {
-                                        setCustomRepeatDateInput(`${parts[2]}.${parts[1]}.${parts[0]}`);
+                                        setRepeatYear(parts[0]);
+                                        setRepeatMonth(parts[1]);
+                                        setRepeatDay(parts[2]);
                                       }
                                     }
                                     setIsCustomRepeatDialogOpen(true);
                                   }
                                 }}
                                 className={cn(
-                                  "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg",
-                                  repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
+                                  "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg transition-all",
+                                  repeatPeriod === period
+                                    ? "bg-primary text-primary-foreground font-semibold"
+                                    : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                                 )}
                               >
                                 {period === "1week"
@@ -1502,21 +1555,29 @@ export default function SlotCreationWizard({
                                 if (repeatUntil) {
                                   const parts = repeatUntil.split("-");
                                   if (parts.length === 3) {
-                                    setCustomRepeatDateInput(`${parts[2]}.${parts[1]}.${parts[0]}`);
+                                    setRepeatYear(parts[0]);
+                                    setRepeatMonth(parts[1]);
+                                    setRepeatDay(parts[2]);
                                   }
+                                } else {
+                                  const today = new Date();
+                                  const defY = format(today, "yyyy");
+                                  const defM = format(today, "MM");
+                                  const defD = format(today, "dd");
+                                  setRepeatYear(defY);
+                                  setRepeatMonth(defM);
+                                  setRepeatDay(defD);
+                                  setRepeatUntil(`${defY}-${defM}-${defD}`);
                                 }
                                 setIsCustomRepeatDialogOpen(true);
                               }}
                               className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs sm:text-sm font-medium hover:bg-primary/10 transition-all rounded-lg"
                             >
-                              <div className="flex items-center gap-2 truncate">
-                                <CalendarIcon className="w-4 h-4 text-primary shrink-0" />
-                                <span className="truncate font-semibold text-foreground">
-                                  {repeatUntil
-                                    ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
-                                    : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
-                                </span>
-                              </div>
+                              <span className="truncate font-semibold text-foreground">
+                                {repeatUntil
+                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                  : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
+                              </span>
                               <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                             </Button>
                           </div>
@@ -1530,7 +1591,7 @@ export default function SlotCreationWizard({
           )}
         </div>
 
-        {/* Custom Repeat Date Dialog (Modal with calendar and 4-digit max year) */}
+        {/* Custom Repeat Date Dialog (Modal with calendar, segmented inputs, no bottom buttons) */}
         <Dialog open={isCustomRepeatDialogOpen} onOpenChange={setIsCustomRepeatDialogOpen}>
           <DialogContent hideCloseButton className="max-w-sm sm:max-w-md w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4">
             {/* Header */}
@@ -1550,40 +1611,79 @@ export default function SlotCreationWizard({
               </Button>
             </div>
 
-            {/* Date Input with strict 4-digit year constraint (DD.MM.YYYY) */}
-            <div className="space-y-1.5">
-              <Label className="text-xs sm:text-sm font-semibold text-foreground">
-                {language === "ru" ? "Дата окончания (ДД.ММ.ГГГГ):" : "Аяқталу күні (КК.АА.ЖЖЖЖ):"}
-              </Label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder="ДД.ММ.ГГГГ"
-                maxLength={10}
-                value={customRepeatDateInput}
-                onChange={(e) => {
-                  let raw = e.target.value.replace(/[^\d.]/g, "");
-                  if (raw.length === 2 && !raw.includes(".")) raw = raw + ".";
-                  else if (raw.length === 5 && raw.split(".").length === 2) raw = raw + ".";
-                  if (raw.length > 10) raw = raw.slice(0, 10);
-                  setCustomRepeatDateInput(raw);
-
-                  const parts = raw.split(".");
-                  if (parts.length === 3 && parts[2].length === 4) {
-                    const day = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const year = parseInt(parts[2], 10);
-                    const parsedDate = new Date(year, month, day);
-                    if (isValid(parsedDate) && year >= 2024 && year <= 2099) {
-                      setRepeatUntil(format(parsedDate, "yyyy-MM-dd"));
+            {/* Segmented Date Input: [ Day ] . [ Month ] . [ Year ] */}
+            <div className="flex items-center justify-center gap-2 py-1">
+              <div className="w-16">
+                <Input
+                  ref={dayInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ДД"
+                  maxLength={2}
+                  value={repeatDay}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+                    setRepeatDay(val);
+                    if (val.length === 2) {
+                      monthInputRef.current?.focus();
+                      monthInputRef.current?.select();
                     }
-                  }
-                }}
-                className="h-11 text-sm font-mono text-center rounded-xl"
-              />
+                    updateRepeatUntilFromParts(val, repeatMonth, repeatYear);
+                  }}
+                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                />
+              </div>
+              <span className="text-muted-foreground font-bold text-lg select-none">.</span>
+              <div className="w-16">
+                <Input
+                  ref={monthInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ММ"
+                  maxLength={2}
+                  value={repeatMonth}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 2);
+                    setRepeatMonth(val);
+                    if (val.length === 2) {
+                      yearInputRef.current?.focus();
+                      yearInputRef.current?.select();
+                    }
+                    updateRepeatUntilFromParts(repeatDay, val, repeatYear);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !repeatMonth) {
+                      dayInputRef.current?.focus();
+                    }
+                  }}
+                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                />
+              </div>
+              <span className="text-muted-foreground font-bold text-lg select-none">.</span>
+              <div className="w-24">
+                <Input
+                  ref={yearInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ГГГГ"
+                  maxLength={4}
+                  value={repeatYear}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                    setRepeatYear(val);
+                    updateRepeatUntilFromParts(repeatDay, repeatMonth, val);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !repeatYear) {
+                      monthInputRef.current?.focus();
+                    }
+                  }}
+                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                />
+              </div>
             </div>
 
-            {/* Calendar picker */}
+            {/* Calendar picker with circular highlighted dates and disabled past arrow */}
             <div className="flex justify-center border border-border/70 rounded-xl p-2 bg-muted/20">
               <Calendar
                 mode="single"
@@ -1592,46 +1692,27 @@ export default function SlotCreationWizard({
                   if (date) {
                     const isoStr = format(date, "yyyy-MM-dd");
                     setRepeatUntil(isoStr);
-                    setCustomRepeatDateInput(format(date, "dd.MM.yyyy"));
+                    setRepeatDay(format(date, "dd"));
+                    setRepeatMonth(format(date, "MM"));
+                    setRepeatYear(format(date, "yyyy"));
                   }
                 }}
-                disabled={(date) => date < new Date()}
+                fromMonth={new Date()}
+                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                 locale={language === "ru" ? ru : kk}
                 initialFocus
-              />
-            </div>
-
-            {/* Footer buttons */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 min-h-0 px-4 text-xs sm:text-sm rounded-xl"
-                onClick={() => setIsCustomRepeatDialogOpen(false)}
-              >
-                {t.cancel}
-              </Button>
-              <Button
-                type="button"
-                className="h-10 min-h-0 px-5 text-xs sm:text-sm bg-primary text-primary-foreground font-semibold rounded-xl"
-                onClick={() => {
-                  if (customRepeatDateInput) {
-                    const parts = customRepeatDateInput.split(".");
-                    if (parts.length === 3 && parts[2].length === 4) {
-                      const day = parseInt(parts[0], 10);
-                      const month = parseInt(parts[1], 10) - 1;
-                      const year = parseInt(parts[2], 10);
-                      const parsedDate = new Date(year, month, day);
-                      if (isValid(parsedDate)) {
-                        setRepeatUntil(format(parsedDate, "yyyy-MM-dd"));
-                      }
-                    }
-                  }
-                  setIsCustomRepeatDialogOpen(false);
+                classNames={{
+                  cell: "h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center bg-transparent",
+                  day: "h-8 w-8 p-0 font-medium rounded-full flex items-center justify-center transition-colors hover:bg-primary/15 hover:text-primary",
+                  day_selected: "!bg-primary !text-primary-foreground font-bold hover:!bg-primary hover:!text-primary-foreground !rounded-full shadow-sm focus:!bg-primary focus:!text-primary-foreground",
+                  day_today: "border-2 border-primary text-primary font-bold rounded-full bg-primary/10",
+                  day_outside: "text-muted-foreground/30 opacity-30",
+                  day_disabled: "text-muted-foreground/20 opacity-20 cursor-not-allowed",
+                  nav_button: "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors",
+                  nav_button_previous: "absolute left-1 disabled:invisible",
+                  nav_button_next: "absolute right-1",
                 }}
-              >
-                {t.ready}
-              </Button>
+              />
             </div>
           </DialogContent>
         </Dialog>
