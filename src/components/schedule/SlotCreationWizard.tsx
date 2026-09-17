@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, Minus } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
@@ -540,7 +540,10 @@ export default function SlotCreationWizard({
   }, [selectedSlotKeys, slotSettingsMap]);
 
   const handleReady = () => {
-    if (activeDays.length === 0) return;
+    if (activeDays.length === 0) {
+      onOpenChange(false);
+      return;
+    }
 
     // Prepare daySlots with per-slot settings
     const daySlotsPayload: Record<
@@ -724,7 +727,7 @@ export default function SlotCreationWizard({
               size="sm"
               className="h-8 sm:h-9 px-4 sm:px-5 text-xs sm:text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
               onClick={handleReady}
-              disabled={isPending || activeDays.length === 0}
+              disabled={isPending}
             >
               {isPending ? "..." : t.ready}
             </Button>
@@ -1004,10 +1007,10 @@ export default function SlotCreationWizard({
 
           {/* STEP 2: Configure Slot Groups */}
           {step === 2 && (
-            <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+            <div className="max-w-5xl mx-auto p-4 sm:p-6 w-full">
               <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 items-start">
-                {/* Left: Day & Slot Groups List */}
-                <div className="space-y-3.5">
+                {/* Left: Day & Slot Groups List (independently scrollable on desktop) */}
+                <div className="space-y-3.5 md:max-h-[calc(100vh-120px)] md:overflow-y-auto md:pr-2">
                   <div className="pb-1 border-b">
                     <h3 className="text-base font-semibold text-foreground">
                       {t.repeatSummary}
@@ -1104,13 +1107,14 @@ export default function SlotCreationWizard({
                     })}
                   </div>
 
-                  {/* Buttons under schedule: Select all (left) | Deselect (right) */}
+                  {/* Buttons under schedule: Select all (left, white with orange hover) | Deselect (right) */}
                   <div className="flex items-center justify-end gap-2.5 pt-3">
                     <Button
                       type="button"
+                      variant="outline"
                       size="sm"
                       onClick={handleSelectAllSlots}
-                      className="text-xs sm:text-sm h-8 px-3.5 bg-primary text-white hover:bg-primary/90 shadow-sm font-medium"
+                      className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
                     >
                       {t.selectAll}
                     </Button>
@@ -1126,44 +1130,24 @@ export default function SlotCreationWizard({
                   </div>
                 </div>
 
-                {/* Right Column: Settings Card + Repetition Card (fits comfortably in laptop screen) */}
-                <div className="sticky top-4 space-y-3 self-start pb-6">
+                {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
+                <div className="w-full space-y-3 self-start md:sticky md:top-0 pb-6">
                   {/* Settings Card for selected slot groups */}
                   <div className="bg-card border border-border p-4 sm:p-4.5 rounded-2xl shadow-sm space-y-3.5">
-                    {/* Duration with orange asterisk */}
+                    {/* Duration with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
                       <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
                         {t.lessonDuration}
                         <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[15, 30, 45, 50, 60, 90].map((dur) => {
-                          const isActive = currentPanelSettings?.slotDuration === dur;
-
-                          return (
-                            <Button
-                              key={dur}
-                              type="button"
-                              disabled={selectedSlotKeys.size === 0}
-                              variant={isActive ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => updateSelectedSlotsField("slotDuration", dur)}
-                              className={cn(
-                                "h-8 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
-                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
-                              )}
-                            >
-                              <span>{dur} {t.min}</span>
-                            </Button>
-                          );
-                        })}
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <input
                           type="number"
                           placeholder={t.custom}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
                           className={cn(
-                            "h-8 text-xs sm:text-sm font-medium w-[72px] text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-8 text-xs sm:text-sm font-medium w-20 text-center rounded-md border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-1 focus:ring-primary/20",
                             currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
@@ -1176,36 +1160,39 @@ export default function SlotCreationWizard({
                             }
                           }}
                         />
+                        {[15, 30, 45, 50, 60, 90].map((dur) => {
+                          const isActive = currentPanelSettings?.slotDuration === dur && !currentPanelSettings?.customDuration;
+
+                          return (
+                            <Button
+                              key={dur}
+                              type="button"
+                              disabled={selectedSlotKeys.size === 0}
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                updateSelectedSlotsField("customDuration", "");
+                                updateSelectedSlotsField("slotDuration", dur);
+                              }}
+                              className={cn(
+                                "h-8 px-2 sm:px-2.5 text-xs transition-all",
+                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
+                              )}
+                            >
+                              <span>{dur} {t.min}</span>
+                            </Button>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    {/* Participants with orange asterisk: 1, 3, 5, 10, свой */}
+                    {/* Participants with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
                       <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
                         {t.participants}
                         <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[1, 3, 5, 10].map((count) => {
-                          const isActive = currentPanelSettings?.maxParticipants === count;
-
-                          return (
-                            <Button
-                              key={count}
-                              type="button"
-                              disabled={selectedSlotKeys.size === 0}
-                              variant={isActive ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => updateSelectedSlotsField("maxParticipants", count)}
-                              className={cn(
-                                "h-8 px-3.5 text-xs sm:text-sm transition-all",
-                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
-                              )}
-                            >
-                              <span>{count}</span>
-                            </Button>
-                          );
-                        })}
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <input
                           type="number"
                           placeholder={t.custom}
@@ -1225,10 +1212,33 @@ export default function SlotCreationWizard({
                             }
                           }}
                         />
+                        {[1, 3, 5, 10].map((count) => {
+                          const isActive = currentPanelSettings?.maxParticipants === count && !currentPanelSettings?.customParticipants;
+
+                          return (
+                            <Button
+                              key={count}
+                              type="button"
+                              disabled={selectedSlotKeys.size === 0}
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                updateSelectedSlotsField("customParticipants", "");
+                                updateSelectedSlotsField("maxParticipants", count);
+                              }}
+                              className={cn(
+                                "h-8 px-3 text-xs sm:text-sm transition-all",
+                                isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
+                              )}
+                            >
+                              <span>{count}</span>
+                            </Button>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    {/* Lesson Details Dialog Button */}
+                    {/* Lesson Details Dialog Button with gray plus */}
                     <div className="pt-0.5">
                       <Button
                         type="button"
@@ -1240,9 +1250,7 @@ export default function SlotCreationWizard({
                         <span className="text-foreground font-medium">
                           {t.details}
                         </span>
-                        <span className="text-base sm:text-lg font-bold text-primary leading-none">
-                          +
-                        </span>
+                        <Plus className="w-4 h-4 text-muted-foreground" />
                       </Button>
                     </div>
                   </div>
@@ -1264,8 +1272,8 @@ export default function SlotCreationWizard({
                     {repeatWeekly && (
                       <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
                         {/* Day circles */}
-                        <div className="space-y-1">
-                          <Label className="text-[11px] font-semibold text-foreground">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs sm:text-sm font-semibold text-foreground">
                             {t.repeatDaysLabel}
                           </Label>
                           <div className="flex items-center gap-1 flex-wrap">
@@ -1295,8 +1303,8 @@ export default function SlotCreationWizard({
                         </div>
 
                         {/* Repeat period buttons */}
-                        <div className="space-y-1">
-                          <Label className="text-[11px] font-semibold text-foreground">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs sm:text-sm font-semibold text-foreground">
                             {t.repeatPeriodLabel}
                           </Label>
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1325,13 +1333,13 @@ export default function SlotCreationWizard({
                         </div>
 
                         {repeatPeriod === "custom" && (
-                          <div className="space-y-1 pt-0.5">
-                            <Label className="text-[11px] text-muted-foreground">{t.repeatUntilLabel}</Label>
+                          <div className="space-y-1.5 pt-0.5">
+                            <Label className="text-xs sm:text-sm font-semibold text-foreground">{t.repeatUntilLabel}</Label>
                             <Input
                               type="date"
                               value={repeatUntil}
                               onChange={(e) => setRepeatUntil(e.target.value)}
-                              className="h-7 text-xs bg-background"
+                              className="h-8 text-xs bg-background rounded-lg"
                             />
                           </div>
                         )}
@@ -1347,7 +1355,7 @@ export default function SlotCreationWizard({
         {/* Lesson Details Dialog (Modal like in product creation) */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
           <DialogContent hideCloseButton className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4">
-            {/* Header: Title (left) | Minus button to minimize/close (right) */}
+            {/* Header: Title (left) | Close cross (right) */}
             <div className="flex items-center justify-between pb-1 border-b border-border/50">
               <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
                 {t.details}
@@ -1358,9 +1366,9 @@ export default function SlotCreationWizard({
                 size="sm"
                 className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
                 onClick={() => setIsDetailsDialogOpen(false)}
-                title="Свернуть"
+                title="Закрыть"
               >
-                <Minus className="w-4 h-4 stroke-[2.5]" />
+                <X className="w-4 h-4" />
               </Button>
             </div>
 
