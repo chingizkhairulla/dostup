@@ -833,13 +833,20 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           : [];
 
         for (const interval of intervalsForDay) {
+          const duration = (interval as any).slotDuration || params.slotDuration;
+          const maxPart = (interval as any).maxParticipants || params.maxParticipants;
+          const slotTitle = (interval as any).title ?? params.title;
+          const slotDesc = (interval as any).description ?? params.description;
+          const slotImg = (interval as any).imageUrl ?? params.imageUrl;
+          const slotLoc = (interval as any).location ?? params.location;
+
           let [startH, startM] = interval.start.split(":").map(Number);
           const [endH, endM] = interval.end.split(":").map(Number);
           const endMinutes = endH * 60 + endM;
 
           while (true) {
             const currentMinutes = startH * 60 + startM;
-            const slotEndMinutes = currentMinutes + params.slotDuration;
+            const slotEndMinutes = currentMinutes + duration;
             if (slotEndMinutes > endMinutes) break;
 
             const slotStart = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}:00`;
@@ -857,11 +864,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 start_time: slotStart,
                 end_time: slotEnd,
                 is_available: true,
-                max_participants: params.maxParticipants,
-                title: params.title || null,
-                description: params.description || null,
-                image_url: params.imageUrl || null,
-                location: params.location || null,
+                max_participants: maxPart,
+                title: slotTitle || null,
+                description: slotDesc || null,
+                image_url: slotImg || null,
+                location: slotLoc || null,
               });
             }
 
