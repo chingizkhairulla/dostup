@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, SlidersHorizontal, Image as ImageIcon, MapPin } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
@@ -166,10 +166,10 @@ export default function SlotCreationWizard({
       lessonDuration: "Длительность урока",
       min: "мин",
       participants: "Количество участников",
-      details: "Детали урока",
+      details: "Детали",
+      cover: "Обложка",
       titleLabel: "Название",
       description: "Описание",
-      imageUrl: "Ссылка на обложку",
       location: "Местоположение",
       ready: "Готово",
       clearAll: "Очистить",
@@ -180,7 +180,6 @@ export default function SlotCreationWizard({
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
-      save: "Сохранить",
     },
     kk: {
       wizTitle: "Слоттар қосу",
@@ -206,10 +205,10 @@ export default function SlotCreationWizard({
       lessonDuration: "Сабақ ұзақтығы",
       min: "мин",
       participants: "Қатысушылар саны",
-      details: "Сабақ туралы мәлімет",
+      details: "Мәліметтер",
+      cover: "Мұқаба",
       titleLabel: "Атауы",
       description: "Сипаттамасы",
-      imageUrl: "Мұқаба сілтемесі",
       location: "Орналасу жері",
       ready: "Дайын",
       clearAll: "Тазарту",
@@ -220,7 +219,6 @@ export default function SlotCreationWizard({
       repeatSummary: "Кесте:",
       selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
-      save: "Сақтау",
     },
   };
   const t = dict[language];
@@ -663,8 +661,8 @@ export default function SlotCreationWizard({
           <DialogTitle>Slot Creation Wizard</DialogTitle>
         </VisuallyHidden>
 
-        {/* Top Header: Title (left) | Step Switcher (center on desktop) | Ready (far right, no cross) */}
-        <header className="flex-none flex items-center justify-between px-4 sm:px-6 py-3 border-b bg-card gap-2">
+        {/* Top Header: Title (left) | Step Switcher (strictly centered) | Ready (far right, no cross) */}
+        <header className="flex-none relative flex items-center justify-between px-4 sm:px-6 py-3 border-b bg-card">
           {/* Left: Wizard title */}
           <div className="flex items-center gap-3">
             <h2 className="text-base sm:text-lg font-semibold text-foreground whitespace-nowrap">
@@ -672,8 +670,8 @@ export default function SlotCreationWizard({
             </h2>
           </div>
 
-          {/* Center on desktop: 2-step switcher by direct click */}
-          <div className="hidden sm:flex items-center justify-center">
+          {/* Center on desktop: 2-step switcher strictly in center */}
+          <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center pointer-events-auto">
             <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-full border border-border/50">
               <button
                 type="button"
@@ -1237,14 +1235,13 @@ export default function SlotCreationWizard({
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-9 px-3 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
+                        className="w-full justify-between h-9 px-3.5 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
                       >
-                        <span className="flex items-center gap-2 text-foreground">
-                          <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
-                          <span>{t.details}</span>
+                        <span className="text-foreground font-medium">
+                          {t.details}
                         </span>
-                        <span className="text-xs text-primary font-semibold">
-                          {currentPanelSettings?.title ? "Изменить ✓" : "Настроить →"}
+                        <span className="text-base sm:text-lg font-bold text-primary leading-none">
+                          +
                         </span>
                       </Button>
                     </div>
@@ -1349,18 +1346,31 @@ export default function SlotCreationWizard({
 
         {/* Lesson Details Dialog (Modal like in product creation) */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-          <DialogContent className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4 max-h-[90vh] overflow-y-auto">
-            <DialogHeader className="pb-1">
+          <DialogContent hideCloseButton className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4">
+            {/* Header: Title (left) | Minus button to minimize/close (right) */}
+            <div className="flex items-center justify-between pb-1 border-b border-border/50">
               <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
                 {t.details}
               </DialogTitle>
-            </DialogHeader>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => setIsDetailsDialogOpen(false)}
+                title="Свернуть"
+              >
+                <Minus className="w-4 h-4 stroke-[2.5]" />
+              </Button>
+            </div>
 
-            <div className="space-y-4">
-              {/* 1. Large Cover Area (like product creation) */}
+            <div className="space-y-3.5">
+              {/* 1. Cover Area (Photos only, with plus icon only when empty) */}
               <div className="space-y-1.5">
-                <Label className="text-xs sm:text-sm font-medium text-foreground flex items-center justify-between">
-                  <span>{language === "ru" ? "Обложка урока" : "Сабақ мұқабасы"}</span>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm sm:text-base font-semibold text-foreground">
+                    {t.cover}
+                  </Label>
                   {currentPanelSettings?.imageUrl && (
                     <button
                       type="button"
@@ -1370,10 +1380,10 @@ export default function SlotCreationWizard({
                       {language === "ru" ? "Удалить" : "Жою"}
                     </button>
                   )}
-                </Label>
+                </div>
 
                 {currentPanelSettings?.imageUrl ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-border aspect-video sm:h-48 w-full bg-muted/30 group">
+                  <div className="relative rounded-2xl overflow-hidden border border-border h-40 sm:h-44 w-full bg-muted/30 group">
                     <img
                       src={currentPanelSettings.imageUrl}
                       alt="Cover"
@@ -1412,17 +1422,9 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center gap-2.5 h-44 sm:h-48 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl cursor-pointer hover:bg-muted/30 transition-all text-center p-4">
-                    <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                      <ImageIcon className="w-5 h-5" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <span className="text-xs sm:text-sm font-medium text-foreground block">
-                        {language === "ru" ? "Нажмите, чтобы загрузить обложку" : "Мұқабаны жүктеу үшін басыңыз"}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground block">
-                        PNG, JPG до 10 МБ
-                      </span>
+                  <label className="flex items-center justify-center h-40 sm:h-44 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl cursor-pointer hover:bg-muted/30 transition-all">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+                      <Plus className="w-7 h-7 sm:w-8 sm:h-8" />
                     </div>
                     <input
                       type="file"
@@ -1443,20 +1445,11 @@ export default function SlotCreationWizard({
                     />
                   </label>
                 )}
-
-                {/* Alternative direct URL input */}
-                <Input
-                  type="url"
-                  value={currentPanelSettings?.imageUrl || ""}
-                  placeholder={language === "ru" ? "Или вставьте ссылку на изображение..." : "Немесе сурет сілтемесін қойыңыз..."}
-                  onChange={(e) => updateSelectedSlotsField("imageUrl", e.target.value)}
-                  className="h-8 text-xs font-mono rounded-lg"
-                />
               </div>
 
-              {/* 2. Small Title field */}
+              {/* 2. Title field */}
               <div className="space-y-1.5">
-                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                <Label className="text-sm sm:text-base font-semibold text-foreground">
                   {t.titleLabel}
                 </Label>
                 <Input
@@ -1467,9 +1460,9 @@ export default function SlotCreationWizard({
                 />
               </div>
 
-              {/* 3. Larger Description field (Textarea) */}
+              {/* 3. Description field */}
               <div className="space-y-1.5">
-                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                <Label className="text-sm sm:text-base font-semibold text-foreground">
                   {t.description}
                 </Label>
                 <Textarea
@@ -1477,36 +1470,30 @@ export default function SlotCreationWizard({
                   value={currentPanelSettings?.description || ""}
                   placeholder={language === "ru" ? "Кратко опишите тему занятия, план урока или требования к участникам..." : "Сабақтың тақырыбы мен жоспарын жазыңыз..."}
                   onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
-                  className="min-h-[85px] text-sm rounded-xl resize-y"
+                  className="min-h-[80px] text-sm rounded-xl resize-y"
                 />
               </div>
 
               {/* 4. Location field */}
               <div className="space-y-1.5">
-                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                <Label className="text-sm sm:text-base font-semibold text-foreground">
                   {t.location}
                 </Label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   <Input
                     value={currentPanelSettings?.location || ""}
-                    placeholder={language === "ru" ? "Ссылка на Zoom / Google Meet или адрес" : "Zoom / Google Meet сілтемесі немесе мекенжай"}
+                    placeholder={
+                      language === "ru"
+                        ? "Напишите адрес, если мероприятие пройдет оффлайн"
+                        : "Іс-шара оффлайн өтсе, мекенжайын жазыңыз"
+                    }
                     onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
                     className="h-9 sm:h-10 text-sm rounded-xl pl-9"
                   />
                 </div>
               </div>
             </div>
-
-            <DialogFooter className="pt-2">
-              <Button
-                type="button"
-                className="w-full sm:w-auto h-8 sm:h-9 px-5 text-xs sm:text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl"
-                onClick={() => setIsDetailsDialogOpen(false)}
-              >
-                {t.save}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 
