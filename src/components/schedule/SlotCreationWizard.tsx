@@ -3,13 +3,20 @@ import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, SlidersHorizontal } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, SlidersHorizontal, Image as ImageIcon, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+
+const ReqStar = () => (
+  <span className="text-primary font-bold ml-1 text-sm sm:text-base inline-block -translate-y-0.5 select-none leading-none" aria-hidden="true">
+    *
+  </span>
+);
 
 interface SlotSettings {
   slotDuration?: number;
@@ -632,7 +639,7 @@ export default function SlotCreationWizard({
                     "h-5 sm:h-6 w-full transition-colors cursor-pointer select-none",
                     m === 0 ? "border-t border-border/80" : "border-t border-border/40",
                     isSelected
-                      ? "bg-primary/65 border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)]"
+                      ? "bg-primary/80 border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)]"
                       : "hover:bg-primary/20 active:bg-primary/30"
                   )}
                 />
@@ -946,11 +953,11 @@ export default function SlotCreationWizard({
               <div className="w-72 sm:w-80 md:w-96 flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-base sm:text-[17px] font-medium text-foreground">
                       {t.repeatSummary}
                     </p>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {activeDays.length === 0 ? (
                       <div className="p-4 border rounded-xl text-center text-xs sm:text-sm text-muted-foreground border-dashed bg-card/50">
                         {t.noSlotsWarning}
@@ -959,17 +966,18 @@ export default function SlotCreationWizard({
                       activeDays.map((dayIdx) => (
                         <div
                           key={dayIdx}
-                          className="p-3 sm:p-3.5 rounded-xl border border-border bg-card shadow-sm space-y-2"
+                          className="p-2.5 sm:p-3 rounded-xl border border-border bg-card shadow-xs space-y-1.5"
                         >
-                          <Badge variant="outline" className="text-sm font-semibold px-2.5 py-1">
-                            {t.weekDaysFull[dayIdx]}
-                          </Badge>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs sm:text-sm font-medium text-foreground">
+                              {t.weekDaysFull[dayIdx]}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
                             {effectiveIntervalsByDay[dayIdx]?.map((interval, i) => (
-                              <Badge
+                              <div
                                 key={i}
-                                variant="secondary"
-                                className="text-xs sm:text-sm font-mono gap-0.5 px-2 py-1 cursor-default bg-muted hover:bg-muted/80 items-center flex"
+                                className="text-xs font-mono gap-0.5 px-2 py-0.5 rounded-md border border-border/70 bg-muted/60 hover:bg-muted items-center flex"
                               >
                                 <EditableTime
                                   time={interval.start}
@@ -984,7 +992,7 @@ export default function SlotCreationWizard({
                                     updateIntervalTime(dayIdx, i, interval.start, newTime)
                                   }
                                 />
-                              </Badge>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1120,17 +1128,17 @@ export default function SlotCreationWizard({
                   </div>
                 </div>
 
-                {/* Right Column: Settings Card + Repetition Card (both in sticky container) */}
-                <div className="sticky top-4 space-y-4">
+                {/* Right Column: Settings Card + Repetition Card (fits comfortably in laptop screen) */}
+                <div className="sticky top-4 space-y-3 self-start pb-6">
                   {/* Settings Card for selected slot groups */}
-                  <div className="bg-card border border-border p-5 rounded-2xl shadow-sm space-y-5">
+                  <div className="bg-card border border-border p-4 sm:p-4.5 rounded-2xl shadow-sm space-y-3.5">
                     {/* Duration with orange asterisk */}
-                    <div className="space-y-2.5">
-                      <Label className="text-sm font-semibold text-foreground flex items-center">
+                    <div className="space-y-2">
+                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
                         {t.lessonDuration}
-                        <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
+                        <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {[15, 30, 45, 50, 60, 90].map((dur) => {
                           const isActive = currentPanelSettings?.slotDuration === dur;
 
@@ -1143,7 +1151,7 @@ export default function SlotCreationWizard({
                               size="sm"
                               onClick={() => updateSelectedSlotsField("slotDuration", dur)}
                               className={cn(
-                                "h-8 px-3 text-xs sm:text-sm transition-all",
+                                "h-8 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1151,12 +1159,17 @@ export default function SlotCreationWizard({
                             </Button>
                           );
                         })}
-                        <Input
+                        <input
                           type="number"
                           placeholder={t.custom}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
-                          className="h-8 text-xs sm:text-sm w-16 text-center"
+                          className={cn(
+                            "h-8 text-xs sm:text-sm font-medium w-[72px] text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                            "focus:border-primary focus:ring-1 focus:ring-primary/20",
+                            currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
+                          )}
                           onChange={(e) => {
                             const val = e.target.value;
                             updateSelectedSlotsField("customDuration", val);
@@ -1169,12 +1182,12 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Participants with orange asterisk: 1, 3, 5, 10, свой */}
-                    <div className="space-y-2.5">
-                      <Label className="text-sm font-semibold text-foreground flex items-center">
+                    <div className="space-y-2">
+                      <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
                         {t.participants}
-                        <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
+                        <ReqStar />
                       </Label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {[1, 3, 5, 10].map((count) => {
                           const isActive = currentPanelSettings?.maxParticipants === count;
 
@@ -1195,12 +1208,17 @@ export default function SlotCreationWizard({
                             </Button>
                           );
                         })}
-                        <Input
+                        <input
                           type="number"
                           placeholder={t.custom}
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customParticipants || ""}
-                          className="h-8 text-xs sm:text-sm w-16 text-center"
+                          className={cn(
+                            "h-8 text-xs sm:text-sm font-medium w-16 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                            "focus:border-primary focus:ring-1 focus:ring-primary/20",
+                            currentPanelSettings?.customParticipants && "border-primary font-semibold text-primary"
+                          )}
                           onChange={(e) => {
                             const val = e.target.value;
                             updateSelectedSlotsField("customParticipants", val);
@@ -1213,13 +1231,13 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Lesson Details Dialog Button */}
-                    <div className="pt-1">
+                    <div className="pt-0.5">
                       <Button
                         type="button"
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-10 px-3.5 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
+                        className="w-full justify-between h-9 px-3 text-xs sm:text-sm font-medium border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
                       >
                         <span className="flex items-center gap-2 text-foreground">
                           <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
@@ -1232,18 +1250,13 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
 
-                  {/* Separate Repetition Card under Settings Card (moves with it on scroll) */}
-                  <div className="p-5 rounded-2xl border border-border bg-card shadow-sm space-y-4">
+                  {/* Separate Repetition Card under Settings Card */}
+                  <div className="p-4 sm:p-4.5 rounded-2xl border border-border bg-card shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="repeat-switch" className="text-sm font-semibold cursor-pointer text-foreground flex items-center">
-                          {t.everyWeek}
-                          <span className="text-primary font-bold ml-1 text-xs -translate-y-1">*</span>
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {language === "ru" ? "Повторять расписание на выбранный период" : "Кестені мерзімге қайталау"}
-                        </p>
-                      </div>
+                      <Label htmlFor="repeat-switch" className="text-xs sm:text-sm font-semibold cursor-pointer text-foreground flex items-center">
+                        {t.everyWeek}
+                        <ReqStar />
+                      </Label>
                       <Switch
                         id="repeat-switch"
                         checked={repeatWeekly}
@@ -1252,13 +1265,13 @@ export default function SlotCreationWizard({
                     </div>
 
                     {repeatWeekly && (
-                      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
+                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
                         {/* Day circles */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-foreground">
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-foreground">
                             {t.repeatDaysLabel}
                           </Label>
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1 flex-wrap">
                             {dict[language].weekDays.map((dayName, idx) => {
                               const isDaySelected = repeatDays.includes(idx);
                               return (
@@ -1271,7 +1284,7 @@ export default function SlotCreationWizard({
                                     );
                                   }}
                                   className={cn(
-                                    "w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all cursor-pointer",
+                                    "w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all cursor-pointer",
                                     isDaySelected
                                       ? "bg-primary text-primary-foreground shadow-sm"
                                       : "bg-background text-muted-foreground border border-border/80 hover:border-primary/50"
@@ -1285,8 +1298,8 @@ export default function SlotCreationWizard({
                         </div>
 
                         {/* Repeat period buttons */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-foreground">
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-foreground">
                             {t.repeatPeriodLabel}
                           </Label>
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1298,7 +1311,7 @@ export default function SlotCreationWizard({
                                 size="sm"
                                 onClick={() => setRepeatPeriod(period)}
                                 className={cn(
-                                  "h-8 text-xs sm:text-sm",
+                                  "h-7 text-xs",
                                   repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
                                 )}
                               >
@@ -1315,13 +1328,13 @@ export default function SlotCreationWizard({
                         </div>
 
                         {repeatPeriod === "custom" && (
-                          <div className="space-y-1 pt-1">
-                            <Label className="text-xs text-muted-foreground">{t.repeatUntilLabel}</Label>
+                          <div className="space-y-1 pt-0.5">
+                            <Label className="text-[11px] text-muted-foreground">{t.repeatUntilLabel}</Label>
                             <Input
                               type="date"
                               value={repeatUntil}
                               onChange={(e) => setRepeatUntil(e.target.value)}
-                              className="h-8 text-xs bg-background"
+                              className="h-7 text-xs bg-background"
                             />
                           </div>
                         )}
@@ -1336,60 +1349,159 @@ export default function SlotCreationWizard({
 
         {/* Lesson Details Dialog (Modal like in product creation) */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-          <DialogContent className="max-w-md w-full p-5 rounded-2xl bg-card border border-border space-y-4">
-            <DialogHeader>
-              <DialogTitle className="text-base font-semibold text-foreground">
+          <DialogContent className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4 max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="pb-1">
+              <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
                 {t.details}
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-foreground">{t.titleLabel}</Label>
-                <Input
-                  value={currentPanelSettings?.title || ""}
-                  placeholder={language === "ru" ? "Например: Английский для начинающих" : "Сабақ атауы"}
-                  onChange={(e) => updateSelectedSlotsField("title", e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
+            <div className="space-y-4">
+              {/* 1. Large Cover Area (like product creation) */}
+              <div className="space-y-1.5">
+                <Label className="text-xs sm:text-sm font-medium text-foreground flex items-center justify-between">
+                  <span>{language === "ru" ? "Обложка урока" : "Сабақ мұқабасы"}</span>
+                  {currentPanelSettings?.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedSlotsField("imageUrl", "")}
+                      className="text-xs text-destructive hover:underline"
+                    >
+                      {language === "ru" ? "Удалить" : "Жою"}
+                    </button>
+                  )}
+                </Label>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-foreground">{t.description}</Label>
-                <Input
-                  value={currentPanelSettings?.description || ""}
-                  placeholder={language === "ru" ? "Краткое описание урока..." : "Сабақ сипаттамасы..."}
-                  onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
+                {currentPanelSettings?.imageUrl ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-border aspect-video sm:h-48 w-full bg-muted/30 group">
+                    <img
+                      src={currentPanelSettings.imageUrl}
+                      alt="Cover"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <label className="cursor-pointer bg-background/90 hover:bg-background text-foreground text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm transition-all">
+                        <span>{language === "ru" ? "Заменить" : "Ауыстыру"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                if (typeof reader.result === "string") {
+                                  updateSelectedSlotsField("imageUrl", reader.result);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs"
+                        onClick={() => updateSelectedSlotsField("imageUrl", "")}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-2.5 h-44 sm:h-48 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl cursor-pointer hover:bg-muted/30 transition-all text-center p-4">
+                    <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-xs sm:text-sm font-medium text-foreground block">
+                        {language === "ru" ? "Нажмите, чтобы загрузить обложку" : "Мұқабаны жүктеу үшін басыңыз"}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground block">
+                        PNG, JPG до 10 МБ
+                      </span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            if (typeof reader.result === "string") {
+                              updateSelectedSlotsField("imageUrl", reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
 
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-foreground">{t.location}</Label>
-                <Input
-                  value={currentPanelSettings?.location || ""}
-                  placeholder={language === "ru" ? "Например: Zoom, ул. Абая 1" : "Мысалы: Zoom"}
-                  onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium text-foreground">{t.imageUrl}</Label>
+                {/* Alternative direct URL input */}
                 <Input
                   type="url"
                   value={currentPanelSettings?.imageUrl || ""}
-                  placeholder="https://..."
+                  placeholder={language === "ru" ? "Или вставьте ссылку на изображение..." : "Немесе сурет сілтемесін қойыңыз..."}
                   onChange={(e) => updateSelectedSlotsField("imageUrl", e.target.value)}
-                  className="h-9 text-sm"
+                  className="h-8 text-xs font-mono rounded-lg"
                 />
+              </div>
+
+              {/* 2. Small Title field */}
+              <div className="space-y-1.5">
+                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                  {t.titleLabel}
+                </Label>
+                <Input
+                  value={currentPanelSettings?.title || ""}
+                  placeholder={language === "ru" ? "Например: Английский для начинающих" : "Мысалы: Бастаушыларға ағылшын тілі"}
+                  onChange={(e) => updateSelectedSlotsField("title", e.target.value)}
+                  className="h-9 sm:h-10 text-sm rounded-xl"
+                />
+              </div>
+
+              {/* 3. Larger Description field (Textarea) */}
+              <div className="space-y-1.5">
+                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                  {t.description}
+                </Label>
+                <Textarea
+                  rows={3}
+                  value={currentPanelSettings?.description || ""}
+                  placeholder={language === "ru" ? "Кратко опишите тему занятия, план урока или требования к участникам..." : "Сабақтың тақырыбы мен жоспарын жазыңыз..."}
+                  onChange={(e) => updateSelectedSlotsField("description", e.target.value)}
+                  className="min-h-[85px] text-sm rounded-xl resize-y"
+                />
+              </div>
+
+              {/* 4. Location field */}
+              <div className="space-y-1.5">
+                <Label className="text-xs sm:text-sm font-medium text-foreground">
+                  {t.location}
+                </Label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={currentPanelSettings?.location || ""}
+                    placeholder={language === "ru" ? "Ссылка на Zoom / Google Meet или адрес" : "Zoom / Google Meet сілтемесі немесе мекенжай"}
+                    onChange={(e) => updateSelectedSlotsField("location", e.target.value)}
+                    className="h-9 sm:h-10 text-sm rounded-xl pl-9"
+                  />
+                </div>
               </div>
             </div>
 
             <DialogFooter className="pt-2">
               <Button
                 type="button"
-                className="w-full sm:w-auto h-8 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+                className="w-full sm:w-auto h-8 sm:h-9 px-5 text-xs sm:text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl"
                 onClick={() => setIsDetailsDialogOpen(false)}
               >
                 {t.save}
