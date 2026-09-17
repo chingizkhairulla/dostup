@@ -901,14 +901,20 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         currentDate = addDays(currentDate, 1);
       }
 
-      if (slots.length === 0) throw new Error(language === "ru" ? "Нет новых слотов для создания" : "Жаңа слоттар жоқ");
+      if (slots.length === 0) {
+        return 0;
+      }
       await invokeApi("manage-schedules", { action: "create_slots", ...studentCreds(), slots, scheduleId });
       return slots.length;
     },
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["teacher-schedules"] });
-      toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+      if (count > 0) {
+        toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+      } else {
+        toast.info(language === "ru" ? "Новых слотов не добавлено" : "Жаңа слоттар қосылмады");
+      }
       setIsWizardOpen(false);
     },
     onError: (error: any) => {

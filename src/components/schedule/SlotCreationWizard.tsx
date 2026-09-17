@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
+import { ru, kk } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
 import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
 
@@ -126,6 +128,8 @@ export default function SlotCreationWizard({
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
   const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "1month" | "2months" | "custom" | null>("1week");
   const [repeatUntil, setRepeatUntil] = useState("");
+  const [isCustomRepeatDialogOpen, setIsCustomRepeatDialogOpen] = useState(false);
+  const [customRepeatDateInput, setCustomRepeatDateInput] = useState("");
 
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
@@ -197,6 +201,8 @@ export default function SlotCreationWizard({
       setRepeatWeekly(true);
       setRepeatPeriod("1week");
       setRepeatUntil("");
+      setIsCustomRepeatDialogOpen(false);
+      setCustomRepeatDateInput("");
       setIsDetailsDialogOpen(false);
       coverCrop.resetCrop();
     }
@@ -1284,9 +1290,9 @@ export default function SlotCreationWizard({
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customDuration || ""}
                           className={cn(
-                            "h-9 text-xs sm:text-sm font-medium w-1/2 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-11 min-h-[44px] text-xs sm:text-sm font-semibold flex-1 text-center rounded-lg border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                            "focus:border-primary focus:ring-1 focus:ring-primary/20",
+                            "focus:border-primary focus:ring-2 focus:ring-primary/20",
                             currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
                           )}
                           onChange={(e) => {
@@ -1312,7 +1318,7 @@ export default function SlotCreationWizard({
                                 updateSelectedSlotsField("slotDuration", dur);
                               }}
                               className={cn(
-                                "h-9 flex-1 px-2.5 sm:px-3 text-xs sm:text-sm transition-all",
+                                "h-11 min-h-[44px] flex-1 px-2.5 sm:px-3 text-xs sm:text-sm transition-all rounded-lg",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1336,9 +1342,9 @@ export default function SlotCreationWizard({
                           disabled={selectedSlotKeys.size === 0}
                           value={currentPanelSettings?.customParticipants || ""}
                           className={cn(
-                            "h-9 text-xs sm:text-sm font-medium w-20 sm:w-24 text-center rounded-md border border-input bg-background outline-none transition-colors",
+                            "h-11 min-h-[44px] text-xs sm:text-sm font-semibold w-28 sm:w-36 flex-shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
                             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-                            "focus:border-primary focus:ring-1 focus:ring-primary/20",
+                            "focus:border-primary focus:ring-2 focus:ring-primary/20",
                             currentPanelSettings?.customParticipants && "border-primary font-semibold text-primary"
                           )}
                           onChange={(e) => {
@@ -1364,7 +1370,7 @@ export default function SlotCreationWizard({
                                 updateSelectedSlotsField("maxParticipants", count);
                               }}
                               className={cn(
-                                "h-9 flex-1 px-2 text-xs sm:text-sm transition-all",
+                                "h-11 min-h-[44px] flex-1 px-1.5 sm:px-2 text-xs sm:text-sm transition-all rounded-lg",
                                 isActive && "bg-primary text-primary-foreground font-semibold shadow-sm"
                               )}
                             >
@@ -1382,7 +1388,7 @@ export default function SlotCreationWizard({
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-9 px-3.5 border-border hover:border-primary/50 hover:bg-muted/50 transition-all"
+                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/50 hover:bg-muted/50 transition-all rounded-lg"
                       >
                         <span className="text-xs sm:text-sm font-semibold text-foreground">
                           {t.details}
@@ -1458,9 +1464,20 @@ export default function SlotCreationWizard({
                                 type="button"
                                 variant={repeatPeriod === period ? "default" : "outline"}
                                 size="sm"
-                                onClick={() => setRepeatPeriod(period)}
+                                onClick={() => {
+                                  setRepeatPeriod(period);
+                                  if (period === "custom") {
+                                    if (repeatUntil) {
+                                      const parts = repeatUntil.split("-");
+                                      if (parts.length === 3) {
+                                        setCustomRepeatDateInput(`${parts[2]}.${parts[1]}.${parts[0]}`);
+                                      }
+                                    }
+                                    setIsCustomRepeatDialogOpen(true);
+                                  }
+                                }}
                                 className={cn(
-                                  "h-9 text-xs sm:text-sm font-semibold",
+                                  "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg",
                                   repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
                                 )}
                               >
@@ -1477,29 +1494,31 @@ export default function SlotCreationWizard({
                         </div>
 
                         {repeatPeriod === "custom" && (
-                          <div className="space-y-1.5 pt-0.5">
-                            <Label className="text-xs sm:text-sm font-semibold text-foreground">{t.repeatUntilLabel}</Label>
-                            <Input
-                              type="date"
-                              min={format(new Date(), "yyyy-MM-dd")}
-                              max="9999-12-31"
-                              value={repeatUntil}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (!val) {
-                                  setRepeatUntil("");
-                                  return;
+                          <div className="pt-0.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                if (repeatUntil) {
+                                  const parts = repeatUntil.split("-");
+                                  if (parts.length === 3) {
+                                    setCustomRepeatDateInput(`${parts[2]}.${parts[1]}.${parts[0]}`);
+                                  }
                                 }
-                                const parts = val.split("-");
-                                if (parts[0] && parts[0].length > 4) {
-                                  parts[0] = parts[0].slice(0, 4);
-                                  setRepeatUntil(parts.join("-"));
-                                } else {
-                                  setRepeatUntil(val);
-                                }
+                                setIsCustomRepeatDialogOpen(true);
                               }}
-                              className="h-9 text-xs sm:text-sm bg-background rounded-lg"
-                            />
+                              className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs sm:text-sm font-medium hover:bg-primary/10 transition-all rounded-lg"
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <CalendarIcon className="w-4 h-4 text-primary shrink-0" />
+                                <span className="truncate font-semibold text-foreground">
+                                  {repeatUntil
+                                    ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                    : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
+                                </span>
+                              </div>
+                              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -1510,6 +1529,112 @@ export default function SlotCreationWizard({
             </div>
           )}
         </div>
+
+        {/* Custom Repeat Date Dialog (Modal with calendar and 4-digit max year) */}
+        <Dialog open={isCustomRepeatDialogOpen} onOpenChange={setIsCustomRepeatDialogOpen}>
+          <DialogContent hideCloseButton className="max-w-sm sm:max-w-md w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-1 border-b border-border/50">
+              <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
+                {language === "ru" ? "Повторять до даты" : "Күнге дейін қайталау"}
+              </DialogTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 min-h-0 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => setIsCustomRepeatDialogOpen(false)}
+                title={t.cancel}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Date Input with strict 4-digit year constraint (DD.MM.YYYY) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs sm:text-sm font-semibold text-foreground">
+                {language === "ru" ? "Дата окончания (ДД.ММ.ГГГГ):" : "Аяқталу күні (КК.АА.ЖЖЖЖ):"}
+              </Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="ДД.ММ.ГГГГ"
+                maxLength={10}
+                value={customRepeatDateInput}
+                onChange={(e) => {
+                  let raw = e.target.value.replace(/[^\d.]/g, "");
+                  if (raw.length === 2 && !raw.includes(".")) raw = raw + ".";
+                  else if (raw.length === 5 && raw.split(".").length === 2) raw = raw + ".";
+                  if (raw.length > 10) raw = raw.slice(0, 10);
+                  setCustomRepeatDateInput(raw);
+
+                  const parts = raw.split(".");
+                  if (parts.length === 3 && parts[2].length === 4) {
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const year = parseInt(parts[2], 10);
+                    const parsedDate = new Date(year, month, day);
+                    if (isValid(parsedDate) && year >= 2024 && year <= 2099) {
+                      setRepeatUntil(format(parsedDate, "yyyy-MM-dd"));
+                    }
+                  }
+                }}
+                className="h-11 text-sm font-mono text-center rounded-xl"
+              />
+            </div>
+
+            {/* Calendar picker */}
+            <div className="flex justify-center border border-border/70 rounded-xl p-2 bg-muted/20">
+              <Calendar
+                mode="single"
+                selected={repeatUntil ? parseISO(repeatUntil) : undefined}
+                onSelect={(date) => {
+                  if (date) {
+                    const isoStr = format(date, "yyyy-MM-dd");
+                    setRepeatUntil(isoStr);
+                    setCustomRepeatDateInput(format(date, "dd.MM.yyyy"));
+                  }
+                }}
+                disabled={(date) => date < new Date()}
+                locale={language === "ru" ? ru : kk}
+                initialFocus
+              />
+            </div>
+
+            {/* Footer buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 min-h-0 px-4 text-xs sm:text-sm rounded-xl"
+                onClick={() => setIsCustomRepeatDialogOpen(false)}
+              >
+                {t.cancel}
+              </Button>
+              <Button
+                type="button"
+                className="h-10 min-h-0 px-5 text-xs sm:text-sm bg-primary text-primary-foreground font-semibold rounded-xl"
+                onClick={() => {
+                  if (customRepeatDateInput) {
+                    const parts = customRepeatDateInput.split(".");
+                    if (parts.length === 3 && parts[2].length === 4) {
+                      const day = parseInt(parts[0], 10);
+                      const month = parseInt(parts[1], 10) - 1;
+                      const year = parseInt(parts[2], 10);
+                      const parsedDate = new Date(year, month, day);
+                      if (isValid(parsedDate)) {
+                        setRepeatUntil(format(parsedDate, "yyyy-MM-dd"));
+                      }
+                    }
+                  }
+                  setIsCustomRepeatDialogOpen(false);
+                }}
+              >
+                {t.ready}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Lesson Details Dialog (Modal like in product creation) */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
