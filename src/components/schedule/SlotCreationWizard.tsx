@@ -1069,133 +1069,214 @@ export default function SlotCreationWizard({
 
           {/* STEP 2: Configure Slot Groups */}
           {step === 2 && (
-            <div className="max-w-5xl mx-auto p-4 sm:p-6 w-full">
+            <div
+              onClick={() => setSelectedSlotKeys(new Set())}
+              className="max-w-6xl mx-auto p-4 sm:p-6 w-full"
+            >
               <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 items-start">
-                {/* Left: Day & Slot Groups List (independently scrollable on desktop) */}
-                <div className="space-y-3.5 md:max-h-[calc(100vh-120px)] md:overflow-y-auto md:pr-2">
-                  <div className="pb-1 border-b">
-                    <h3 className="text-base font-semibold text-foreground">
-                      {t.repeatSummary}
-                    </h3>
-                  </div>
-
-                  <div className="space-y-3">
-                    {activeDays.map((dayIdx) => {
-                      const isFullDay = isDayFullySelected(dayIdx);
-
-                      return (
-                        <div
-                          key={dayIdx}
-                          className="p-3.5 rounded-xl border border-border bg-card shadow-sm space-y-3"
-                        >
-                          {/* Day header with clickable circle */}
-                          <div className="flex items-center justify-between">
+                {/* Left: Schedule Grid with continuous interval blocks */}
+                <div className="space-y-3 min-w-0 overflow-x-auto">
+                  <div
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) {
+                        setSelectedSlotKeys(new Set());
+                      }
+                    }}
+                    className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none min-w-[500px]"
+                  >
+                    {/* 7 Days Header (Mon-Sun) */}
+                    <div className="grid grid-cols-7 bg-muted/50 border-b border-border sticky top-0 z-10">
+                      {t.weekDays.map((dayName, idx) => {
+                        const date = weekDates[idx];
+                        const isCur = isSameDay(date, new Date());
+                        const hasSlots = Boolean(effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
+                        return (
+                          <div
+                            key={idx}
+                            className={cn(
+                              "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                              hasSlots && "bg-primary/5"
+                            )}
+                          >
+                            <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                             <div
-                              onClick={() => toggleDaySlotsSelection(dayIdx)}
-                              className="flex items-center gap-2.5 cursor-pointer select-none group"
+                              className={cn(
+                                "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
+                                isCur
+                                  ? "bg-primary text-primary-foreground"
+                                  : hasSlots
+                                  ? "bg-primary/20 text-primary"
+                                  : "text-foreground"
+                              )}
                             >
-                              {/* Round circle for day */}
-                              <div
-                                className={cn(
-                                  "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                  isFullDay
-                                    ? "bg-primary border-primary text-primary-foreground shadow-sm"
-                                    : "border-muted-foreground/40 group-hover:border-primary/60 bg-background"
-                                )}
-                              >
-                                {isFullDay && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-
-                              <span className="text-sm sm:text-base font-semibold text-foreground group-hover:text-primary transition-colors">
-                                {t.weekDaysFull[dayIdx]}
-                              </span>
+                              {format(date, "d")}
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
 
-                          {/* Slot intervals list */}
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {effectiveIntervalsByDay[dayIdx]?.map((interval) => {
+                    {/* Timeline Grid with solid blocks without square splits */}
+                    <div
+                      onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setSelectedSlotKeys(new Set());
+                        }
+                      }}
+                      className="relative grid grid-cols-7 bg-card divide-x divide-border/60"
+                      style={{
+                        height: `${Math.max(360, displayHours.length * 48)}px`,
+                      }}
+                    >
+                      {/* Background horizontal hour lines */}
+                      <div className="absolute inset-0 pointer-events-none flex flex-col">
+                        {displayHours.map((_, i) => (
+                          <div
+                            key={i}
+                            className="border-b border-border/30"
+                            style={{ height: "48px" }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* 7 Day Columns */}
+                      {Array.from({ length: 7 }).map((_, dayIdx) => {
+                        const intervals = effectiveIntervalsByDay[dayIdx] || [];
+                        const startHour = displayHours[0] ?? 9;
+
+                        const getMinutesFromStart = (timeStr: string) => {
+                          const [h, m] = timeStr.split(":").map(Number);
+                          let diffHours = h - startHour;
+                          if (diffHours < 0) diffHours += 24;
+                          return diffHours * 60 + m;
+                        };
+
+                        return (
+                          <div
+                            key={dayIdx}
+                            onClick={(e) => {
+                              if (e.target === e.currentTarget) {
+                                setSelectedSlotKeys(new Set());
+                              }
+                            }}
+                            className="relative h-full"
+                          >
+                            {intervals.map((interval) => {
                               const key = `${dayIdx}_${interval.start}_${interval.end}`;
                               const isSelected = selectedSlotKeys.has(key);
                               const settings = slotSettingsMap[key];
 
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => toggleSlotSelection(key)}
-                                  className={cn(
-                                    "flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-mono transition-all border cursor-pointer select-none text-left",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground border-primary font-semibold shadow-sm ring-2 ring-primary/20 scale-[1.02]"
-                                      : "bg-muted/60 text-foreground border-border/80 hover:bg-muted hover:border-border"
-                                  )}
-                                >
-                                  {/* Small circle indicator */}
-                                  <span
-                                    className={cn(
-                                      "w-4 h-4 rounded-full border flex items-center justify-center flex-none",
-                                      isSelected
-                                        ? "border-primary-foreground bg-primary-foreground text-primary"
-                                        : "border-muted-foreground/50 bg-background"
-                                    )}
-                                  >
-                                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                                  </span>
+                              const startM = getMinutesFromStart(interval.start);
+                              let endM = getMinutesFromStart(interval.end);
+                              if (endM <= startM) {
+                                endM += 24 * 60;
+                              }
+                              const durationM = Math.max(30, endM - startM);
+                              const pixelsPerMinute = 48 / 60;
+                              const topPx = startM * pixelsPerMinute;
+                              const heightPx = Math.max(44, durationM * pixelsPerMinute);
 
-                                  <span>
+                              return (
+                                <div
+                                  key={key}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSlotSelection(key);
+                                  }}
+                                  style={{
+                                    top: `${topPx + 2}px`,
+                                    height: `${heightPx - 4}px`,
+                                  }}
+                                  className={cn(
+                                    "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex flex-col items-center justify-center p-1.5 text-center overflow-hidden",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+                                      : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
+                                  )}
+                                  title={`${interval.start} - ${interval.end}`}
+                                >
+                                  <span className="font-mono font-bold text-xs sm:text-sm leading-tight">
                                     {interval.start} – {interval.end}
                                   </span>
 
-                                  {/* Mini badge showing settings if configured */}
+                                  {/* Configured settings details */}
                                   {settings?.slotDuration && (
                                     <span
                                       className={cn(
-                                        "text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-sans",
+                                        "text-[10px] mt-1 font-medium px-1.5 py-0.5 rounded leading-none",
                                         isSelected
                                           ? "bg-primary-foreground/20 text-primary-foreground"
-                                          : "bg-background text-muted-foreground border border-border/40"
+                                          : "bg-primary/10 text-primary"
                                       )}
                                     >
-                                      {settings.slotDuration} {t.min} • {settings.maxParticipants || 1} чел
+                                      {settings.slotDuration} мин • {settings.maxParticipants || 1} чел
                                     </span>
                                   )}
-                                </button>
+
+                                  {settings?.title && (
+                                    <span
+                                      className={cn(
+                                        "text-[10px] sm:text-[11px] truncate max-w-full font-semibold mt-0.5 leading-tight",
+                                        isSelected ? "text-primary-foreground/90" : "text-foreground"
+                                      )}
+                                    >
+                                      {settings.title}
+                                    </span>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {/* Buttons under schedule: Select all (left, white with orange hover) | Deselect (right) */}
-                  <div className="flex items-center justify-end gap-2.5 pt-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSelectAllSlots}
-                      className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
-                    >
-                      {t.selectAll}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedSlotKeys(new Set())}
-                      className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium"
-                    >
-                      {t.unselectAll}
-                    </Button>
+                  {/* Buttons under schedule: Select all (left) | Deselect (right) */}
+                  <div className="flex items-center justify-between pt-1 px-1">
+                    <span className="text-xs text-muted-foreground">
+                      {selectedSlotKeys.size > 0
+                        ? `Выбрано блоков: ${selectedSlotKeys.size}`
+                        : "Нажмите на блок для настройки параметров"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectAllSlots}
+                        className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
+                      >
+                        {t.selectAll}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={selectedSlotKeys.size === 0}
+                        onClick={() => setSelectedSlotKeys(new Set())}
+                        className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
+                      >
+                        {t.unselectAll}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
-                <div className="w-full space-y-3 self-start md:sticky md:top-0 pb-6">
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full space-y-3 self-start md:sticky md:top-0 pb-6"
+                >
                   {/* Settings Card for selected slot groups */}
-                  <div className="bg-card border border-border p-4 sm:p-4.5 rounded-2xl shadow-sm space-y-3.5">
+                  <div
+                    className={cn(
+                      "bg-card border p-4 sm:p-4.5 rounded-2xl shadow-sm space-y-3.5 transition-all",
+                      selectedSlotKeys.size > 0
+                        ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
+                        : "border-border/60 opacity-60"
+                    )}
+                  >
                     {/* Duration with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
                       <Label className="text-xs sm:text-sm font-semibold text-foreground flex items-center">
