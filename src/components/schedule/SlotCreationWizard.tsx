@@ -63,7 +63,7 @@ interface SlotCreationWizardProps {
     timeIntervals: { start: string; end: string }[];
     repeatDays: number[];
     repeatWeekly: boolean;
-    repeatPeriod: "2weeks" | "1month" | "2months" | "custom" | null;
+    repeatPeriod: "1week" | "1month" | "2months" | "custom" | null;
     repeatUntil: string | null;
     slotDuration: number;
     maxParticipants: number;
@@ -121,10 +121,10 @@ export default function SlotCreationWizard({
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  // Step 2: Global repetition settings (default: 2 weeks)
+  // Step 2: Global repetition settings (default: 1 week)
   const [repeatWeekly, setRepeatWeekly] = useState(true);
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
-  const [repeatPeriod, setRepeatPeriod] = useState<"2weeks" | "1month" | "2months" | "custom" | null>("2weeks");
+  const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "1month" | "2months" | "custom" | null>("1week");
   const [repeatUntil, setRepeatUntil] = useState("");
 
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -195,7 +195,7 @@ export default function SlotCreationWizard({
       setIsRangeOpen(false);
       setIsConfirmClearOpen(false);
       setRepeatWeekly(true);
-      setRepeatPeriod("2weeks");
+      setRepeatPeriod("1week");
       setRepeatUntil("");
       setIsDetailsDialogOpen(false);
       coverCrop.resetCrop();
@@ -222,11 +222,13 @@ export default function SlotCreationWizard({
       apply: "Применить",
       weekDays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
       weekDaysFull: ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"],
-      twoWeeks: "2 недели",
+      oneWeek: "1 неделя",
       oneMonth: "1 месяц",
       twoMonths: "2 месяца",
       custom: "Свой",
       everyWeek: "Повторять расписание",
+      repeatScheduleTitle: "Повторение расписания",
+      slotParams: "Параметры слотов",
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
       repeatUntilLabel: "Повторять до даты:",
@@ -261,11 +263,13 @@ export default function SlotCreationWizard({
       apply: "Қолдану",
       weekDays: ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"],
       weekDaysFull: ["Дүйсенбі", "Сейсенбі", "Сәрсенбі", "Бейсенбі", "Жұма", "Сенбі", "Жексенбі"],
-      twoWeeks: "2 апта",
+      oneWeek: "1 апта",
       oneMonth: "1 ай",
       twoMonths: "2 ай",
       custom: "Өзгерту",
       everyWeek: "Кестені қайталау",
+      repeatScheduleTitle: "Кестені қайталау",
+      slotParams: "Слот баптаулары",
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
       repeatUntilLabel: "Күнге дейін қайталау:",
@@ -1071,203 +1075,193 @@ export default function SlotCreationWizard({
           {step === 2 && (
             <div
               onClick={() => setSelectedSlotKeys(new Set())}
-              className="max-w-6xl mx-auto p-4 sm:p-6 w-full"
+              className="flex gap-5 p-2 sm:p-4 min-w-[750px]"
             >
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 items-start">
-                {/* Left: Schedule Grid with continuous interval blocks */}
-                <div className="space-y-3 min-w-0 overflow-x-auto">
+              {/* Left: Schedule Grid with continuous interval blocks */}
+              <div className="flex-1 min-w-0">
+                <div
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setSelectedSlotKeys(new Set());
+                    }
+                  }}
+                  className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none"
+                >
+                  {/* 7 Days Header (Mon-Sun) */}
+                  <div className="grid grid-cols-7 bg-muted/50 border-b border-border sticky top-0 z-10">
+                    {t.weekDays.map((dayName, idx) => {
+                      const date = weekDates[idx];
+                      const isCur = isSameDay(date, new Date());
+                      const hasSlots = Boolean(effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
+                      return (
+                        <div
+                          key={idx}
+                          className={cn(
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            hasSlots && "bg-primary/5"
+                          )}
+                        >
+                          <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
+                          <div
+                            className={cn(
+                              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
+                              isCur
+                                ? "bg-primary text-primary-foreground"
+                                : hasSlots
+                                ? "bg-primary/20 text-primary"
+                                : "text-foreground"
+                            )}
+                          >
+                            {format(date, "d")}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Timeline Grid with solid blocks without square splits */}
                   <div
                     onClick={(e) => {
                       if (e.target === e.currentTarget) {
                         setSelectedSlotKeys(new Set());
                       }
                     }}
-                    className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none min-w-[500px]"
+                    className="relative grid grid-cols-7 bg-card divide-x divide-border/60"
+                    style={{
+                      height: `${Math.max(360, displayHours.length * 48)}px`,
+                    }}
                   >
-                    {/* 7 Days Header (Mon-Sun) */}
-                    <div className="grid grid-cols-7 bg-muted/50 border-b border-border sticky top-0 z-10">
-                      {t.weekDays.map((dayName, idx) => {
-                        const date = weekDates[idx];
-                        const isCur = isSameDay(date, new Date());
-                        const hasSlots = Boolean(effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
-                        return (
-                          <div
-                            key={idx}
-                            className={cn(
-                              "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
-                              hasSlots && "bg-primary/5"
-                            )}
-                          >
-                            <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
-                            <div
-                              className={cn(
-                                "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
-                                isCur
-                                  ? "bg-primary text-primary-foreground"
-                                  : hasSlots
-                                  ? "bg-primary/20 text-primary"
-                                  : "text-foreground"
-                              )}
-                            >
-                              {format(date, "d")}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    {/* Background horizontal hour lines */}
+                    <div className="absolute inset-0 pointer-events-none flex flex-col">
+                      {displayHours.map((_, i) => (
+                        <div
+                          key={i}
+                          className="border-b border-border/30"
+                          style={{ height: "48px" }}
+                        />
+                      ))}
                     </div>
 
-                    {/* Timeline Grid with solid blocks without square splits */}
-                    <div
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          setSelectedSlotKeys(new Set());
-                        }
-                      }}
-                      className="relative grid grid-cols-7 bg-card divide-x divide-border/60"
-                      style={{
-                        height: `${Math.max(360, displayHours.length * 48)}px`,
-                      }}
-                    >
-                      {/* Background horizontal hour lines */}
-                      <div className="absolute inset-0 pointer-events-none flex flex-col">
-                        {displayHours.map((_, i) => (
-                          <div
-                            key={i}
-                            className="border-b border-border/30"
-                            style={{ height: "48px" }}
-                          />
-                        ))}
-                      </div>
+                    {/* 7 Day Columns */}
+                    {Array.from({ length: 7 }).map((_, dayIdx) => {
+                      const intervals = effectiveIntervalsByDay[dayIdx] || [];
+                      const startHour = displayHours[0] ?? 9;
 
-                      {/* 7 Day Columns */}
-                      {Array.from({ length: 7 }).map((_, dayIdx) => {
-                        const intervals = effectiveIntervalsByDay[dayIdx] || [];
-                        const startHour = displayHours[0] ?? 9;
+                      const getMinutesFromStart = (timeStr: string) => {
+                        const [h, m] = timeStr.split(":").map(Number);
+                        let diffHours = h - startHour;
+                        if (diffHours < 0) diffHours += 24;
+                        return diffHours * 60 + m;
+                      };
 
-                        const getMinutesFromStart = (timeStr: string) => {
-                          const [h, m] = timeStr.split(":").map(Number);
-                          let diffHours = h - startHour;
-                          if (diffHours < 0) diffHours += 24;
-                          return diffHours * 60 + m;
-                        };
+                      return (
+                        <div
+                          key={dayIdx}
+                          onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                              setSelectedSlotKeys(new Set());
+                            }
+                          }}
+                          className="relative h-full"
+                        >
+                          {intervals.map((interval) => {
+                            const key = `${dayIdx}_${interval.start}_${interval.end}`;
+                            const isSelected = selectedSlotKeys.has(key);
 
-                        return (
-                          <div
-                            key={dayIdx}
-                            onClick={(e) => {
-                              if (e.target === e.currentTarget) {
-                                setSelectedSlotKeys(new Set());
-                              }
-                            }}
-                            className="relative h-full"
-                          >
-                            {intervals.map((interval) => {
-                              const key = `${dayIdx}_${interval.start}_${interval.end}`;
-                              const isSelected = selectedSlotKeys.has(key);
-                              const settings = slotSettingsMap[key];
+                            const startM = getMinutesFromStart(interval.start);
+                            let endM = getMinutesFromStart(interval.end);
+                            if (endM <= startM) {
+                              endM += 24 * 60;
+                            }
+                            const durationM = Math.max(30, endM - startM);
+                            const pixelsPerMinute = 48 / 60;
+                            const topPx = startM * pixelsPerMinute;
+                            const heightPx = Math.max(44, durationM * pixelsPerMinute);
 
-                              const startM = getMinutesFromStart(interval.start);
-                              let endM = getMinutesFromStart(interval.end);
-                              if (endM <= startM) {
-                                endM += 24 * 60;
-                              }
-                              const durationM = Math.max(30, endM - startM);
-                              const pixelsPerMinute = 48 / 60;
-                              const topPx = startM * pixelsPerMinute;
-                              const heightPx = Math.max(44, durationM * pixelsPerMinute);
-
-                              return (
-                                <div
-                                  key={key}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSlotSelection(key);
-                                  }}
-                                  style={{
-                                    top: `${topPx + 2}px`,
-                                    height: `${heightPx - 4}px`,
-                                  }}
-                                  className={cn(
-                                    "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex flex-col items-center justify-center p-1.5 text-center overflow-hidden",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                      : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
-                                  )}
-                                  title={`${interval.start} - ${interval.end}`}
-                                >
-                                  <span className="font-mono font-bold text-xs sm:text-sm leading-tight">
-                                    {interval.start} – {interval.end}
-                                  </span>
-
-                                  {/* Configured settings details */}
-                                  {settings?.slotDuration && (
-                                    <span
-                                      className={cn(
-                                        "text-[10px] mt-1 font-medium px-1.5 py-0.5 rounded leading-none",
-                                        isSelected
-                                          ? "bg-primary-foreground/20 text-primary-foreground"
-                                          : "bg-primary/10 text-primary"
-                                      )}
-                                    >
-                                      {settings.slotDuration} мин • {settings.maxParticipants || 1} чел
-                                    </span>
-                                  )}
-
-                                  {settings?.title && (
-                                    <span
-                                      className={cn(
-                                        "text-[10px] sm:text-[11px] truncate max-w-full font-semibold mt-0.5 leading-tight",
-                                        isSelected ? "text-primary-foreground/90" : "text-foreground"
-                                      )}
-                                    >
-                                      {settings.title}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Buttons under schedule: Select all (left) | Deselect (right) */}
-                  <div className="flex items-center justify-between pt-1 px-1">
-                    <span className="text-xs text-muted-foreground">
-                      {selectedSlotKeys.size > 0
-                        ? `Выбрано блоков: ${selectedSlotKeys.size}`
-                        : "Нажмите на блок для настройки параметров"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSelectAllSlots}
-                        className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
-                      >
-                        {t.selectAll}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={selectedSlotKeys.size === 0}
-                        onClick={() => setSelectedSlotKeys(new Set())}
-                        className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
-                      >
-                        {t.unselectAll}
-                      </Button>
-                    </div>
+                            return (
+                              <div
+                                key={key}
+                                onClick={(e) => {
+                                 e.stopPropagation();
+                                 toggleSlotSelection(key);
+                                }}
+                                style={{
+                                  top: `${topPx + 2}px`,
+                                  height: `${heightPx - 4}px`,
+                                }}
+                                className={cn(
+                                  "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+                                    : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
+                                )}
+                                title={`${interval.start} - ${interval.end}`}
+                              >
+                                <span className="font-mono font-bold text-xs sm:text-sm leading-tight">
+                                  {interval.start} – {interval.end}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
+                {/* Buttons under schedule: Select all (left) | Deselect (right) */}
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full space-y-3 self-start md:sticky md:top-0 pb-6"
+                  className="flex items-center justify-between mt-3 mb-2 px-1"
                 >
+                  <span className="text-xs text-muted-foreground">
+                    {selectedSlotKeys.size > 0
+                      ? (language === "ru" ? `Выбрано блоков: ${selectedSlotKeys.size}` : `Таңдалған блоктар: ${selectedSlotKeys.size}`)
+                      : (language === "ru" ? "Нажмите на блок для настройки параметров" : "Баптауларды өзгерту үшін блокқа басыңыз")}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectAllSlots();
+                      }}
+                      className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
+                    >
+                      {t.selectAll}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={selectedSlotKeys.size === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSlotKeys(new Set());
+                      }}
+                      className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
+                    >
+                      {t.unselectAll}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-72 sm:w-80 md:w-96 flex-none"
+              >
+                <div className="sticky top-4 space-y-3.5">
+                  {/* Title above Slot Parameters */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-base sm:text-[17px] font-medium text-foreground">
+                      {t.slotParams}
+                    </p>
+                  </div>
+
                   {/* Settings Card for selected slot groups */}
                   <div
                     className={cn(
@@ -1398,6 +1392,13 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
 
+                  {/* Title above Repeat Schedule */}
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-base sm:text-[17px] font-medium text-foreground">
+                      {t.repeatScheduleTitle}
+                    </p>
+                  </div>
+
                   {/* Separate Repetition Card under Settings Card */}
                   <div className="p-4 sm:p-4.5 rounded-2xl border border-border bg-card shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
@@ -1451,7 +1452,7 @@ export default function SlotCreationWizard({
                             {t.repeatPeriodLabel}
                           </Label>
                           <div className="grid grid-cols-2 gap-2">
-                            {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
+                            {(["1week", "1month", "2months", "custom"] as const).map((period) => (
                               <Button
                                 key={period}
                                 type="button"
@@ -1463,8 +1464,8 @@ export default function SlotCreationWizard({
                                   repeatPeriod === period && "bg-primary text-primary-foreground font-semibold"
                                 )}
                               >
-                                {period === "2weeks"
-                                  ? t.twoWeeks
+                                {period === "1week"
+                                  ? t.oneWeek
                                   : period === "1month"
                                   ? t.oneMonth
                                   : period === "2months"

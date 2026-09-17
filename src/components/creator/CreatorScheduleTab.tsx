@@ -788,7 +788,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       timeIntervals: { start: string; end: string }[];
       repeatDays: number[];
       repeatWeekly: boolean;
-      repeatPeriod: "2weeks" | "1month" | "2months" | "custom" | null;
+      repeatPeriod: "1week" | "1month" | "2months" | "custom" | null;
       repeatUntil: string | null;
       slotDuration: number;
       maxParticipants: number;
@@ -806,7 +806,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       let endDate = addDays(currentWeekStart, 6); // default: current week (Mon -> Sun)
 
       if (params.repeatWeekly && params.repeatPeriod) {
-        if (params.repeatPeriod === "2weeks") endDate = addDays(currentWeekStart, 13);
+        if (params.repeatPeriod === "1week") endDate = addDays(currentWeekStart, 6);
         else if (params.repeatPeriod === "1month") endDate = addMonths(currentWeekStart, 1);
         else if (params.repeatPeriod === "2months") endDate = addMonths(currentWeekStart, 2);
         else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = new Date(params.repeatUntil);
