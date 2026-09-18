@@ -105,6 +105,18 @@ export default function SlotCreationWizard({
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [showLateHours, setShowLateHours] = useState(false);
+  const [lateHoursOverflowVisible, setLateHoursOverflowVisible] = useState(false);
+
+  useEffect(() => {
+    if (showLateHours) {
+      const timer = setTimeout(() => {
+        setLateHoursOverflowVisible(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    } else {
+      setLateHoursOverflowVisible(false);
+    }
+  }, [showLateHours]);
   const [workingHours, setWorkingHours] = useState({ start: "09:00", end: "21:00" });
   const [tempWorkingHours, setTempWorkingHours] = useState({ start: "09:00", end: "21:00" });
   const [isRangeOpen, setIsRangeOpen] = useState(false);
@@ -229,6 +241,7 @@ export default function SlotCreationWizard({
       setSelectedSlotKeys(new Set());
       setIsMouseDown(false);
       setShowLateHours(false);
+      setLateHoursOverflowVisible(false);
       setWorkingHours({ start: "09:00", end: "21:00" });
       setTempWorkingHours({ start: "09:00", end: "21:00" });
       setIsRangeOpen(false);
@@ -710,6 +723,7 @@ export default function SlotCreationWizard({
   const handleToggleLateHours = () => {
     if (showLateHours) {
       setShowLateHours(false);
+      setLateHoursOverflowVisible(false);
       setTimeout(() => {
         scrollContainerRef.current?.scrollTo({
           top: savedScrollTopRef.current,
@@ -729,7 +743,7 @@ export default function SlotCreationWizard({
 
     return (
       <div key={h} className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-        <div className="relative border-r border-foreground/35 select-none">
+        <div className="relative border-r border-border/60 select-none">
           <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
             {hourStr}:00
           </span>
@@ -892,7 +906,7 @@ export default function SlotCreationWizard({
                   <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/10">
                     <div className="border-r border-border/60 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
-                      <div key={i} className="border-r last:border-r-0 border-border/60 h-2 sm:h-2.5" />
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5" />
                     ))}
                   </div>
 
@@ -901,10 +915,23 @@ export default function SlotCreationWizard({
                     {baseHours.map(renderHourRow)}
 
                     {/* Late hours */}
+                    {showLateHours && !lateHoursOverflowVisible && lateHoursArr.length > 0 && (
+                      <div className="relative h-0">
+                        <span className="absolute -top-[7px] left-0 w-[70px] text-right pr-2 text-[11px] font-mono text-muted-foreground select-none pointer-events-none z-20">
+                          {String(lateHoursArr[0]).padStart(2, "0")}:00
+                        </span>
+                      </div>
+                    )}
                     <div
-                      className="overflow-hidden transition-[max-height] duration-700 ease-in-out"
+                      onTransitionEnd={() => {
+                        if (showLateHours) {
+                          setLateHoursOverflowVisible(true);
+                        }
+                      }}
+                      className="transition-[max-height] duration-700 ease-in-out"
                       style={{
                         maxHeight: showLateHours ? `${lateMaxHeight}px` : "0px",
+                        overflow: lateHoursOverflowVisible ? "visible" : "hidden",
                       }}
                     >
                       {lateHoursArr.map(renderHourRow)}
@@ -912,7 +939,7 @@ export default function SlotCreationWizard({
 
                     {/* Final closing line */}
                     <div className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-                      <div className="relative border-r border-foreground/35 h-3 select-none">
+                      <div className="relative border-r border-border/60 h-3 select-none">
                         <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
                           {closingHourStr}
                         </span>
@@ -1169,7 +1196,7 @@ export default function SlotCreationWizard({
                         setSelectedSlotKeys(new Set());
                       }
                     }}
-                    className="relative grid grid-cols-7 bg-card divide-x divide-foreground/35"
+                    className="relative grid grid-cols-7 bg-card divide-x divide-border/60"
                     style={{
                       height: `${Math.max(360, displayHours.length * 48)}px`,
                     }}
@@ -1236,7 +1263,7 @@ export default function SlotCreationWizard({
                                   "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
                                   isSelected
                                     ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                    : "bg-primary/25 text-primary border-2 border-primary/50 hover:bg-primary/35 hover:border-primary/70 z-10"
+                                    : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
                                 )}
                                 title={`${interval.start} - ${interval.end}`}
                               >
