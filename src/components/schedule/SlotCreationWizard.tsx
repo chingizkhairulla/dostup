@@ -595,16 +595,19 @@ export default function SlotCreationWizard({
 
   const activeDays = useMemo(() => Object.keys(effectiveIntervalsByDay).map(Number), [effectiveIntervalsByDay]);
 
-  // All slot keys in Step 2: `${dayIdx}_${start}_${end}`
+  // All slot keys in Step 2: `${dateStr}_${start}_${end}`
   const allSlotKeys = useMemo(() => {
     const keys: string[] = [];
     activeDays.forEach((dayIdx) => {
+      const date = weekDates[dayIdx];
+      if (!date) return;
+      const dateStr = format(date, "yyyy-MM-dd");
       effectiveIntervalsByDay[dayIdx]?.forEach((interval) => {
-        keys.push(`${dayIdx}_${interval.start}_${interval.end}`);
+        keys.push(`${dateStr}_${interval.start}_${interval.end}`);
       });
     });
     return keys;
-  }, [activeDays, effectiveIntervalsByDay]);
+  }, [activeDays, effectiveIntervalsByDay, weekDates]);
 
   // Default initial settings for when a slot is first clicked
   const createDefaultSlotSettings = (): SlotSettings => ({
@@ -628,11 +631,14 @@ export default function SlotCreationWizard({
       const newKeys: string[] = [];
       const allKeys: string[] = [];
       activeDays.forEach((dayIdx) => {
+        const date = weekDates[dayIdx];
+        if (!date) return;
+        const dateStr = format(date, "yyyy-MM-dd");
         const intervals = effectiveIntervalsByDay[dayIdx] || [];
         intervals.forEach((interval) => {
-          const key = `${dayIdx}_${interval.start}_${interval.end}`;
+          const key = `${dateStr}_${interval.start}_${interval.end}`;
           allKeys.push(key);
-          if (!existingSlotKeysSet.has(key)) {
+          if (!existingSlotKeysSet.has(`${dayIdx}_${interval.start}_${interval.end}`)) {
             newKeys.push(key);
           }
         });
@@ -697,8 +703,10 @@ export default function SlotCreationWizard({
 
   // Toggle selection of all slots for a given day in Step 2
   const toggleDaySlotsSelection = (dayIdx: number) => {
+    const date = weekDates[dayIdx];
+    const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
     const dayKeys = (effectiveIntervalsByDay[dayIdx] || []).map(
-      (it) => `${dayIdx}_${it.start}_${it.end}`
+      (it) => `${dateStr}_${it.start}_${it.end}`
     );
     const allSelected = dayKeys.every((k) => selectedSlotKeys.has(k));
 
@@ -721,7 +729,7 @@ export default function SlotCreationWizard({
     });
   };
 
-  // Select all slots across all days
+  // Select all slots across currently open week
   const handleSelectAllSlots = () => {
     setSlotSettingsMap((prev) => {
       let map = { ...prev };
@@ -730,13 +738,19 @@ export default function SlotCreationWizard({
       });
       return map;
     });
-    setSelectedSlotKeys(new Set(allSlotKeys));
+    setSelectedSlotKeys((prev) => {
+      const next = new Set(prev);
+      allSlotKeys.forEach((k) => next.add(k));
+      return next;
+    });
   };
 
   // Check if a day has all its slots selected
   const isDayFullySelected = (dayIdx: number) => {
+    const date = weekDates[dayIdx];
+    const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
     const dayKeys = (effectiveIntervalsByDay[dayIdx] || []).map(
-      (it) => `${dayIdx}_${it.start}_${it.end}`
+      (it) => `${dateStr}_${it.start}_${it.end}`
     );
     return dayKeys.length > 0 && dayKeys.every((k) => selectedSlotKeys.has(k));
   };
@@ -852,9 +866,11 @@ export default function SlotCreationWizard({
     > = {};
 
     activeDays.forEach((dayIdx) => {
+      const date = weekDates[dayIdx];
+      const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
       const intervals = effectiveIntervalsByDay[dayIdx] || [];
       daySlotsPayload[dayIdx] = intervals.map((interval) => {
-        const key = `${dayIdx}_${interval.start}_${interval.end}`;
+        const key = `${dateStr}_${interval.start}_${interval.end}`;
         const settings = slotSettingsMap[key] || createDefaultSlotSettings();
         return {
           start: interval.start,
@@ -1298,7 +1314,7 @@ export default function SlotCreationWizard({
               </div>
 
               {/* Right: Summary panel — "Расписание:" */}
-              <div className="w-72 sm:w-80 md:w-96 flex-none">
+              <div className="w-80 sm:w-96 md:w-[440px] flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <div className="flex items-center justify-between">
                     <p className="text-base sm:text-[17px] font-medium text-foreground">
@@ -1373,7 +1389,8 @@ export default function SlotCreationWizard({
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
-                      const isDaySelectedInStep2 = Array.from(selectedSlotKeys).some((key) => key.startsWith(`${idx}_`));
+                      const dateStr = format(date, "yyyy-MM-dd");
+                      const isDaySelectedInStep2 = Array.from(selectedSlotKeys).some((key) => key.startsWith(`${dateStr}_`));
                       return (
                         <div
                           key={idx}
@@ -1471,7 +1488,9 @@ export default function SlotCreationWizard({
                             className="relative h-full"
                           >
                             {intervals.map((interval) => {
-                              const key = `${dayIdx}_${interval.start}_${interval.end}`;
+                              const date = weekDates[dayIdx];
+                              const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
+                              const key = `${dateStr}_${interval.start}_${interval.end}`;
                               const isSelected = selectedSlotKeys.has(key);
 
                               const startM = getMinutesFromStart(interval.start);
@@ -1525,7 +1544,7 @@ export default function SlotCreationWizard({
                   className="flex items-center justify-end mt-3 mb-2 px-1"
                 >
                   {(() => {
-                    const isAllSelected = allSlotKeys.length > 0 && selectedSlotKeys.size === allSlotKeys.length;
+                    const isAllSelected = allSlotKeys.length > 0 && allSlotKeys.every((k) => selectedSlotKeys.has(k));
                     return (
                       <Button
                         type="button"
@@ -1535,7 +1554,11 @@ export default function SlotCreationWizard({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isAllSelected) {
-                            setSelectedSlotKeys(new Set());
+                            setSelectedSlotKeys((prev) => {
+                              const next = new Set(prev);
+                              allSlotKeys.forEach((k) => next.delete(k));
+                              return next;
+                            });
                           } else {
                             handleSelectAllSlots();
                           }
@@ -1557,7 +1580,7 @@ export default function SlotCreationWizard({
               {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-72 sm:w-80 md:w-96 flex-none"
+                className="w-80 sm:w-96 md:w-[440px] flex-none"
               >
                 <div className="sticky top-4 space-y-3.5">
                   {/* Title above Slot Parameters */}
@@ -1693,7 +1716,7 @@ export default function SlotCreationWizard({
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
+                        className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
                       >
                         <span className="text-xs sm:text-sm font-semibold text-foreground">
                           {t.details}
@@ -1703,8 +1726,8 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
 
-                  {/* Title above Repeat Schedule */}
-                  <div className="flex items-center justify-between pt-1">
+                  {/* Title above Repeat Schedule with spacious gap from settings card above */}
+                  <div className="flex items-center justify-between pt-4 sm:pt-5">
                     <p className="text-base sm:text-[17px] font-medium text-foreground whitespace-pre-line leading-snug">
                       {t.repeatScheduleTitle}
                     </p>
