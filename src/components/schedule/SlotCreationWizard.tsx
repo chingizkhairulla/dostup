@@ -75,6 +75,7 @@ interface SlotCreationWizardProps {
     imageUrl?: string;
     location?: string;
   }) => void;
+  onDeleteSlots?: (dates: string[]) => Promise<void> | void;
   isPending?: boolean;
 }
 
@@ -101,6 +102,7 @@ export default function SlotCreationWizard({
   language,
   existingSlots,
   onCreateSlots,
+  onDeleteSlots,
   isPending,
 }: SlotCreationWizardProps) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -340,10 +342,10 @@ export default function SlotCreationWizard({
       description: "Описание",
       location: "Местоположение",
       ready: "Готово",
-      clearAll: "Очистить",
-      confirmClearTitle: "Точно очистить все слоты?",
+      clearAll: "Удалить",
+      confirmClearTitle: "Точно удалить все слоты?",
       cancel: "Отмена",
-      confirm: "Очистить",
+      confirm: "Удалить",
       noSlotsWarning: "Выберите хотя бы одну клетку",
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все",
@@ -383,10 +385,10 @@ export default function SlotCreationWizard({
       description: "Сипаттамасы",
       location: "Орналасу жері",
       ready: "Дайын",
-      clearAll: "Тазарту",
-      confirmClearTitle: "Барлық слоттарды тазарту керек пе?",
+      clearAll: "Жою",
+      confirmClearTitle: "Барлық слоттарды жою керек пе?",
       cancel: "Болдырмау",
-      confirm: "Тазарту",
+      confirm: "Жою",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
       repeatSummary: "Кесте:",
       selectAll: "Барлығын таңдау",
@@ -799,7 +801,7 @@ export default function SlotCreationWizard({
       startDate: format(weekDates[0], "yyyy-MM-dd"),
       daySlots: daySlotsPayload,
       timeIntervals: allIntervals,
-      repeatDays: repeatWeekly ? repeatDays : activeDays,
+      repeatDays: activeDays,
       repeatWeekly,
       repeatPeriod: repeatWeekly ? repeatPeriod : null,
       repeatUntil: repeatWeekly && repeatPeriod === "custom" ? repeatUntil : null,
@@ -976,7 +978,7 @@ export default function SlotCreationWizard({
                           key={idx}
                           className={cn(
                             "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
-                            hasSlots && "bg-primary/5"
+                            hasSlots && "bg-primary/15"
                           )}
                         >
                           {idx === 0 && weekOffset > 0 && (
@@ -986,10 +988,10 @@ export default function SlotCreationWizard({
                                 e.stopPropagation();
                                 changeWeek(weekOffset - 1);
                               }}
-                              className="absolute left-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
                               title="Предыдущая неделя"
                             >
-                              <ChevronLeft className="w-4 h-4" />
+                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
@@ -997,7 +999,7 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary text-primary-foreground"
+                                ? "bg-primary/20 text-primary"
                                 : "text-foreground"
                             )}
                           >
@@ -1010,10 +1012,10 @@ export default function SlotCreationWizard({
                                 e.stopPropagation();
                                 changeWeek(weekOffset + 1);
                               }}
-                              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
                               title="Следующая неделя"
                             >
-                              <ChevronRight className="w-4 h-4" />
+                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
                         </div>
@@ -1185,12 +1187,20 @@ export default function SlotCreationWizard({
                               size="sm"
                               variant="destructive"
                               className="h-7 px-2.5 text-xs"
-                              onClick={() => {
+                              onClick={async () => {
+                                const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
                                 setCustomDayIntervals({});
                                 setSlotSettingsMap({});
                                 setSelectedSlotKeys(new Set());
+                                setCellsByWeek((prev) => ({
+                                  ...prev,
+                                  [weekOffset]: new Set(),
+                                }));
                                 setIsConfirmClearOpen(false);
+                                if (onDeleteSlots) {
+                                  await onDeleteSlots(dates);
+                                }
                               }}
                             >
                               {t.confirm}
@@ -1279,13 +1289,13 @@ export default function SlotCreationWizard({
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
-                      const hasSlots = Boolean(effectiveIntervalsByDay[idx] && effectiveIntervalsByDay[idx].length > 0);
+                      const isDaySelectedInStep2 = Array.from(selectedSlotKeys).some((key) => key.startsWith(`${idx}_`));
                       return (
                         <div
                           key={idx}
                           className={cn(
                             "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
-                            hasSlots && "bg-primary/5"
+                            isDaySelectedInStep2 && "bg-primary/15"
                           )}
                         >
                           {idx === 0 && weekOffset > 0 && (
@@ -1295,10 +1305,10 @@ export default function SlotCreationWizard({
                                 e.stopPropagation();
                                 changeWeek(weekOffset - 1);
                               }}
-                              className="absolute left-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
                               title="Предыдущая неделя"
                             >
-                              <ChevronLeft className="w-4 h-4" />
+                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
@@ -1306,7 +1316,7 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary text-primary-foreground"
+                                ? "bg-primary/20 text-primary"
                                 : "text-foreground"
                             )}
                           >
@@ -1319,10 +1329,10 @@ export default function SlotCreationWizard({
                                 e.stopPropagation();
                                 changeWeek(weekOffset + 1);
                               }}
-                              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
                               title="Следующая неделя"
                             >
-                              <ChevronRight className="w-4 h-4" />
+                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                           )}
                         </div>

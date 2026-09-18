@@ -825,15 +825,19 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       const today = new Date();
       const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
 
-      const startDate = params.startDate ? new Date(params.startDate) : currentWeekStart;
+      const startDate = params.startDate ? parseISO(params.startDate) : currentWeekStart;
       let endDate = addDays(startDate, 6);
 
       if (params.repeatWeekly && params.repeatPeriod) {
         if (params.repeatPeriod === "1week") endDate = addDays(startDate, 13);
         else if (params.repeatPeriod === "1month") endDate = addMonths(startDate, 1);
         else if (params.repeatPeriod === "2months") endDate = addMonths(startDate, 2);
-        else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = new Date(params.repeatUntil);
+        else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = parseISO(params.repeatUntil);
       }
+
+      const daysToRepeat = (params.repeatDays && params.repeatDays.length > 0)
+        ? params.repeatDays
+        : Object.keys(params.daySlots || {}).map(Number);
 
       // Pre-fetch all existing slots across the target range to avoid duplicates
       let dbSlots: TimeSlot[] = timeSlots;
@@ -865,14 +869,14 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
         const monFirstDay = (currentDate.getDay() + 6) % 7;
         const isFutureWeek = currentDate > addDays(startDate, 6);
-        if (isFutureWeek && params.repeatWeekly && !params.repeatDays.includes(monFirstDay)) {
+        if (isFutureWeek && params.repeatWeekly && !daysToRepeat.includes(monFirstDay)) {
           currentDate = addDays(currentDate, 1);
           continue;
         }
 
         const intervalsForDay = params.daySlots
           ? params.daySlots[monFirstDay] || []
-          : params.repeatDays.includes(monFirstDay)
+          : daysToRepeat.includes(monFirstDay)
           ? params.timeIntervals
           : [];
 
@@ -1835,6 +1839,12 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         language={language as "ru" | "kk"}
         existingSlots={timeSlots}
         onCreateSlots={(params) => createWizardSlots.mutate(params)}
+        onDeleteSlots={async (dates) => {
+          const scheduleId = schedules[0]?.id || (await ensureScheduleId());
+          if (scheduleId) {
+            await deleteMultipleSlots.mutateAsync({ scheduleId, dates });
+          }
+        }}
         isPending={createWizardSlots.isPending}
       />
 
