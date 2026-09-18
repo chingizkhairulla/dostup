@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, SlidersHorizontal } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
@@ -270,8 +270,8 @@ export default function SlotCreationWizard({
       twoMonths: "2 месяца",
       custom: "Свой",
       customValue: "Своё",
-      everyWeek: "Повторять расписание",
-      repeatScheduleTitle: "Расписание\nПовторять определенное время",
+      everyWeek: "Повторять определенное время",
+      repeatScheduleTitle: "Расписание",
       slotParams: "Параметры слотов",
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
@@ -312,8 +312,8 @@ export default function SlotCreationWizard({
       twoMonths: "2 ай",
       custom: "Өзгерту",
       customValue: "Өзім",
-      everyWeek: "Кестені қайталау",
-      repeatScheduleTitle: "Кесте\nБелгілі бір уақытқа қайталау",
+      everyWeek: "Белгілі бір уақытқа қайталау",
+      repeatScheduleTitle: "Кесте",
       slotParams: "Слот баптаулары",
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
@@ -729,13 +729,13 @@ export default function SlotCreationWizard({
 
     return (
       <div key={h} className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-        <div className="relative border-r border-border/60 select-none">
+        <div className="relative border-r border-foreground/35 select-none">
           <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
             {hourStr}:00
           </span>
         </div>
         {Array.from({ length: 7 }).map((_, dayIdx) => (
-          <div key={dayIdx} className="border-r last:border-r-0 border-border/60 flex flex-col">
+          <div key={dayIdx} className="border-r last:border-r-0 border-foreground/35 flex flex-col">
             {halfHours.map((m) => {
               const minuteStr = String(m).padStart(2, "0");
               const cellId = `${dayIdx}_${hourStr}:${minuteStr}`;
@@ -855,7 +855,7 @@ export default function SlotCreationWizard({
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
                   {/* Grid header with days */}
                   <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
-                    <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-border/60 flex items-center justify-center">
+                    <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-foreground/35 flex items-center justify-center">
                       {t.timezone}
                     </div>
                     {t.weekDays.map((dayName, idx) => {
@@ -866,7 +866,7 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-foreground/35 flex flex-col items-center justify-center transition-colors",
                             hasSlots && "bg-primary/5"
                           )}
                         >
@@ -890,9 +890,9 @@ export default function SlotCreationWizard({
 
                   {/* Spacer */}
                   <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/10">
-                    <div className="border-r border-border/60 h-2 sm:h-2.5" />
+                    <div className="border-r border-foreground/35 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
-                      <div key={i} className="border-r last:border-r-0 border-border/60 h-2 sm:h-2.5" />
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5" />
                     ))}
                   </div>
 
@@ -905,8 +905,6 @@ export default function SlotCreationWizard({
                       className="overflow-hidden transition-[max-height] duration-700 ease-in-out"
                       style={{
                         maxHeight: showLateHours ? `${lateMaxHeight}px` : "0px",
-                        paddingTop: showLateHours ? "10px" : "0px",
-                        marginTop: showLateHours ? "-10px" : "0px",
                       }}
                     >
                       {lateHoursArr.map(renderHourRow)}
@@ -914,7 +912,7 @@ export default function SlotCreationWizard({
 
                     {/* Final closing line */}
                     <div className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-                      <div className="relative border-r border-border/60 h-3 select-none">
+                      <div className="relative border-r border-foreground/35 border-t border-foreground/35 h-3 select-none">
                         <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
                           {closingHourStr}
                         </span>
@@ -922,7 +920,7 @@ export default function SlotCreationWizard({
                       {Array.from({ length: 7 }).map((_, i) => (
                         <div
                           key={i}
-                          className="border-r last:border-r-0 border-border/60 border-t border-border/70 h-3"
+                          className="border-r last:border-r-0 border-foreground/35 border-t border-foreground/35 h-3"
                         />
                       ))}
                     </div>
@@ -1142,7 +1140,7 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-foreground/35 flex flex-col items-center justify-center transition-colors",
                             hasSlots && "bg-primary/5"
                           )}
                         >
@@ -1171,7 +1169,7 @@ export default function SlotCreationWizard({
                         setSelectedSlotKeys(new Set());
                       }
                     }}
-                    className="relative grid grid-cols-7 bg-card divide-x divide-border/60"
+                    className="relative grid grid-cols-7 bg-card divide-x divide-foreground/35"
                     style={{
                       height: `${Math.max(360, displayHours.length * 48)}px`,
                     }}
@@ -1259,38 +1257,31 @@ export default function SlotCreationWizard({
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center justify-between mt-3 mb-2 px-1"
                 >
-                  <span className="text-xs text-muted-foreground">
-                    {selectedSlotKeys.size > 0
-                      ? (language === "ru" ? `Выбрано блоков: ${selectedSlotKeys.size}` : `Таңдалған блоктар: ${selectedSlotKeys.size}`)
-                      : ""}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectAllSlots();
-                      }}
-                      className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
-                    >
-                      {t.selectAll}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={selectedSlotKeys.size === 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSlotKeys(new Set());
-                      }}
-                      className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
-                    >
-                      {t.unselectAll}
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectAllSlots();
+                    }}
+                    className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
+                  >
+                    {t.selectAll}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={selectedSlotKeys.size === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSlotKeys(new Set());
+                    }}
+                    className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
+                  >
+                    {t.unselectAll}
+                  </Button>
                 </div>
               </div>
 
@@ -1435,9 +1426,8 @@ export default function SlotCreationWizard({
                         onClick={() => setIsDetailsDialogOpen(true)}
                         className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
                       >
-                        <span className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-foreground">
-                          <SlidersHorizontal className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span>{t.details}</span>
+                        <span className="text-xs sm:text-sm font-semibold text-foreground">
+                          {t.details}
                         </span>
                         <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
                       </Button>
@@ -1703,7 +1693,7 @@ export default function SlotCreationWizard({
                   day: "h-8 w-8 p-0 font-medium rounded-full flex items-center justify-center transition-colors hover:bg-primary/15 hover:text-primary",
                   day_selected: "!bg-primary !text-primary-foreground font-bold hover:!bg-primary hover:!text-primary-foreground !rounded-full shadow-sm focus:!bg-primary focus:!text-primary-foreground",
                   day_today: "text-muted-foreground font-semibold rounded-full border border-muted-foreground/30",
-                  day_outside: "text-muted-foreground/30 opacity-30",
+                  day_outside: "text-muted-foreground opacity-50",
                   day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed pointer-events-none",
                   nav_button: "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors",
                   nav_button_previous: "absolute left-1 disabled:invisible",
