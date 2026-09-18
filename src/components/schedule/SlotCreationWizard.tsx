@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
+import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
@@ -49,6 +49,7 @@ interface SlotCreationWizardProps {
     location?: string | null;
   }[];
   onCreateSlots: (params: {
+    startDate?: string;
     daySlots?: Record<
       number,
       {
@@ -172,10 +173,82 @@ export default function SlotCreationWizard({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const savedScrollTopRef = useRef<number>(0);
 
-  const weekDates = useMemo(() => {
-    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [cellsByWeek, setCellsByWeek] = useState<Record<number, Set<string>>>({});
+
+  const currentWeekStart = useMemo(() => {
+    return startOfWeek(new Date(), { weekStartsOn: 1 });
   }, []);
+
+  const weekDates = useMemo(() => {
+    const targetStart = addDays(currentWeekStart, weekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => addDays(targetStart, i));
+  }, [currentWeekStart, weekOffset]);
+
+  const getInitialCellsForDates = useCallback((dates: Date[]) => {
+    const cells = new Set<string>();
+    if (existingSlots && existingSlots.length > 0) {
+      dates.forEach((date, dayIdx) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const dayExisting = existingSlots.filter((s) => s.date === dateStr);
+        dayExisting.forEach((s) => {
+          const startStr = s.start_time.slice(0, 5);
+          const endStr = s.end_time.slice(0, 5);
+          const [sh, sm] = startStr.split(":").map(Number);
+          const [eh, em] = endStr.split(":").map(Number);
+          const startM = sh * 60 + sm;
+          const endM = eh * 60 + em;
+          for (let m = startM; m < endM; m += 30) {
+            const ch = Math.floor(m / 60);
+            const cm = m % 60;
+            const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
+            cells.add(cellId);
+          }
+        });
+      });
+    }
+    return cells;
+  }, [existingSlots]);
+
+  const changeWeek = (newOffset: number) => {
+    if (newOffset < 0) return;
+    setCellsByWeek((prev) => ({
+      ...prev,
+      [weekOffset]: new Set(selectedCells),
+    }));
+
+    const targetStart = addDays(currentWeekStart, newOffset * 7);
+    const targetDates = Array.from({ length: 7 }, (_, i) => addDays(targetStart, i));
+
+    setCellsByWeek((prev) => {
+      const existingForTarget = prev[newOffset];
+      if (existingForTarget) {
+        setSelectedCells(new Set(existingForTarget));
+      } else {
+        const loaded = getInitialCellsForDates(targetDates);
+        setSelectedCells(loaded);
+      }
+      return prev;
+    });
+
+    setWeekOffset(newOffset);
+  };
+
+  const existingSlotKeysSet = useMemo(() => {
+    const set = new Set<string>();
+    if (existingSlots && existingSlots.length > 0) {
+      weekDates.forEach((date, dayIdx) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const dayExisting = existingSlots.filter((s) => s.date === dateStr);
+        dayExisting.forEach((s) => {
+          const sStart = s.start_time.slice(0, 5);
+          const sEnd = s.end_time.slice(0, 5);
+          set.add(`${dayIdx}_${sStart}_${sEnd}`);
+        });
+      });
+    }
+    return set;
+  }, [existingSlots, weekDates]);
 
   const handleSaveCrop = async () => {
     if (!coverCrop.source || cropSaving) return;
@@ -200,28 +273,10 @@ export default function SlotCreationWizard({
   useEffect(() => {
     if (open) {
       setStep(1);
-      const initialCells = new Set<string>();
-
-      if (existingSlots && existingSlots.length > 0) {
-        weekDates.forEach((date, dayIdx) => {
-          const dateStr = format(date, "yyyy-MM-dd");
-          const dayExisting = existingSlots.filter((s) => s.date === dateStr);
-          dayExisting.forEach((s) => {
-            const startStr = s.start_time.slice(0, 5);
-            const endStr = s.end_time.slice(0, 5);
-            const [sh, sm] = startStr.split(":").map(Number);
-            const [eh, em] = endStr.split(":").map(Number);
-            const startM = sh * 60 + sm;
-            const endM = eh * 60 + em;
-            for (let m = startM; m < endM; m += 30) {
-              const ch = Math.floor(m / 60);
-              const cm = m % 60;
-              const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
-              initialCells.add(cellId);
-            }
-          });
-        });
-      }
+      setWeekOffset(0);
+      setCellsByWeek({});
+      const initialDates = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+      const initialCells = getInitialCellsForDates(initialDates);
 
       setSelectedCells(initialCells);
       setCustomDayIntervals({});
@@ -243,7 +298,7 @@ export default function SlotCreationWizard({
       setIsDetailsDialogOpen(false);
       coverCrop.resetCrop();
     }
-  }, [open, existingSlots, weekDates]);
+  }, [open, existingSlots, currentWeekStart, getInitialCellsForDates]);
 
   useEffect(() => {
     const up = () => setIsMouseDown(false);
@@ -293,6 +348,7 @@ export default function SlotCreationWizard({
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
+      different: "Разные",
     },
     kk: {
       wizTitle: "Слоттар қосу",
@@ -335,6 +391,7 @@ export default function SlotCreationWizard({
       repeatSummary: "Кесте:",
       selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
+      different: "Әртүрлі",
     },
   };
   const t = dict[language];
@@ -527,11 +584,36 @@ export default function SlotCreationWizard({
     location: "",
   });
 
-  // When switching to step 2: by default nothing is selected!
+  // When switching to step 2: auto-select new slots!
   const handleStepChange = (newStep: 1 | 2) => {
     if (newStep === 2) {
       if (activeDays.length === 0) return;
       setRepeatDays(activeDays);
+
+      const newKeys: string[] = [];
+      const allKeys: string[] = [];
+      activeDays.forEach((dayIdx) => {
+        const intervals = effectiveIntervalsByDay[dayIdx] || [];
+        intervals.forEach((interval) => {
+          const key = `${dayIdx}_${interval.start}_${interval.end}`;
+          allKeys.push(key);
+          if (!existingSlotKeysSet.has(key)) {
+            newKeys.push(key);
+          }
+        });
+      });
+
+      const keysToSelect = newKeys.length > 0 ? newKeys : [];
+      setSelectedSlotKeys(new Set(keysToSelect));
+      setSlotSettingsMap((prev) => {
+        const copy = { ...prev };
+        keysToSelect.forEach((k) => {
+          if (!copy[k]) {
+            copy[k] = createDefaultSlotSettings();
+          }
+        });
+        return copy;
+      });
     }
     setStep(newStep);
   };
@@ -643,6 +725,28 @@ export default function SlotCreationWizard({
     });
   };
 
+  const selectedList = useMemo(() => {
+    return Array.from(selectedSlotKeys).map((k) => slotSettingsMap[k] || createDefaultSlotSettings());
+  }, [selectedSlotKeys, slotSettingsMap]);
+
+  const isDifferentDuration = useMemo(() => {
+    if (selectedList.length <= 1) return false;
+    const firstDur = selectedList[0].customDuration ? Number(selectedList[0].customDuration) : selectedList[0].slotDuration;
+    return selectedList.some((s) => {
+      const dur = s.customDuration ? Number(s.customDuration) : s.slotDuration;
+      return dur !== firstDur;
+    });
+  }, [selectedList]);
+
+  const isDifferentParticipants = useMemo(() => {
+    if (selectedList.length <= 1) return false;
+    const firstCount = selectedList[0].customParticipants ? Number(selectedList[0].customParticipants) : selectedList[0].maxParticipants;
+    return selectedList.some((s) => {
+      const count = s.customParticipants ? Number(s.customParticipants) : s.maxParticipants;
+      return count !== firstCount;
+    });
+  }, [selectedList]);
+
   // Current values to show in right panel: if nothing selected, empty!
   const currentPanelSettings = useMemo((): SlotSettings | null => {
     if (selectedSlotKeys.size === 0) return null;
@@ -692,6 +796,7 @@ export default function SlotCreationWizard({
     const allIntervals = Object.values(effectiveIntervalsByDay).flat();
 
     onCreateSlots({
+      startDate: format(weekDates[0], "yyyy-MM-dd"),
       daySlots: daySlotsPayload,
       timeIntervals: allIntervals,
       repeatDays: repeatWeekly ? repeatDays : activeDays,
@@ -870,23 +975,47 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
                             hasSlots && "bg-primary/5"
                           )}
                         >
+                          {idx === 0 && weekOffset > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changeWeek(weekOffset - 1);
+                              }}
+                              className="absolute left-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              title="Предыдущая неделя"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
                                 ? "bg-primary text-primary-foreground"
-                                : hasSlots
-                                ? "bg-primary/20 text-primary"
                                 : "text-foreground"
                             )}
                           >
                             {format(date, "d")}
                           </div>
+                          {idx === 6 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changeWeek(weekOffset + 1);
+                              }}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              title="Следующая неделя"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -1155,23 +1284,47 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
                             hasSlots && "bg-primary/5"
                           )}
                         >
+                          {idx === 0 && weekOffset > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changeWeek(weekOffset - 1);
+                              }}
+                              className="absolute left-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              title="Предыдущая неделя"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
                                 ? "bg-primary text-primary-foreground"
-                                : hasSlots
-                                ? "bg-primary/20 text-primary"
                                 : "text-foreground"
                             )}
                           >
                             {format(date, "d")}
                           </div>
+                          {idx === 6 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changeWeek(weekOffset + 1);
+                              }}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors z-20 cursor-pointer"
+                              title="Следующая неделя"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -1336,18 +1489,18 @@ export default function SlotCreationWizard({
                       </Label>
                       <div className="flex items-center gap-2">
                         <input
-                          type="number"
-                          placeholder={t.customValue}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={isDifferentDuration ? t.different : t.customValue}
                           disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.customDuration || ""}
+                          value={isDifferentDuration ? "" : (currentPanelSettings?.customDuration || "")}
                           className={cn(
                             "h-11 min-h-[44px] text-xs sm:text-sm font-semibold flex-1 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                            currentPanelSettings?.customDuration && "border-primary font-semibold text-primary"
+                            (isDifferentDuration || currentPanelSettings?.customDuration) && "border-primary font-semibold text-primary"
                           )}
                           onChange={(e) => {
-                            const val = e.target.value;
+                            const val = e.target.value.replace(/\D/g, "");
                             updateSelectedSlotsField("customDuration", val);
                             if (val && Number(val) > 0) {
                               updateSelectedSlotsField("slotDuration", Number(val));
@@ -1355,7 +1508,7 @@ export default function SlotCreationWizard({
                           }}
                         />
                         {[60, 90].map((dur) => {
-                          const isActive = currentPanelSettings?.slotDuration === dur && !currentPanelSettings?.customDuration;
+                          const isActive = !isDifferentDuration && currentPanelSettings?.slotDuration === dur && !currentPanelSettings?.customDuration;
 
                           return (
                             <Button
@@ -1391,18 +1544,18 @@ export default function SlotCreationWizard({
                       </Label>
                       <div className="flex items-center gap-1.5">
                         <input
-                          type="number"
-                          placeholder={t.customValue}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={isDifferentParticipants ? t.different : t.customValue}
                           disabled={selectedSlotKeys.size === 0}
-                          value={currentPanelSettings?.customParticipants || ""}
+                          value={isDifferentParticipants ? "" : (currentPanelSettings?.customParticipants || "")}
                           className={cn(
                             "h-11 min-h-[44px] text-xs sm:text-sm font-semibold w-28 sm:w-36 flex-shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                            currentPanelSettings?.customParticipants && "border-primary font-semibold text-primary"
+                            (isDifferentParticipants || currentPanelSettings?.customParticipants) && "border-primary font-semibold text-primary"
                           )}
                           onChange={(e) => {
-                            const val = e.target.value;
+                            const val = e.target.value.replace(/\D/g, "");
                             updateSelectedSlotsField("customParticipants", val);
                             if (val && Number(val) > 0) {
                               updateSelectedSlotsField("maxParticipants", Number(val));
@@ -1410,7 +1563,7 @@ export default function SlotCreationWizard({
                           }}
                         />
                         {[1, 3, 5, 10].map((count) => {
-                          const isActive = currentPanelSettings?.maxParticipants === count && !currentPanelSettings?.customParticipants;
+                          const isActive = !isDifferentParticipants && currentPanelSettings?.maxParticipants === count && !currentPanelSettings?.customParticipants;
 
                           return (
                             <Button
@@ -1478,36 +1631,6 @@ export default function SlotCreationWizard({
 
                     {repeatWeekly && (
                       <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
-                        {/* Day circles */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs sm:text-sm font-semibold text-foreground">
-                            {t.repeatDaysLabel}
-                          </Label>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {dict[language].weekDays.map((dayName, idx) => {
-                              const isDaySelected = repeatDays.includes(idx);
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => {
-                                    setRepeatDays((prev) =>
-                                      prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
-                                    );
-                                  }}
-                                  className={cn(
-                                    "w-8 h-8 sm:w-9 sm:h-9 rounded-full text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer",
-                                    isDaySelected
-                                      ? "bg-primary text-primary-foreground shadow-sm"
-                                      : "bg-background text-muted-foreground border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                  )}
-                                >
-                                  {dayName}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
 
                         {/* Repeat period buttons */}
                         <div className="space-y-1.5">

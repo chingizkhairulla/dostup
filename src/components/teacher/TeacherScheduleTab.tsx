@@ -807,6 +807,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
   const createWizardSlots = useMutation({
     mutationFn: async (params: {
+      startDate?: string;
       daySlots?: Record<number, { start: string; end: string }[]>;
       timeIntervals: { start: string; end: string }[];
       repeatDays: number[];
@@ -824,13 +825,13 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       const today = new Date();
       const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
 
-      const startDate = currentWeekStart;
-      let endDate = addDays(currentWeekStart, 6);
+      const startDate = params.startDate ? new Date(params.startDate) : currentWeekStart;
+      let endDate = addDays(startDate, 6);
 
       if (params.repeatWeekly && params.repeatPeriod) {
-        if (params.repeatPeriod === "1week") endDate = addDays(currentWeekStart, 13);
-        else if (params.repeatPeriod === "1month") endDate = addMonths(currentWeekStart, 1);
-        else if (params.repeatPeriod === "2months") endDate = addMonths(currentWeekStart, 2);
+        if (params.repeatPeriod === "1week") endDate = addDays(startDate, 13);
+        else if (params.repeatPeriod === "1month") endDate = addMonths(startDate, 1);
+        else if (params.repeatPeriod === "2months") endDate = addMonths(startDate, 2);
         else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = new Date(params.repeatUntil);
       }
 
@@ -863,7 +864,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         }
 
         const monFirstDay = (currentDate.getDay() + 6) % 7;
-        const isFutureWeek = currentDate > addDays(currentWeekStart, 6);
+        const isFutureWeek = currentDate > addDays(startDate, 6);
         if (isFutureWeek && params.repeatWeekly && !params.repeatDays.includes(monFirstDay)) {
           currentDate = addDays(currentDate, 1);
           continue;
