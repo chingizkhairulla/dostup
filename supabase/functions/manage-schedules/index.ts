@@ -170,9 +170,25 @@ Deno.serve(async (req) => {
       if (!slots.length) return json({ error: 'No slots' }, 400)
       const scheduleId = String(slots[0].schedule_id || body.scheduleId || '')
       if (!(await ownsSchedule(supabase, caller, scheduleId))) return forbidden()
-      const { data, error } = await supabase.from('time_slots').insert(slots).select()
+
+      // Deduplicate: avoid creating slots that already exist for this schedule on the same date and start_time
+      const dates = Array.from(new Set(slots.map((s: any) => String(s.date))))
+      const { data: existingSlots } = await supabase
+        .from('time_slots')
+        .select('date, start_time')
+        .eq('schedule_id', scheduleId)
+        .in('date', dates)
+
+      const existingSet = new Set((existingSlots || []).map((s: any) => `${s.date}_${String(s.start_time).slice(0, 5)}`))
+      const newSlots = slots.filter((s: any) => !existingSet.has(`${s.date}_${String(s.start_time).slice(0, 5)}`))
+
+      if (newSlots.length === 0) {
+        return json({ slots: [], count: 0 })
+      }
+
+      const { data, error } = await supabase.from('time_slots').insert(newSlots).select()
       if (error) return json({ error: error.message }, 500)
-      return json({ slots: data ?? [], count: slots.length })
+      return json({ slots: data ?? [], count: newSlots.length })
     }
 
     if (action === 'delete_slot') {

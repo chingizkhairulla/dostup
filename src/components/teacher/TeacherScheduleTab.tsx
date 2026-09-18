@@ -828,10 +828,27 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       let endDate = addDays(currentWeekStart, 6);
 
       if (params.repeatWeekly && params.repeatPeriod) {
-        if (params.repeatPeriod === "1week") endDate = addDays(currentWeekStart, 6);
+        if (params.repeatPeriod === "1week") endDate = addDays(currentWeekStart, 13);
         else if (params.repeatPeriod === "1month") endDate = addMonths(currentWeekStart, 1);
         else if (params.repeatPeriod === "2months") endDate = addMonths(currentWeekStart, 2);
         else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = new Date(params.repeatUntil);
+      }
+
+      // Pre-fetch all existing slots across the target range to avoid duplicates
+      let dbSlots: TimeSlot[] = timeSlots;
+      try {
+        const existingInDb = await invokeApi<{ slots: TimeSlot[] }>("manage-schedules", {
+          action: "list_slots",
+          ...studentCreds(),
+          scheduleIds: [scheduleId],
+          fromDate: format(startDate, "yyyy-MM-dd"),
+          toDate: format(endDate, "yyyy-MM-dd"),
+        });
+        if (existingInDb?.slots) {
+          dbSlots = existingInDb.slots;
+        }
+      } catch (err) {
+        console.warn("Could not pre-fetch existing slots:", err);
       }
 
       const todayStr = format(today, "yyyy-MM-dd");
@@ -846,6 +863,12 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         }
 
         const monFirstDay = (currentDate.getDay() + 6) % 7;
+        const isFutureWeek = currentDate > addDays(currentWeekStart, 6);
+        if (isFutureWeek && params.repeatWeekly && !params.repeatDays.includes(monFirstDay)) {
+          currentDate = addDays(currentDate, 1);
+          continue;
+        }
+
         const intervalsForDay = params.daySlots
           ? params.daySlots[monFirstDay] || []
           : params.repeatDays.includes(monFirstDay)
@@ -878,7 +901,10 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
             const slotEndM = slotEndMinutes % 60;
             const slotEnd = `${String(slotEndH).padStart(2, "0")}:${String(slotEndM).padStart(2, "0")}:00`;
 
-            const exists = timeSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5));
+            const exists =
+              dbSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5)) ||
+              timeSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5));
+
             if (!exists) {
               slots.push({
                 schedule_id: scheduleId,
@@ -911,7 +937,16 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["teacher-schedules"] });
       if (count > 0) {
-        toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+        const getCreatedSlotsMessage = (c: number) => {
+          if (language === "kk") return `${c} слот жасалды!`;
+          const mod10 = c % 10;
+          const mod100 = c % 100;
+          if (mod100 >= 11 && mod100 <= 19) return `Создано ${c} слотов!`;
+          if (mod10 === 1) return `Создан ${c} слот!`;
+          if (mod10 >= 2 && mod10 <= 4) return `Создано ${c} слота!`;
+          return `Создано ${c} слотов!`;
+        };
+        toast.success(getCreatedSlotsMessage(count));
       } else {
         toast.info(language === "ru" ? "Новых слотов не добавлено" : "Жаңа слоттар қосылмады");
       }

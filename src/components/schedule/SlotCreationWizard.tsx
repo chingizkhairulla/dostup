@@ -123,8 +123,8 @@ export default function SlotCreationWizard({
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  // Step 2: Global repetition settings (default: 1 week)
-  const [repeatWeekly, setRepeatWeekly] = useState(true);
+  // Step 2: Global repetition settings (default: off)
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
   const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "1month" | "2months" | "custom" | null>("1week");
   const [repeatUntil, setRepeatUntil] = useState("");
@@ -233,7 +233,7 @@ export default function SlotCreationWizard({
       setTempWorkingHours({ start: "09:00", end: "21:00" });
       setIsRangeOpen(false);
       setIsConfirmClearOpen(false);
-      setRepeatWeekly(true);
+      setRepeatWeekly(false);
       setRepeatPeriod("1week");
       setRepeatUntil("");
       setIsCustomRepeatDialogOpen(false);
@@ -270,7 +270,7 @@ export default function SlotCreationWizard({
       twoMonths: "2 месяца",
       custom: "Свой",
       customValue: "Своё",
-      everyWeek: "Повторять определенное время",
+      everyWeek: "Повторять уроки",
       repeatScheduleTitle: "Расписание",
       slotParams: "Параметры слотов",
       repeatPeriodLabel: "Срок повторения:",
@@ -312,7 +312,7 @@ export default function SlotCreationWizard({
       twoMonths: "2 ай",
       custom: "Өзгерту",
       customValue: "Өзім",
-      everyWeek: "Белгілі бір уақытқа қайталау",
+      everyWeek: "Сабақтарды қайталау",
       repeatScheduleTitle: "Кесте",
       slotParams: "Слот баптаулары",
       repeatPeriodLabel: "Қайталау мерзімі:",
@@ -855,7 +855,7 @@ export default function SlotCreationWizard({
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
                   {/* Grid header with days */}
                   <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
-                    <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-foreground/35 flex items-center justify-center">
+                    <div className="py-2.5 px-1 text-center text-[10px] sm:text-[11px] font-semibold text-muted-foreground border-r border-border/60 flex items-center justify-center">
                       {t.timezone}
                     </div>
                     {t.weekDays.map((dayName, idx) => {
@@ -866,7 +866,7 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-foreground/35 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
                             hasSlots && "bg-primary/5"
                           )}
                         >
@@ -890,9 +890,9 @@ export default function SlotCreationWizard({
 
                   {/* Spacer */}
                   <div className="grid grid-cols-[70px_repeat(7,1fr)] bg-muted/10">
-                    <div className="border-r border-foreground/35 h-2 sm:h-2.5" />
+                    <div className="border-r border-border/60 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
-                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5" />
+                      <div key={i} className="border-r last:border-r-0 border-border/60 h-2 sm:h-2.5" />
                     ))}
                   </div>
 
@@ -912,7 +912,7 @@ export default function SlotCreationWizard({
 
                     {/* Final closing line */}
                     <div className="grid grid-cols-[70px_repeat(7,1fr)] relative">
-                      <div className="relative border-r border-foreground/35 border-t border-foreground/35 h-3 select-none">
+                      <div className="relative border-r border-foreground/35 h-3 select-none">
                         <span className="absolute top-0 -translate-y-1/2 right-2 text-[11px] font-mono text-muted-foreground">
                           {closingHourStr}
                         </span>
@@ -1140,7 +1140,7 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-foreground/35 flex flex-col items-center justify-center transition-colors",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
                             hasSlots && "bg-primary/5"
                           )}
                         >
@@ -1600,12 +1600,12 @@ export default function SlotCreationWizard({
 
             {/* Segmented Date Input: [ Day ] . [ Month ] . [ Year ] */}
             <div className="flex items-end justify-center gap-1.5 py-1">
-              <div className="w-16">
+              <div className="w-20">
                 <Input
                   ref={dayInputRef}
                   type="text"
                   inputMode="numeric"
-                  placeholder="ДД"
+                  placeholder={language === "ru" ? "День" : "Күн"}
                   maxLength={2}
                   value={repeatDay}
                   onChange={(e) => {
@@ -1617,16 +1617,16 @@ export default function SlotCreationWizard({
                     }
                     updateRepeatUntilFromParts(val, repeatMonth, repeatYear);
                   }}
-                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                  className="h-11 text-center font-semibold text-sm sm:text-base rounded-xl border-border bg-background focus:border-primary placeholder:text-muted-foreground/70"
                 />
               </div>
               <span className="text-muted-foreground font-bold text-2xl select-none pb-1.5 leading-none">.</span>
-              <div className="w-16">
+              <div className="w-24">
                 <Input
                   ref={monthInputRef}
                   type="text"
                   inputMode="numeric"
-                  placeholder="ММ"
+                  placeholder={language === "ru" ? "Месяц" : "Ай"}
                   maxLength={2}
                   value={repeatMonth}
                   onChange={(e) => {
@@ -1643,16 +1643,16 @@ export default function SlotCreationWizard({
                       dayInputRef.current?.focus();
                     }
                   }}
-                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                  className="h-11 text-center font-semibold text-sm sm:text-base rounded-xl border-border bg-background focus:border-primary placeholder:text-muted-foreground/70"
                 />
               </div>
               <span className="text-muted-foreground font-bold text-2xl select-none pb-1.5 leading-none">.</span>
-              <div className="w-24">
+              <div className="w-20">
                 <Input
                   ref={yearInputRef}
                   type="text"
                   inputMode="numeric"
-                  placeholder="ГГГГ"
+                  placeholder={language === "ru" ? "Год" : "Жыл"}
                   maxLength={4}
                   value={repeatYear}
                   onChange={(e) => {
@@ -1665,7 +1665,7 @@ export default function SlotCreationWizard({
                       monthInputRef.current?.focus();
                     }
                   }}
-                  className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
+                  className="h-11 text-center font-semibold text-sm sm:text-base rounded-xl border-border bg-background focus:border-primary placeholder:text-muted-foreground/70"
                 />
               </div>
             </div>
