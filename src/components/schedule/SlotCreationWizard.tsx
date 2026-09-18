@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
+import { Clock, ChevronDown, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
@@ -136,6 +136,12 @@ export default function SlotCreationWizard({
   const monthInputRef = useRef<HTMLInputElement>(null);
   const yearInputRef = useRef<HTMLInputElement>(null);
 
+  const isPastOrToday = (date: Date) => {
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    return date <= todayEnd;
+  };
+
   const updateRepeatUntilFromParts = (d: string, m: string, y: string) => {
     if (d && m && y && y.length === 4) {
       const dayNum = parseInt(d, 10);
@@ -150,7 +156,7 @@ export default function SlotCreationWizard({
         yearNum <= 2099
       ) {
         const testDate = new Date(yearNum, monthNum - 1, dayNum);
-        if (isValid(testDate) && testDate.getDate() === dayNum) {
+        if (isValid(testDate) && testDate.getDate() === dayNum && !isPastOrToday(testDate)) {
           const iso = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
           setRepeatUntil(iso);
           return;
@@ -265,7 +271,7 @@ export default function SlotCreationWizard({
       custom: "Свой",
       customValue: "Своё",
       everyWeek: "Повторять расписание",
-      repeatScheduleTitle: "Повторение расписания",
+      repeatScheduleTitle: "Расписание\nПовторять определенное время",
       slotParams: "Параметры слотов",
       repeatPeriodLabel: "Срок повторения:",
       repeatDaysLabel: "Дни для повторения:",
@@ -307,7 +313,7 @@ export default function SlotCreationWizard({
       custom: "Өзгерту",
       customValue: "Өзім",
       everyWeek: "Кестені қайталау",
-      repeatScheduleTitle: "Кестені қайталау",
+      repeatScheduleTitle: "Кесте\nБелгілі бір уақытқа қайталау",
       slotParams: "Слот баптаулары",
       repeatPeriodLabel: "Қайталау мерзімі:",
       repeatDaysLabel: "Қайталанатын күндер:",
@@ -743,9 +749,9 @@ export default function SlotCreationWizard({
                   onTouchStart={() => toggleCell(cellId)}
                   className={cn(
                     "h-5 sm:h-6 w-full transition-colors cursor-pointer select-none",
-                    m === 0 ? "border-t border-border/80" : "border-t border-border/40",
+                    m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                     isSelected
-                      ? "bg-primary/80 border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)]"
+                      ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)]"
                       : "hover:bg-primary/20 active:bg-primary/30"
                   )}
                 />
@@ -1232,7 +1238,7 @@ export default function SlotCreationWizard({
                                   "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
                                   isSelected
                                     ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                    : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
+                                    : "bg-primary/25 text-primary border-2 border-primary/50 hover:bg-primary/35 hover:border-primary/70 z-10"
                                 )}
                                 title={`${interval.start} - ${interval.end}`}
                               >
@@ -1256,7 +1262,7 @@ export default function SlotCreationWizard({
                   <span className="text-xs text-muted-foreground">
                     {selectedSlotKeys.size > 0
                       ? (language === "ru" ? `Выбрано блоков: ${selectedSlotKeys.size}` : `Таңдалған блоктар: ${selectedSlotKeys.size}`)
-                      : (language === "ru" ? "Нажмите на блок для настройки параметров" : "Баптауларды өзгерту үшін блокқа басыңыз")}
+                      : ""}
                   </span>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1429,17 +1435,18 @@ export default function SlotCreationWizard({
                         onClick={() => setIsDetailsDialogOpen(true)}
                         className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
                       >
-                        <span className="text-xs sm:text-sm font-semibold text-foreground">
-                          {t.details}
+                        <span className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-foreground">
+                          <SlidersHorizontal className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span>{t.details}</span>
                         </span>
-                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                        <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
                       </Button>
                     </div>
                   </div>
 
                   {/* Title above Repeat Schedule */}
                   <div className="flex items-center justify-between pt-1">
-                    <p className="text-base sm:text-[17px] font-medium text-foreground">
+                    <p className="text-base sm:text-[17px] font-medium text-foreground whitespace-pre-line leading-snug">
                       {t.repeatScheduleTitle}
                     </p>
                   </div>
@@ -1507,22 +1514,17 @@ export default function SlotCreationWizard({
                                 onClick={() => {
                                   setRepeatPeriod(period);
                                   if (period === "custom") {
-                                    if (!repeatUntil) {
-                                      const today = new Date();
-                                      const defY = format(today, "yyyy");
-                                      const defM = format(today, "MM");
-                                      const defD = format(today, "dd");
-                                      setRepeatYear(defY);
-                                      setRepeatMonth(defM);
-                                      setRepeatDay(defD);
-                                      setRepeatUntil(`${defY}-${defM}-${defD}`);
-                                    } else {
+                                    if (repeatUntil) {
                                       const parts = repeatUntil.split("-");
                                       if (parts.length === 3) {
                                         setRepeatYear(parts[0]);
                                         setRepeatMonth(parts[1]);
                                         setRepeatDay(parts[2]);
                                       }
+                                    } else {
+                                      setRepeatYear("");
+                                      setRepeatMonth("");
+                                      setRepeatDay("");
                                     }
                                     setIsCustomRepeatDialogOpen(true);
                                   }
@@ -1560,14 +1562,9 @@ export default function SlotCreationWizard({
                                     setRepeatDay(parts[2]);
                                   }
                                 } else {
-                                  const today = new Date();
-                                  const defY = format(today, "yyyy");
-                                  const defM = format(today, "MM");
-                                  const defD = format(today, "dd");
-                                  setRepeatYear(defY);
-                                  setRepeatMonth(defM);
-                                  setRepeatDay(defD);
-                                  setRepeatUntil(`${defY}-${defM}-${defD}`);
+                                  setRepeatYear("");
+                                  setRepeatMonth("");
+                                  setRepeatDay("");
                                 }
                                 setIsCustomRepeatDialogOpen(true);
                               }}
@@ -1612,7 +1609,7 @@ export default function SlotCreationWizard({
             </div>
 
             {/* Segmented Date Input: [ Day ] . [ Month ] . [ Year ] */}
-            <div className="flex items-center justify-center gap-2 py-1">
+            <div className="flex items-end justify-center gap-1.5 py-1">
               <div className="w-16">
                 <Input
                   ref={dayInputRef}
@@ -1633,7 +1630,7 @@ export default function SlotCreationWizard({
                   className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
                 />
               </div>
-              <span className="text-muted-foreground font-bold text-lg select-none">.</span>
+              <span className="text-muted-foreground font-bold text-2xl select-none pb-1.5 leading-none">.</span>
               <div className="w-16">
                 <Input
                   ref={monthInputRef}
@@ -1659,7 +1656,7 @@ export default function SlotCreationWizard({
                   className="h-11 text-center font-mono font-semibold text-base rounded-xl border-border bg-background focus:border-primary"
                 />
               </div>
-              <span className="text-muted-foreground font-bold text-lg select-none">.</span>
+              <span className="text-muted-foreground font-bold text-2xl select-none pb-1.5 leading-none">.</span>
               <div className="w-24">
                 <Input
                   ref={yearInputRef}
@@ -1689,7 +1686,7 @@ export default function SlotCreationWizard({
                 mode="single"
                 selected={repeatUntil ? parseISO(repeatUntil) : undefined}
                 onSelect={(date) => {
-                  if (date) {
+                  if (date && !isPastOrToday(date)) {
                     const isoStr = format(date, "yyyy-MM-dd");
                     setRepeatUntil(isoStr);
                     setRepeatDay(format(date, "dd"));
@@ -1698,16 +1695,16 @@ export default function SlotCreationWizard({
                   }
                 }}
                 fromMonth={new Date()}
-                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                disabled={isPastOrToday}
                 locale={language === "ru" ? ru : kk}
                 initialFocus
                 classNames={{
                   cell: "h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center bg-transparent",
                   day: "h-8 w-8 p-0 font-medium rounded-full flex items-center justify-center transition-colors hover:bg-primary/15 hover:text-primary",
                   day_selected: "!bg-primary !text-primary-foreground font-bold hover:!bg-primary hover:!text-primary-foreground !rounded-full shadow-sm focus:!bg-primary focus:!text-primary-foreground",
-                  day_today: "border-2 border-primary text-primary font-bold rounded-full bg-primary/10",
+                  day_today: "text-muted-foreground font-semibold rounded-full border border-muted-foreground/30",
                   day_outside: "text-muted-foreground/30 opacity-30",
-                  day_disabled: "text-muted-foreground/20 opacity-20 cursor-not-allowed",
+                  day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed pointer-events-none",
                   nav_button: "h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors",
                   nav_button_previous: "absolute left-1 disabled:invisible",
                   nav_button_next: "absolute right-1",
