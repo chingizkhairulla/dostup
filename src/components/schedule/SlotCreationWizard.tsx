@@ -1184,7 +1184,7 @@ export default function SlotCreationWizard({
                         setSelectedSlotKeys(new Set());
                       }
                     }}
-                    className="relative grid grid-cols-7 bg-card divide-x divide-foreground/35"
+                    className="relative bg-card"
                     style={{
                       height: `${Math.max(360, displayHours.length * 48)}px`,
                     }}
@@ -1201,69 +1201,74 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* 7 Day Columns */}
-                    {Array.from({ length: 7 }).map((_, dayIdx) => {
-                      const intervals = effectiveIntervalsByDay[dayIdx] || [];
-                      const startHour = displayHours[0] ?? 9;
+                    <div className="relative grid grid-cols-7 h-full divide-x divide-foreground/35">
+                      {Array.from({ length: 7 }).map((_, dayIdx) => {
+                        const intervals = effectiveIntervalsByDay[dayIdx] || [];
+                        const startHour = displayHours[0] ?? 9;
 
-                      const getMinutesFromStart = (timeStr: string) => {
-                        const [h, m] = timeStr.split(":").map(Number);
-                        let diffHours = h - startHour;
-                        if (diffHours < 0) diffHours += 24;
-                        return diffHours * 60 + m;
-                      };
+                        const getMinutesFromStart = (timeStr: string) => {
+                          const [h, m] = timeStr.split(":").map(Number);
+                          let diffHours = h - startHour;
+                          if (diffHours < 0) diffHours += 24;
+                          return diffHours * 60 + m;
+                        };
 
-                      return (
-                        <div
-                          key={dayIdx}
-                          onClick={(e) => {
-                            if (e.target === e.currentTarget) {
-                              setSelectedSlotKeys(new Set());
-                            }
-                          }}
-                          className="relative h-full"
-                        >
-                          {intervals.map((interval) => {
-                            const key = `${dayIdx}_${interval.start}_${interval.end}`;
-                            const isSelected = selectedSlotKeys.has(key);
+                        return (
+                          <div
+                            key={dayIdx}
+                            onClick={(e) => {
+                              if (e.target === e.currentTarget) {
+                                setSelectedSlotKeys(new Set());
+                              }
+                            }}
+                            className="relative h-full"
+                          >
+                            {intervals.map((interval) => {
+                              const key = `${dayIdx}_${interval.start}_${interval.end}`;
+                              const isSelected = selectedSlotKeys.has(key);
 
-                            const startM = getMinutesFromStart(interval.start);
-                            let endM = getMinutesFromStart(interval.end);
-                            if (endM <= startM) {
-                              endM += 24 * 60;
-                            }
-                            const durationM = Math.max(30, endM - startM);
-                            const pixelsPerMinute = 48 / 60;
-                            const topPx = startM * pixelsPerMinute;
-                            const heightPx = Math.max(44, durationM * pixelsPerMinute);
+                              const startM = getMinutesFromStart(interval.start);
+                              let endM = getMinutesFromStart(interval.end);
+                              if (endM <= startM) {
+                                endM += 24 * 60;
+                              }
+                              const durationM = Math.max(30, endM - startM);
+                              const pixelsPerMinute = 48 / 60;
+                              const topPx = startM * pixelsPerMinute;
+                              const heightPx = Math.max(44, durationM * pixelsPerMinute);
 
-                            return (
-                              <div
-                                key={key}
-                                onClick={(e) => {
-                                 e.stopPropagation();
-                                 toggleSlotSelection(key);
-                                }}
-                                style={{
-                                  top: `${topPx + 2}px`,
-                                  height: `${heightPx - 4}px`,
-                                }}
-                                className={cn(
-                                  "absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                    : "bg-primary/15 text-primary border-2 border-primary/40 hover:bg-primary/25 hover:border-primary/60 z-10"
-                                )}
-                                title={`${interval.start} - ${interval.end}`}
-                              >
-                                <span className="font-mono font-bold text-xs sm:text-sm leading-tight">
-                                  {interval.start} – {interval.end}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
+                              return (
+                                <div
+                                  key={key}
+                                  onClick={(e) => {
+                                   e.stopPropagation();
+                                   toggleSlotSelection(key);
+                                  }}
+                                  style={{
+                                    top: `${topPx + 2}px`,
+                                    height: `${heightPx - 4}px`,
+                                  }}
+                                  className={cn(
+                                    "group absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+                                      : "bg-card text-primary border-2 border-primary/40 hover:border-primary/60 z-10"
+                                  )}
+                                  title={`${interval.start} - ${interval.end}`}
+                                >
+                                  {!isSelected && (
+                                    <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
+                                  )}
+                                  <span className="relative z-10 font-mono font-bold text-xs sm:text-sm leading-tight">
+                                    {interval.start} – {interval.end}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
