@@ -785,7 +785,22 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const createWizardSlots = useMutation({
     mutationFn: async (params: {
       startDate?: string;
-      daySlots?: Record<number, { start: string; end: string }[]>;
+      daySlots?: Record<
+        number,
+        {
+          start: string;
+          end: string;
+          slotDuration?: number;
+          maxParticipants?: number;
+          title?: string;
+          description?: string;
+          imageUrl?: string;
+          location?: string;
+          repeatWeekly?: boolean;
+          repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+          repeatUntil?: string | null;
+        }[]
+      >;
       timeIntervals: { start: string; end: string }[];
       repeatDays: number[];
       repeatWeekly: boolean;
@@ -804,18 +819,31 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
       // Calculate start and end dates
       const startDate = params.startDate ? parseISO(params.startDate) : currentWeekStart;
-      let endDate = addDays(startDate, 6); // default: selected week (Mon -> Sun)
+      let maxEndDate = addDays(startDate, 6); // default: selected week (Mon -> Sun)
 
-      if (params.repeatWeekly && params.repeatPeriod) {
-        if (params.repeatPeriod === "1week") endDate = addDays(startDate, 13);
-        else if (params.repeatPeriod === "1month") endDate = addMonths(startDate, 1);
-        else if (params.repeatPeriod === "2months") endDate = addMonths(startDate, 2);
-        else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = parseISO(params.repeatUntil);
+      const allIntervals = Object.values(params.daySlots || {}).flat();
+      allIntervals.forEach((interval: any) => {
+        const repWeekly = interval.repeatWeekly ?? params.repeatWeekly;
+        const repPeriod = interval.repeatPeriod ?? params.repeatPeriod;
+        const repUntil = interval.repeatUntil ?? params.repeatUntil;
+        if (repWeekly && repPeriod) {
+          let intervalEnd = addDays(startDate, 6);
+          if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
+          else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
+          else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+          else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
+          if (intervalEnd > maxEndDate) {
+            maxEndDate = intervalEnd;
+          }
+        }
+      });
+
+      if (params.repeatWeekly && params.repeatPeriod && maxEndDate <= addDays(startDate, 6)) {
+        if (params.repeatPeriod === "1week") maxEndDate = addDays(startDate, 13);
+        else if (params.repeatPeriod === "1month") maxEndDate = addMonths(startDate, 1);
+        else if (params.repeatPeriod === "2months") maxEndDate = addMonths(startDate, 2);
+        else if (params.repeatPeriod === "custom" && params.repeatUntil) maxEndDate = parseISO(params.repeatUntil);
       }
-
-      const daysToRepeat = (params.repeatDays && params.repeatDays.length > 0)
-        ? params.repeatDays
-        : Object.keys(params.daySlots || {}).map(Number);
 
       // Pre-fetch all existing slots across the target range to avoid duplicates
       let dbSlots: TimeSlot[] = timeSlots;
@@ -825,7 +853,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           ...creatorCreds(),
           scheduleIds: [scheduleId],
           fromDate: format(startDate, "yyyy-MM-dd"),
-          toDate: format(endDate, "yyyy-MM-dd"),
+          toDate: format(maxEndDate, "yyyy-MM-dd"),
         });
         if (existingInDb?.slots) {
           dbSlots = existingInDb.slots;
@@ -838,7 +866,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       const slots: any[] = [];
       let currentDate = new Date(startDate);
 
-      while (currentDate <= endDate) {
+      while (currentDate <= maxEndDate) {
         const dateStr = format(currentDate, "yyyy-MM-dd");
         // Skip dates in the past
         if (dateStr < todayStr) {
@@ -849,16 +877,34 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         // 0=Mon, 1=Tue ... 6=Sun
         const monFirstDay = (currentDate.getDay() + 6) % 7;
         const isFutureWeek = currentDate > addDays(startDate, 6);
-        if (isFutureWeek && params.repeatWeekly && !daysToRepeat.includes(monFirstDay)) {
+
+        const rawIntervalsForDay = params.daySlots
+          ? params.daySlots[monFirstDay] || []
+          : params.timeIntervals;
+
+        // On future weeks, ONLY include intervals that have repeatWeekly === true
+        // AND whose repeatPeriod covers this date!
+        const intervalsForDay = isFutureWeek
+          ? rawIntervalsForDay.filter((interval: any) => {
+              const repWeekly = interval.repeatWeekly ?? params.repeatWeekly;
+              const repPeriod = interval.repeatPeriod ?? params.repeatPeriod;
+              const repUntil = interval.repeatUntil ?? params.repeatUntil;
+              if (!repWeekly || !repPeriod) return false;
+
+              let intervalEnd = addDays(startDate, 6);
+              if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
+              else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
+              else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+              else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
+
+              return currentDate <= intervalEnd;
+            })
+          : rawIntervalsForDay;
+
+        if (intervalsForDay.length === 0) {
           currentDate = addDays(currentDate, 1);
           continue;
         }
-
-        const intervalsForDay = params.daySlots
-          ? params.daySlots[monFirstDay] || []
-          : daysToRepeat.includes(monFirstDay)
-          ? params.timeIntervals
-          : [];
 
         for (const interval of intervalsForDay) {
           const duration = (interval as any).slotDuration || params.slotDuration || 60;

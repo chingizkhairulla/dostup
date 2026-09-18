@@ -32,6 +32,9 @@ interface SlotSettings {
   description: string;
   imageUrl: string;
   location: string;
+  repeatWeekly?: boolean;
+  repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+  repeatUntil?: string | null;
 }
 
 export interface SlotCreationWizardProps {
@@ -58,6 +61,9 @@ export interface SlotCreationWizardProps {
         description?: string;
         imageUrl?: string;
         location?: string;
+        repeatWeekly?: boolean;
+        repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+        repeatUntil?: string | null;
       }[]
     >;
     timeIntervals: { start: string; end: string }[];
@@ -143,30 +149,6 @@ export default function SlotCreationWizard({
     return date <= todayEnd;
   };
 
-  const updateRepeatUntilFromParts = (d: string, m: string, y: string) => {
-    if (d && m && y && y.length === 4) {
-      const dayNum = parseInt(d, 10);
-      const monthNum = parseInt(m, 10);
-      const yearNum = parseInt(y, 10);
-      if (
-        monthNum >= 1 &&
-        monthNum <= 12 &&
-        dayNum >= 1 &&
-        dayNum <= 31 &&
-        yearNum >= 2024 &&
-        yearNum <= 2099
-      ) {
-        const testDate = new Date(yearNum, monthNum - 1, dayNum);
-        if (isValid(testDate) && testDate.getDate() === dayNum && !isPastOrToday(testDate)) {
-          const iso = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-          setRepeatUntil(iso);
-          return;
-        }
-      }
-    }
-    setRepeatUntil("");
-  };
-
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragMode, setDragMode] = useState<"select" | "deselect">("select");
 
@@ -189,33 +171,29 @@ export default function SlotCreationWizard({
     (dayIdx: number, timeStr: string) => {
       const date = weekDates[dayIdx];
       if (!date) return false;
-      const dateStr = format(date, "yyyy-MM-dd");
-      const now = new Date();
-      const todayStr = format(now, "yyyy-MM-dd");
-
-      if (dateStr < todayStr) return true;
-      if (dateStr > todayStr) return false;
-
       const [h, m] = timeStr.split(":").map(Number);
-      const cellStartMinutes = h * 60 + m;
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const startHour = parseInt(workingHours.start.split(":")[0], 10) || 9;
 
-      return cellStartMinutes < nowMinutes;
+      const cellDate = new Date(date);
+      // Late night hours (00:00, 00:30, 01:00) come after 23:00 of this column's day
+      if (h < startHour) {
+        cellDate.setDate(cellDate.getDate() + 1);
+      }
+      cellDate.setHours(h, m, 0, 0);
+
+      return cellDate.getTime() < Date.now();
     },
-    [weekDates]
+    [weekDates, workingHours.start]
   );
 
   const getInitialCellsForDates = useCallback(
     (dates: Date[]) => {
       const cells = new Set<string>();
-      const now = new Date();
-      const todayStr = format(now, "yyyy-MM-dd");
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const startHour = parseInt(workingHours.start.split(":")[0], 10) || 9;
 
       if (existingSlots && existingSlots.length > 0) {
         dates.forEach((date, dayIdx) => {
           const dateStr = format(date, "yyyy-MM-dd");
-          if (dateStr < todayStr) return;
           const dayExisting = existingSlots.filter((s) => s.date === dateStr);
           dayExisting.forEach((s) => {
             const startStr = s.start_time.slice(0, 5);
@@ -225,9 +203,15 @@ export default function SlotCreationWizard({
             const startM = sh * 60 + sm;
             const endM = eh * 60 + em;
             for (let m = startM; m < endM; m += 30) {
-              if (dateStr === todayStr && m < nowMinutes) continue;
               const ch = Math.floor(m / 60);
               const cm = m % 60;
+              const cellDate = new Date(date);
+              if (ch < startHour) {
+                cellDate.setDate(cellDate.getDate() + 1);
+              }
+              cellDate.setHours(ch, cm, 0, 0);
+              if (cellDate.getTime() < Date.now()) continue;
+
               const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
               cells.add(cellId);
             }
@@ -236,7 +220,7 @@ export default function SlotCreationWizard({
       }
       return cells;
     },
-    [existingSlots]
+    [existingSlots, workingHours.start]
   );
 
   const changeWeek = (newOffset: number) => {
@@ -630,6 +614,9 @@ export default function SlotCreationWizard({
     description: "",
     imageUrl: "",
     location: "",
+    repeatWeekly: false,
+    repeatPeriod: "1week",
+    repeatUntil: null,
   });
 
   // When switching to step 2: auto-select new slots!
@@ -773,6 +760,32 @@ export default function SlotCreationWizard({
     });
   };
 
+  const updateRepeatUntilFromParts = (d: string, m: string, y: string) => {
+    if (d && m && y && y.length === 4) {
+      const dayNum = parseInt(d, 10);
+      const monthNum = parseInt(m, 10);
+      const yearNum = parseInt(y, 10);
+      if (
+        monthNum >= 1 &&
+        monthNum <= 12 &&
+        dayNum >= 1 &&
+        dayNum <= 31 &&
+        yearNum >= 2024 &&
+        yearNum <= 2099
+      ) {
+        const testDate = new Date(yearNum, monthNum - 1, dayNum);
+        if (isValid(testDate) && testDate.getDate() === dayNum && !isPastOrToday(testDate)) {
+          const iso = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+          setRepeatUntil(iso);
+          updateSelectedSlotsField("repeatUntil", iso);
+          updateSelectedSlotsField("repeatPeriod", "custom");
+          return;
+        }
+      }
+    }
+    setRepeatUntil("");
+  };
+
   const selectedList = useMemo(() => {
     return Array.from(selectedSlotKeys).map((k) => slotSettingsMap[k] || createDefaultSlotSettings());
   }, [selectedSlotKeys, slotSettingsMap]);
@@ -793,6 +806,18 @@ export default function SlotCreationWizard({
       const count = s.customParticipants ? Number(s.customParticipants) : s.maxParticipants;
       return count !== firstCount;
     });
+  }, [selectedList]);
+
+  const isDifferentRepeat = useMemo(() => {
+    if (selectedList.length <= 1) return false;
+    const firstRep = Boolean(selectedList[0].repeatWeekly);
+    return selectedList.some((s) => Boolean(s.repeatWeekly) !== firstRep);
+  }, [selectedList]);
+
+  const isDifferentPeriod = useMemo(() => {
+    if (selectedList.length <= 1) return false;
+    const firstPeriod = selectedList[0].repeatPeriod || "1week";
+    return selectedList.some((s) => (s.repeatPeriod || "1week") !== firstPeriod);
   }, [selectedList]);
 
   // Current values to show in right panel: if nothing selected, empty!
@@ -820,6 +845,9 @@ export default function SlotCreationWizard({
         description?: string;
         imageUrl?: string;
         location?: string;
+        repeatWeekly?: boolean;
+        repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+        repeatUntil?: string | null;
       }[]
     > = {};
 
@@ -837,20 +865,26 @@ export default function SlotCreationWizard({
           description: settings.description.trim() || undefined,
           imageUrl: settings.imageUrl.trim() || undefined,
           location: settings.location.trim() || undefined,
+          repeatWeekly: Boolean(settings.repeatWeekly),
+          repeatPeriod: settings.repeatWeekly ? settings.repeatPeriod || "1week" : null,
+          repeatUntil: settings.repeatWeekly && settings.repeatPeriod === "custom" ? settings.repeatUntil || null : null,
         };
       });
     });
 
     const allIntervals = Object.values(effectiveIntervalsByDay).flat();
+    const anyRepeatWeekly = Object.values(daySlotsPayload).some((dayList) =>
+      dayList.some((s) => s.repeatWeekly)
+    );
 
     onCreateSlots({
       startDate: format(weekDates[0], "yyyy-MM-dd"),
       daySlots: daySlotsPayload,
       timeIntervals: allIntervals,
       repeatDays: activeDays,
-      repeatWeekly,
-      repeatPeriod: repeatWeekly ? repeatPeriod : null,
-      repeatUntil: repeatWeekly && repeatPeriod === "custom" ? repeatUntil : null,
+      repeatWeekly: anyRepeatWeekly,
+      repeatPeriod: currentPanelSettings?.repeatPeriod || "1week",
+      repeatUntil: currentPanelSettings?.repeatUntil || null,
       slotDuration: currentPanelSettings?.slotDuration || 60,
       maxParticipants: currentPanelSettings?.maxParticipants || 1,
       title: currentPanelSettings?.title.trim() || undefined,
@@ -1488,7 +1522,7 @@ export default function SlotCreationWizard({
                 {/* Single Combined Button under schedule: Select All / Unselect All */}
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-start mt-3 mb-2 px-1"
+                  className="flex items-center justify-end mt-3 mb-2 px-1"
                 >
                   {(() => {
                     const isAllSelected = allSlotKeys.length > 0 && selectedSlotKeys.size === allSlotKeys.length;
@@ -1509,8 +1543,8 @@ export default function SlotCreationWizard({
                         className={cn(
                           "text-xs sm:text-sm h-8 px-3.5 rounded-lg transition-colors shadow-2xs font-medium",
                           isAllSelected
-                            ? "bg-card text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive hover:border-destructive font-semibold"
-                            : "bg-card text-foreground border-border hover:border-primary hover:text-primary hover:bg-primary/10"
+                            ? "bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive font-semibold"
+                            : "bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary"
                         )}
                       >
                         {isAllSelected ? t.unselectAll : t.selectAll}
@@ -1677,97 +1711,133 @@ export default function SlotCreationWizard({
                   </div>
 
                   {/* Separate Repetition Card under Settings Card */}
-                  <div className="p-4 sm:p-4.5 rounded-2xl border border-border bg-card shadow-sm space-y-3">
+                  <div
+                    className={cn(
+                      "p-4 sm:p-4.5 rounded-2xl border bg-card shadow-sm space-y-3 transition-all",
+                      selectedSlotKeys.size > 0
+                        ? "border-border"
+                        : "border-border opacity-50 pointer-events-none"
+                    )}
+                  >
                     <div className="flex items-center justify-between">
                       <Label htmlFor="repeat-switch" className="text-xs sm:text-sm font-semibold cursor-pointer text-foreground flex items-center gap-1.5">
                         <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.everyWeek}</span>
+                        {isDifferentRepeat && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
+                        )}
                         <ReqStar />
                       </Label>
                       <Switch
                         id="repeat-switch"
-                        checked={repeatWeekly}
-                        onCheckedChange={setRepeatWeekly}
+                        checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
+                        onCheckedChange={(checked) => {
+                          setRepeatWeekly(checked);
+                          updateSelectedSlotsField("repeatWeekly", checked);
+                          if (checked && !currentPanelSettings?.repeatPeriod) {
+                            updateSelectedSlotsField("repeatPeriod", "1week");
+                          }
+                        }}
                       />
                     </div>
 
-                    {repeatWeekly && (
+                    {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
                       <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
 
                         {/* Repeat period buttons */}
                         <div className="space-y-1.5">
-                          <Label className="text-xs sm:text-sm font-semibold text-foreground">
-                            {t.repeatPeriodLabel}
-                          </Label>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs sm:text-sm font-semibold text-foreground">
+                              {t.repeatPeriodLabel}
+                            </Label>
+                            {isDifferentPeriod && (
+                              <span className="text-[11px] text-muted-foreground font-normal italic">
+                                ({t.different})
+                              </span>
+                            )}
+                          </div>
                           <div className="grid grid-cols-2 gap-2">
-                            {(["1week", "1month", "2months", "custom"] as const).map((period) => (
-                              <Button
-                                key={period}
-                                type="button"
-                                variant={repeatPeriod === period ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => {
-                                  setRepeatPeriod(period);
-                                  if (period === "custom") {
-                                    if (repeatUntil) {
-                                      const parts = repeatUntil.split("-");
-                                      if (parts.length === 3) {
-                                        setRepeatYear(parts[0]);
-                                        setRepeatMonth(parts[1]);
-                                        setRepeatDay(parts[2]);
+                            {(["1week", "1month", "2months", "custom"] as const).map((period) => {
+                              const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
+                              const isSelected = !isDifferentPeriod && activePeriod === period;
+                              return (
+                                <Button
+                                  key={period}
+                                  type="button"
+                                  variant={isSelected ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    setRepeatPeriod(period);
+                                    updateSelectedSlotsField("repeatPeriod", period);
+                                    if (period === "custom") {
+                                      const currentUntil = currentPanelSettings?.repeatUntil;
+                                      if (currentUntil) {
+                                        const parts = currentUntil.split("-");
+                                        if (parts.length === 3) {
+                                          setRepeatYear(parts[0]);
+                                          setRepeatMonth(parts[1]);
+                                          setRepeatDay(parts[2]);
+                                        }
+                                        setRepeatUntil(currentUntil);
+                                      } else {
+                                        setRepeatYear("");
+                                        setRepeatMonth("");
+                                        setRepeatDay("");
+                                        setRepeatUntil("");
                                       }
-                                    } else {
-                                      setRepeatYear("");
-                                      setRepeatMonth("");
-                                      setRepeatDay("");
+                                      setIsCustomRepeatDialogOpen(true);
                                     }
-                                    setIsCustomRepeatDialogOpen(true);
-                                  }
-                                }}
-                                className={cn(
-                                  "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg transition-all",
-                                  repeatPeriod === period
-                                    ? "bg-primary text-primary-foreground font-semibold"
-                                    : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                )}
-                              >
-                                {period === "1week"
-                                  ? t.oneWeek
-                                  : period === "1month"
-                                  ? t.oneMonth
-                                  : period === "2months"
-                                  ? t.twoMonths
-                                  : t.custom}
-                              </Button>
-                            ))}
+                                  }}
+                                  className={cn(
+                                    "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg transition-all",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground font-semibold"
+                                      : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                  )}
+                                >
+                                  {period === "1week"
+                                    ? t.oneWeek
+                                    : period === "1month"
+                                    ? t.oneMonth
+                                    : period === "2months"
+                                    ? t.twoMonths
+                                    : t.custom}
+                                </Button>
+                              );
+                            })}
                           </div>
                         </div>
 
-                        {repeatPeriod === "custom" && (
+                        {currentPanelSettings?.repeatPeriod === "custom" && (
                           <div className="pt-0.5">
                             <Button
                               type="button"
                               variant="outline"
                               onClick={() => {
-                                if (repeatUntil) {
-                                  const parts = repeatUntil.split("-");
+                                const currentUntil = currentPanelSettings?.repeatUntil;
+                                if (currentUntil) {
+                                  const parts = currentUntil.split("-");
                                   if (parts.length === 3) {
                                     setRepeatYear(parts[0]);
                                     setRepeatMonth(parts[1]);
                                     setRepeatDay(parts[2]);
                                   }
+                                  setRepeatUntil(currentUntil);
                                 } else {
                                   setRepeatYear("");
                                   setRepeatMonth("");
                                   setRepeatDay("");
+                                  setRepeatUntil("");
                                 }
                                 setIsCustomRepeatDialogOpen(true);
                               }}
                               className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs sm:text-sm font-medium hover:bg-primary/10 transition-all rounded-lg"
                             >
                               <span className="truncate font-semibold text-foreground">
-                                {repeatUntil
-                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                {currentPanelSettings?.repeatUntil
+                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
                                   : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
                               </span>
                               <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -1887,6 +1957,8 @@ export default function SlotCreationWizard({
                     setRepeatDay(format(date, "dd"));
                     setRepeatMonth(format(date, "MM"));
                     setRepeatYear(format(date, "yyyy"));
+                    updateSelectedSlotsField("repeatUntil", isoStr);
+                    updateSelectedSlotsField("repeatPeriod", "custom");
                   }
                 }}
                 fromMonth={new Date()}
