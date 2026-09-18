@@ -1314,7 +1314,7 @@ export default function SlotCreationWizard({
               </div>
 
               {/* Right: Summary panel — "Расписание:" */}
-              <div className="w-80 sm:w-96 md:w-[440px] flex-none">
+              <div className="w-80 sm:w-[440px] md:w-[480px] lg:w-[500px] flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <div className="flex items-center justify-between">
                     <p className="text-base sm:text-[17px] font-medium text-foreground">
@@ -1580,7 +1580,7 @@ export default function SlotCreationWizard({
               {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-80 sm:w-96 md:w-[440px] flex-none"
+                className="w-80 sm:w-[440px] md:w-[480px] lg:w-[500px] flex-none"
               >
                 <div className="sticky top-4 space-y-3.5">
                   {/* Title above Slot Parameters */}
@@ -1643,8 +1643,8 @@ export default function SlotCreationWizard({
                               className={cn(
                                 "h-11 min-h-[44px] flex-1 px-2.5 sm:px-3 text-xs sm:text-sm transition-all rounded-lg",
                                 isActive
-                                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                                  : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                   ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                   : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                               )}
                             >
                               <span>{dur} {t.min}</span>
@@ -1710,15 +1710,15 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Lesson Details Dialog Button with gray pencil */}
-                    <div className="pt-0.5">
+                    <div className="pt-1">
                       <Button
                         type="button"
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-lg"
+                        className="w-full justify-between h-12 min-h-[48px] px-4 sm:px-5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl"
                       >
-                        <span className="text-xs sm:text-sm font-semibold text-foreground">
+                        <span className="text-sm font-semibold text-foreground">
                           {t.details}
                         </span>
                         <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -1727,7 +1727,7 @@ export default function SlotCreationWizard({
                   </div>
 
                   {/* Title above Repeat Schedule with spacious gap from settings card above */}
-                  <div className="flex items-center justify-between pt-4 sm:pt-5">
+                  <div className="flex items-center justify-between pt-8 sm:pt-10">
                     <p className="text-base sm:text-[17px] font-medium text-foreground whitespace-pre-line leading-snug">
                       {t.repeatScheduleTitle}
                     </p>
