@@ -208,16 +208,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const queryRange = useMemo(() => {
     if (viewMode === "week") {
       return {
-        from: format(currentWeekStart, "yyyy-MM-dd"),
-        to: format(weekEnd, "yyyy-MM-dd"),
+        from: format(addDays(currentWeekStart, -14), "yyyy-MM-dd"),
+        to: format(addDays(currentWeekStart, 90), "yyyy-MM-dd"),
       };
     } else {
       return {
-        from: format(calendarStart, "yyyy-MM-dd"),
-        to: format(calendarEnd, "yyyy-MM-dd"),
+        from: format(addDays(calendarStart, -14), "yyyy-MM-dd"),
+        to: format(addDays(calendarEnd, 60), "yyyy-MM-dd"),
       };
     }
-  }, [viewMode, currentWeekStart, weekEnd, calendarStart, calendarEnd]);
+  }, [viewMode, currentWeekStart, calendarStart, calendarEnd]);
 
   // Fetch time slots for visible range
   const { data: timeSlots = [], isLoading: slotsLoading } = useQuery({
@@ -925,9 +925,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
       return slots.length;
     },
-    onSuccess: (count) => {
+    onSuccess: async (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
+      await queryClient.refetchQueries({ queryKey: ["creator-slots"] });
       if (count > 0) {
         const getCreatedSlotsMessage = (c: number) => {
           if (language === "kk") return `${c} слот жасалды!`;
@@ -1847,6 +1848,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         onOpenChange={setIsWizardOpen}
         language={language as "ru" | "kk"}
         existingSlots={timeSlots}
+        initialWeekStart={currentWeekStart}
         onCreateSlots={(params) => createWizardSlots.mutate(params)}
         onDeleteSlots={async (dates) => {
           const scheduleId = schedules[0]?.id || (await ensureScheduleId());

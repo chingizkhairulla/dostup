@@ -10,11 +10,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { format, addDays, startOfWeek, isSameDay, parseISO, isValid } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, parseISO, isValid, differenceInCalendarWeeks } from "date-fns";
 import { ru, kk } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
+import { toast } from "sonner";
 
 const ReqStar = () => (
   <span className="text-primary font-bold ml-1 text-sm sm:text-base inline-block -translate-y-0.5 select-none leading-none" aria-hidden="true">
@@ -33,21 +34,17 @@ interface SlotSettings {
   location: string;
 }
 
-interface SlotCreationWizardProps {
+export interface SlotCreationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   language: "ru" | "kk";
   existingSlots?: {
+    id: string;
     date: string;
     start_time: string;
     end_time: string;
-    slot_duration?: number;
-    max_participants?: number;
-    title?: string | null;
-    description?: string | null;
-    image_url?: string | null;
-    location?: string | null;
   }[];
+  initialWeekStart?: Date;
   onCreateSlots: (params: {
     startDate?: string;
     daySlots?: Record<
@@ -101,6 +98,7 @@ export default function SlotCreationWizard({
   onOpenChange,
   language,
   existingSlots,
+  initialWeekStart,
   onCreateSlots,
   onDeleteSlots,
   isPending,
@@ -178,39 +176,68 @@ export default function SlotCreationWizard({
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [cellsByWeek, setCellsByWeek] = useState<Record<number, Set<string>>>({});
 
-  const currentWeekStart = useMemo(() => {
+  const realCurrentWeekStart = useMemo(() => {
     return startOfWeek(new Date(), { weekStartsOn: 1 });
   }, []);
 
   const weekDates = useMemo(() => {
-    const targetStart = addDays(currentWeekStart, weekOffset * 7);
+    const targetStart = addDays(realCurrentWeekStart, weekOffset * 7);
     return Array.from({ length: 7 }, (_, i) => addDays(targetStart, i));
-  }, [currentWeekStart, weekOffset]);
+  }, [realCurrentWeekStart, weekOffset]);
 
-  const getInitialCellsForDates = useCallback((dates: Date[]) => {
-    const cells = new Set<string>();
-    if (existingSlots && existingSlots.length > 0) {
-      dates.forEach((date, dayIdx) => {
-        const dateStr = format(date, "yyyy-MM-dd");
-        const dayExisting = existingSlots.filter((s) => s.date === dateStr);
-        dayExisting.forEach((s) => {
-          const startStr = s.start_time.slice(0, 5);
-          const endStr = s.end_time.slice(0, 5);
-          const [sh, sm] = startStr.split(":").map(Number);
-          const [eh, em] = endStr.split(":").map(Number);
-          const startM = sh * 60 + sm;
-          const endM = eh * 60 + em;
-          for (let m = startM; m < endM; m += 30) {
-            const ch = Math.floor(m / 60);
-            const cm = m % 60;
-            const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
-            cells.add(cellId);
-          }
+  const isCellInPast = useCallback(
+    (dayIdx: number, timeStr: string) => {
+      const date = weekDates[dayIdx];
+      if (!date) return false;
+      const dateStr = format(date, "yyyy-MM-dd");
+      const now = new Date();
+      const todayStr = format(now, "yyyy-MM-dd");
+
+      if (dateStr < todayStr) return true;
+      if (dateStr > todayStr) return false;
+
+      const [h, m] = timeStr.split(":").map(Number);
+      const cellStartMinutes = h * 60 + m;
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      return cellStartMinutes < nowMinutes;
+    },
+    [weekDates]
+  );
+
+  const getInitialCellsForDates = useCallback(
+    (dates: Date[]) => {
+      const cells = new Set<string>();
+      const now = new Date();
+      const todayStr = format(now, "yyyy-MM-dd");
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      if (existingSlots && existingSlots.length > 0) {
+        dates.forEach((date, dayIdx) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          if (dateStr < todayStr) return;
+          const dayExisting = existingSlots.filter((s) => s.date === dateStr);
+          dayExisting.forEach((s) => {
+            const startStr = s.start_time.slice(0, 5);
+            const endStr = s.end_time.slice(0, 5);
+            const [sh, sm] = startStr.split(":").map(Number);
+            const [eh, em] = endStr.split(":").map(Number);
+            const startM = sh * 60 + sm;
+            const endM = eh * 60 + em;
+            for (let m = startM; m < endM; m += 30) {
+              if (dateStr === todayStr && m < nowMinutes) continue;
+              const ch = Math.floor(m / 60);
+              const cm = m % 60;
+              const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
+              cells.add(cellId);
+            }
+          });
         });
-      });
-    }
-    return cells;
-  }, [existingSlots]);
+      }
+      return cells;
+    },
+    [existingSlots]
+  );
 
   const changeWeek = (newOffset: number) => {
     if (newOffset < 0) return;
@@ -219,7 +246,7 @@ export default function SlotCreationWizard({
       [weekOffset]: new Set(selectedCells),
     }));
 
-    const targetStart = addDays(currentWeekStart, newOffset * 7);
+    const targetStart = addDays(realCurrentWeekStart, newOffset * 7);
     const targetDates = Array.from({ length: 7 }, (_, i) => addDays(targetStart, i));
 
     setCellsByWeek((prev) => {
@@ -256,7 +283,8 @@ export default function SlotCreationWizard({
     if (!coverCrop.source || cropSaving) return;
     setCropSaving(true);
     try {
-      const result = await coverCrop.cropResult();
+      const result = await coverCrop.getCroppedImage();
+      if (!result) return;
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === "string") {
@@ -275,9 +303,14 @@ export default function SlotCreationWizard({
   useEffect(() => {
     if (open) {
       setStep(1);
-      setWeekOffset(0);
+      const initialOffset = initialWeekStart
+        ? Math.max(0, differenceInCalendarWeeks(initialWeekStart, realCurrentWeekStart, { weekStartsOn: 1 }))
+        : 0;
+      setWeekOffset(initialOffset);
       setCellsByWeek({});
-      const initialDates = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+      const initialDates = Array.from({ length: 7 }, (_, i) =>
+        addDays(realCurrentWeekStart, initialOffset * 7 + i)
+      );
       const initialCells = getInitialCellsForDates(initialDates);
 
       setSelectedCells(initialCells);
@@ -300,7 +333,7 @@ export default function SlotCreationWizard({
       setIsDetailsDialogOpen(false);
       coverCrop.resetCrop();
     }
-  }, [open, existingSlots, currentWeekStart, getInitialCellsForDates]);
+  }, [open, existingSlots, realCurrentWeekStart, initialWeekStart, getInitialCellsForDates]);
 
   useEffect(() => {
     const up = () => setIsMouseDown(false);
@@ -449,7 +482,12 @@ export default function SlotCreationWizard({
   }, [showLateHours, lateHoursArr, workingHours.end]);
 
   const toggleCell = (cellId: string) => {
-    const dayIdx = parseInt(cellId.split("_")[0], 10);
+    const [dStr, tStr] = cellId.split("_");
+    const dayIdx = Number(dStr);
+    if (isCellInPast(dayIdx, tStr)) {
+      toast.info(language === "ru" ? "Нельзя выбрать прошедшее время" : "Өткен уақытты таңдау мүмкін емес");
+      return;
+    }
     if (customDayIntervals[dayIdx]) {
       setCustomDayIntervals((prev) => {
         const copy = { ...prev };
@@ -469,8 +507,13 @@ export default function SlotCreationWizard({
   const handleCellMouseDown = (cellId: string, e: React.MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    const [dStr, tStr] = cellId.split("_");
+    const dayIdx = Number(dStr);
+    if (isCellInPast(dayIdx, tStr)) {
+      toast.info(language === "ru" ? "Нельзя выбрать прошедшее время" : "Өткен уақытты таңдау мүмкін емес");
+      return;
+    }
     setIsMouseDown(true);
-    const dayIdx = parseInt(cellId.split("_")[0], 10);
     if (customDayIntervals[dayIdx]) {
       setCustomDayIntervals((prev) => {
         const copy = { ...prev };
@@ -491,7 +534,10 @@ export default function SlotCreationWizard({
 
   const handleCellMouseEnter = (cellId: string) => {
     if (!isMouseDown) return;
-    const dayIdx = parseInt(cellId.split("_")[0], 10);
+    const [dStr, tStr] = cellId.split("_");
+    const dayIdx = Number(dStr);
+    if (isCellInPast(dayIdx, tStr)) return;
+
     if (customDayIntervals[dayIdx]) {
       setCustomDayIntervals((prev) => {
         const copy = { ...prev };
@@ -849,8 +895,10 @@ export default function SlotCreationWizard({
           <div key={dayIdx} className="border-r last:border-r-0 border-foreground/35 flex flex-col">
             {halfHours.map((m) => {
               const minuteStr = String(m).padStart(2, "0");
-              const cellId = `${dayIdx}_${hourStr}:${minuteStr}`;
+              const timeStr = `${hourStr}:${minuteStr}`;
+              const cellId = `${dayIdx}_${timeStr}`;
               const isSelected = selectedCells.has(cellId);
+              const isPast = isCellInPast(dayIdx, timeStr);
               return (
                 <button
                   key={m}
@@ -859,11 +907,13 @@ export default function SlotCreationWizard({
                   onMouseEnter={() => handleCellMouseEnter(cellId)}
                   onTouchStart={() => toggleCell(cellId)}
                   className={cn(
-                    "h-5 sm:h-6 w-full transition-colors cursor-pointer select-none",
+                    "h-5 sm:h-6 w-full transition-colors select-none",
                     m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
-                    isSelected
-                      ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)]"
-                      : "hover:bg-primary/20 active:bg-primary/30"
+                    isPast
+                      ? "bg-muted/40 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.04)_5px,rgba(0,0,0,0.04)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.04)_5px,rgba(255,255,255,0.04)_10px)] cursor-not-allowed opacity-60"
+                      : isSelected
+                      ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
+                      : "hover:bg-primary/20 active:bg-primary/30 cursor-pointer"
                   )}
                 />
               );
@@ -999,7 +1049,7 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary/20 text-primary"
+                                ? "bg-primary/20 text-foreground"
                                 : "text-foreground"
                             )}
                           >
@@ -1316,7 +1366,7 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary/20 text-primary"
+                                ? "bg-primary/20 text-foreground"
                                 : "text-foreground"
                             )}
                           >
@@ -1435,36 +1485,38 @@ export default function SlotCreationWizard({
                   </div>
                 </div>
 
-                {/* Buttons under schedule: Select all (left) | Deselect (right) */}
+                {/* Single Combined Button under schedule: Select All / Unselect All */}
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-between mt-3 mb-2 px-1"
+                  className="flex items-center justify-start mt-3 mb-2 px-1"
                 >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectAllSlots();
-                    }}
-                    className="text-xs sm:text-sm h-8 px-3.5 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors shadow-2xs font-medium"
-                  >
-                    {t.selectAll}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={selectedSlotKeys.size === 0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedSlotKeys(new Set());
-                    }}
-                    className="text-xs sm:text-sm h-8 px-3.5 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium disabled:opacity-30"
-                  >
-                    {t.unselectAll}
-                  </Button>
+                  {(() => {
+                    const isAllSelected = allSlotKeys.length > 0 && selectedSlotKeys.size === allSlotKeys.length;
+                    return (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={allSlotKeys.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isAllSelected) {
+                            setSelectedSlotKeys(new Set());
+                          } else {
+                            handleSelectAllSlots();
+                          }
+                        }}
+                        className={cn(
+                          "text-xs sm:text-sm h-8 px-3.5 rounded-lg transition-colors shadow-2xs font-medium",
+                          isAllSelected
+                            ? "bg-card text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive hover:border-destructive font-semibold"
+                            : "bg-card text-foreground border-border hover:border-primary hover:text-primary hover:bg-primary/10"
+                        )}
+                      >
+                        {isAllSelected ? t.unselectAll : t.selectAll}
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
 
