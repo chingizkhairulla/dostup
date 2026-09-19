@@ -77,6 +77,7 @@ export interface SlotCreationWizardProps {
     description?: string;
     imageUrl?: string;
     location?: string;
+    deletedSlotIds?: string[];
   }) => void;
   onDeleteSlots?: (dates: string[]) => Promise<void> | void;
   isPending?: boolean;
@@ -205,13 +206,6 @@ export default function SlotCreationWizard({
             for (let m = startM; m < endM; m += 30) {
               const ch = Math.floor(m / 60);
               const cm = m % 60;
-              const cellDate = new Date(date);
-              if (ch < startHour) {
-                cellDate.setDate(cellDate.getDate() + 1);
-              }
-              cellDate.setHours(ch, cm, 0, 0);
-              if (cellDate.getTime() < Date.now()) continue;
-
               const cellId = `${dayIdx}_${String(ch).padStart(2, "0")}:${String(cm).padStart(2, "0")}`;
               cells.add(cellId);
             }
@@ -842,7 +836,39 @@ export default function SlotCreationWizard({
   }, [selectedSlotKeys, slotSettingsMap]);
 
   const handleReady = () => {
-    if (activeDays.length === 0) {
+    const isSlotInPast = (slot: { date: string; start_time: string }) => {
+      const [h, m] = slot.start_time.slice(0, 5).split(":").map(Number);
+      const [y, mo, d] = slot.date.split("-").map(Number);
+      const slotDate = new Date(y, mo - 1, d, h, m, 0, 0);
+      return slotDate.getTime() < Date.now();
+    };
+
+    const deletedSlotIds: string[] = [];
+    const visitedOffsets = new Set<number>([
+      weekOffset,
+      ...Object.keys(cellsByWeek).map(Number),
+    ]);
+
+    visitedOffsets.forEach((offset) => {
+      const oStart = addDays(realCurrentWeekStart, offset * 7);
+      const oDates = Array.from({ length: 7 }, (_, i) => addDays(oStart, i));
+      const oCells = offset === weekOffset ? selectedCells : cellsByWeek[offset] || new Set();
+
+      (existingSlots || []).forEach((s) => {
+        const dayIdx = oDates.findIndex((d) => format(d, "yyyy-MM-dd") === s.date);
+        if (dayIdx === -1) return;
+        if (isSlotInPast(s)) return;
+        const startStr = s.start_time.slice(0, 5);
+        const cellId = `${dayIdx}_${startStr}`;
+        if (!oCells.has(cellId)) {
+          if (!deletedSlotIds.includes(s.id)) {
+            deletedSlotIds.push(s.id);
+          }
+        }
+      });
+    });
+
+    if (activeDays.length === 0 && deletedSlotIds.length === 0) {
       onOpenChange(false);
       return;
     }
@@ -907,6 +933,7 @@ export default function SlotCreationWizard({
       description: currentPanelSettings?.description.trim() || undefined,
       imageUrl: currentPanelSettings?.imageUrl.trim() || undefined,
       location: currentPanelSettings?.location.trim() || undefined,
+      deletedSlotIds,
     });
   };
 
@@ -960,7 +987,9 @@ export default function SlotCreationWizard({
                     "h-5 sm:h-6 w-full transition-colors select-none",
                     m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                     isPast
-                      ? "bg-muted/40 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.04)_5px,rgba(0,0,0,0.04)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.04)_5px,rgba(255,255,255,0.04)_10px)] cursor-not-allowed opacity-60"
+                      ? isSelected
+                        ? "bg-primary/50 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed border-t border-white/50 opacity-80"
+                        : "bg-muted/40 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.04)_5px,rgba(0,0,0,0.04)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.04)_5px,rgba(255,255,255,0.04)_10px)] cursor-not-allowed opacity-60"
                       : isSelected
                       ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
                       : "hover:bg-primary/20 active:bg-primary/30 cursor-pointer"
@@ -1099,7 +1128,9 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary/20 text-foreground"
+                                ? hasSlots
+                                  ? "bg-primary/20 text-foreground"
+                                  : "bg-muted text-foreground"
                                 : "text-foreground"
                             )}
                           >
@@ -1314,7 +1345,7 @@ export default function SlotCreationWizard({
               </div>
 
               {/* Right: Summary panel — "Расписание:" */}
-              <div className="w-80 sm:w-[440px] md:w-[480px] lg:w-[500px] flex-none">
+              <div className="w-72 sm:w-80 md:w-96 flex-none">
                 <div className="sticky top-4 space-y-3.5">
                   <div className="flex items-center justify-between">
                     <p className="text-base sm:text-[17px] font-medium text-foreground">
@@ -1417,7 +1448,9 @@ export default function SlotCreationWizard({
                             className={cn(
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                               isCur
-                                ? "bg-primary/20 text-foreground"
+                                ? isDaySelectedInStep2
+                                  ? "bg-primary/20 text-foreground"
+                                  : "bg-muted text-foreground"
                                 : "text-foreground"
                             )}
                           >
@@ -1580,7 +1613,7 @@ export default function SlotCreationWizard({
               {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-80 sm:w-[440px] md:w-[480px] lg:w-[500px] flex-none"
+                className="w-72 sm:w-80 md:w-96 flex-none"
               >
                 <div className="sticky top-4 space-y-3.5">
                   {/* Title above Slot Parameters */}
@@ -1710,15 +1743,15 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Lesson Details Dialog Button with gray pencil */}
-                    <div className="pt-1">
+                    <div className="pt-1 -mx-1 sm:-mx-1.5">
                       <Button
                         type="button"
                         variant="outline"
                         disabled={selectedSlotKeys.size === 0}
                         onClick={() => setIsDetailsDialogOpen(true)}
-                        className="w-full justify-between h-12 min-h-[48px] px-4 sm:px-5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl"
+                        className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs"
                       >
-                        <span className="text-sm font-semibold text-foreground">
+                        <span className="text-xs sm:text-sm font-semibold text-foreground">
                           {t.details}
                         </span>
                         <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -1738,8 +1771,8 @@ export default function SlotCreationWizard({
                     className={cn(
                       "p-4 sm:p-4.5 rounded-2xl border bg-card shadow-sm space-y-3 transition-all",
                       selectedSlotKeys.size > 0
-                        ? "border-border"
-                        : "border-border opacity-50 pointer-events-none"
+                        ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
+                        : "border-border/60 opacity-60 pointer-events-none"
                     )}
                   >
                     <div className="flex items-center justify-between">

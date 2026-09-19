@@ -812,10 +812,30 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       description?: string;
       imageUrl?: string;
       location?: string;
+      deletedSlotIds?: string[];
     }) => {
       const scheduleId = schedules[0]?.id || (await ensureScheduleId());
       const today = new Date();
       const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+
+      // 1. Delete removed slots if any
+      let deletedCount = 0;
+      if (params.deletedSlotIds && params.deletedSlotIds.length > 0) {
+        await Promise.all(
+          params.deletedSlotIds.map(async (slotId) => {
+            try {
+              await invokeApi("manage-schedules", {
+                action: "delete_slot",
+                ...creatorCreds(),
+                slotId,
+              });
+              deletedCount++;
+            } catch (e) {
+              console.warn("Failed to delete slot:", slotId, e);
+            }
+          })
+        );
+      }
 
       // Calculate start and end dates
       const startDate = params.startDate ? parseISO(params.startDate) : currentWeekStart;
@@ -932,6 +952,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             const slotEndM = slotEndMinutes % 60;
             const slotEnd = `${String(slotEndH).padStart(2, "0")}:${String(slotEndM).padStart(2, "0")}:00`;
 
+            // If date is today, skip times in past
+            if (dateStr === todayStr) {
+              const [sh, sm] = slotStart.split(":").map(Number);
+              const now = new Date();
+              if (sh < now.getHours() || (sh === now.getHours() && sm < now.getMinutes())) {
+                currentMinutes = slotEndMinutes;
+                continue;
+              }
+            }
+
             const exists =
               dbSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5)) ||
               timeSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5));
@@ -958,24 +988,28 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         currentDate = addDays(currentDate, 1);
       }
 
-      if (slots.length === 0) {
-        return 0;
+      if (slots.length > 0) {
+        await invokeApi("manage-schedules", {
+          action: "create_slots",
+          ...creatorCreds(),
+          slots,
+          scheduleId,
+        });
       }
 
-      await invokeApi("manage-schedules", {
-        action: "create_slots",
-        ...creatorCreds(),
-        slots,
-        scheduleId,
-      });
-
-      return slots.length;
+      return { createdCount: slots.length, deletedCount };
     },
-    onSuccess: async (count) => {
+    onSuccess: async ({ createdCount, deletedCount }: { createdCount: number; deletedCount: number }) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
       await queryClient.refetchQueries({ queryKey: ["creator-slots"] });
-      if (count > 0) {
+      if (createdCount > 0 && deletedCount > 0) {
+        toast.success(
+          language === "ru"
+            ? `Создано ${createdCount}, удалено ${deletedCount}!`
+            : `${createdCount} жасалды, ${deletedCount} жойылды!`
+        );
+      } else if (createdCount > 0) {
         const getCreatedSlotsMessage = (c: number) => {
           if (language === "kk") return `${c} слот жасалды!`;
           const mod10 = c % 10;
@@ -985,7 +1019,18 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           if (mod10 >= 2 && mod10 <= 4) return `Создано ${c} слота!`;
           return `Создано ${c} слотов!`;
         };
-        toast.success(getCreatedSlotsMessage(count));
+        toast.success(getCreatedSlotsMessage(createdCount));
+      } else if (deletedCount > 0) {
+        const getDeletedSlotsMessage = (c: number) => {
+          if (language === "kk") return `${c} слот жойылды!`;
+          const mod10 = c % 10;
+          const mod100 = c % 100;
+          if (mod100 >= 11 && mod100 <= 19) return `Удалено ${c} слотов!`;
+          if (mod10 === 1) return `Удален ${c} слот!`;
+          if (mod10 >= 2 && mod10 <= 4) return `Удалено ${c} слота!`;
+          return `Удалено ${c} слотов!`;
+        };
+        toast.success(getDeletedSlotsMessage(deletedCount));
       } else {
         toast.info(
           language === "ru"
