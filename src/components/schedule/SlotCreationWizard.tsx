@@ -358,6 +358,8 @@ export default function SlotCreationWizard({
       confirmClearAllTitle: "Точно удалить все слоты на неделю?",
       cancel: "Отмена",
       confirm: "Удалить",
+      yes: "Да",
+      no: "Нет",
       noSlotsWarning: "Выберите хотя бы одну клетку",
       repeatSummary: "Расписание:",
       selectAll: "Выбрать все слоты",
@@ -402,6 +404,8 @@ export default function SlotCreationWizard({
       confirmClearAllTitle: "Осы аптадағы барлық слоттарды жою керек пе?",
       cancel: "Болдырмау",
       confirm: "Жою",
+      yes: "Иә",
+      no: "Жоқ",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
       repeatSummary: "Кесте:",
       selectAll: "Барлық слоттарды таңдау",
@@ -1313,15 +1317,15 @@ export default function SlotCreationWizard({
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-2.5 text-xs"
+                              className="h-7 px-3 min-w-[48px] text-xs"
                               onClick={() => setIsConfirmClearOpen(false)}
                             >
-                              {t.cancel}
+                              {t.no}
                             </Button>
                             <Button
                               size="sm"
                               variant="destructive"
-                              className="h-7 px-2.5 text-xs"
+                              className="h-7 px-3 min-w-[48px] text-xs"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -1338,7 +1342,7 @@ export default function SlotCreationWizard({
                                 }
                               }}
                             >
-                              {t.confirm}
+                              {t.yes}
                             </Button>
                           </div>
                         </PopoverContent>
