@@ -353,13 +353,14 @@ export default function SlotCreationWizard({
       description: "Описание",
       location: "Местоположение",
       ready: "Готово",
-      clearAll: "Удалить",
-      confirmClearTitle: "Точно удалить все слоты?",
+      clearAll: "Удалить все слоты",
+      confirmClearRemainingTitle: "Точно удалить оставшиеся слоты на неделю?",
+      confirmClearAllTitle: "Точно удалить все слоты на неделю?",
       cancel: "Отмена",
       confirm: "Удалить",
       noSlotsWarning: "Выберите хотя бы одну клетку",
       repeatSummary: "Расписание:",
-      selectAll: "Выбрать все",
+      selectAll: "Выбрать все слоты",
       unselectAll: "Снять выбор",
       different: "Разные",
     },
@@ -396,13 +397,14 @@ export default function SlotCreationWizard({
       description: "Сипаттамасы",
       location: "Орналасу жері",
       ready: "Дайын",
-      clearAll: "Жою",
-      confirmClearTitle: "Барлық слоттарды жою керек пе?",
+      clearAll: "Барлық слоттарды жою",
+      confirmClearRemainingTitle: "Осы аптадағы қалған слоттарды жою керек пе?",
+      confirmClearAllTitle: "Осы аптадағы барлық слоттарды жою керек пе?",
       cancel: "Болдырмау",
       confirm: "Жою",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
       repeatSummary: "Кесте:",
-      selectAll: "Барлығын таңдау",
+      selectAll: "Барлық слоттарды таңдау",
       unselectAll: "Таңдауды алып тастау",
       different: "Әртүрлі",
     },
@@ -1290,21 +1292,23 @@ export default function SlotCreationWizard({
                   )}
 
                   {/* Right: Clear all with popover */}
-                  <div className="w-[140px] flex justify-end">
+                  <div className="min-w-[150px] flex justify-end shrink-0">
                     {activeDays.length > 0 && (
                       <Popover open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 rounded-full px-3"
+                            className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 rounded-full px-3 whitespace-nowrap"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             {t.clearAll}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-56 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                          <p className="text-xs font-medium text-foreground">{t.confirmClearTitle}</p>
+                        <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
+                          <p className="text-xs font-medium text-foreground">
+                            {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
+                          </p>
                           <div className="flex items-center justify-center gap-2">
                             <Button
                               size="sm"
