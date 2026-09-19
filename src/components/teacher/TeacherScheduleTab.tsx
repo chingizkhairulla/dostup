@@ -1017,34 +1017,38 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["teacher-schedules"] });
       await queryClient.refetchQueries({ queryKey: ["teacher-slots"] });
+      const getCreatedPhrase = (c: number) => {
+        if (language === "kk") return `${c} слот жасалды`;
+        const mod10 = c % 10;
+        const mod100 = c % 100;
+        if (mod100 >= 11 && mod100 <= 19) return `Создано ${c} слотов`;
+        if (mod10 === 1) return `Создан ${c} слот`;
+        if (mod10 >= 2 && mod10 <= 4) return `Создано ${c} слота`;
+        return `Создано ${c} слотов`;
+      };
+
+      const getDeletedPhrase = (c: number) => {
+        if (language === "kk") return `${c} слот жойылды`;
+        const mod10 = c % 10;
+        const mod100 = c % 100;
+        if (mod100 >= 11 && mod100 <= 19) return `удалено ${c} слотов`;
+        if (mod10 === 1) return `удалён ${c} слот`;
+        if (mod10 >= 2 && mod10 <= 4) return `удалено ${c} слота`;
+        return `удалено ${c} слотов`;
+      };
+
       if (createdCount > 0 && deletedCount > 0) {
-        toast.success(
-          language === "ru"
-            ? `Создано ${createdCount}, удалено ${deletedCount}!`
-            : `${createdCount} жасалды, ${deletedCount} жойылды!`
-        );
+        if (language === "kk") {
+          toast.success(`${createdCount} слот жасалды және ${deletedCount} слот жойылды!`);
+        } else {
+          toast.success(`${getCreatedPhrase(createdCount)} и ${getDeletedPhrase(deletedCount)}!`);
+        }
       } else if (createdCount > 0) {
-        const getCreatedSlotsMessage = (c: number) => {
-          if (language === "kk") return `${c} слот жасалды!`;
-          const mod10 = c % 10;
-          const mod100 = c % 100;
-          if (mod100 >= 11 && mod100 <= 19) return `Создано ${c} слотов!`;
-          if (mod10 === 1) return `Создан ${c} слот!`;
-          if (mod10 >= 2 && mod10 <= 4) return `Создано ${c} слота!`;
-          return `Создано ${c} слотов!`;
-        };
-        toast.success(getCreatedSlotsMessage(createdCount));
+        toast.success(`${getCreatedPhrase(createdCount)}!`);
       } else if (deletedCount > 0) {
-        const getDeletedSlotsMessage = (c: number) => {
-          if (language === "kk") return `${c} слот жойылды!`;
-          const mod10 = c % 10;
-          const mod100 = c % 100;
-          if (mod100 >= 11 && mod100 <= 19) return `Удалено ${c} слотов!`;
-          if (mod10 === 1) return `Удален ${c} слот!`;
-          if (mod10 >= 2 && mod10 <= 4) return `Удалено ${c} слота!`;
-          return `Удалено ${c} слотов!`;
-        };
-        toast.success(getDeletedSlotsMessage(deletedCount));
+        const delPhrase = getDeletedPhrase(deletedCount);
+        const capitalized = delPhrase.charAt(0).toUpperCase() + delPhrase.slice(1);
+        toast.success(`${capitalized}!`);
       } else {
         toast.info(language === "ru" ? "Новых слотов не добавлено" : "Жаңа слоттар қосылмады");
       }
