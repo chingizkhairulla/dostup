@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import AccountSettingsView from "@/components/account/AccountSettingsView";
+import { invokeApi } from "@/lib/sessionApi";
 
 interface CreatorAccountTabProps {
   creatorName: string;
@@ -17,14 +18,18 @@ const CreatorAccountTab = ({ creatorName }: CreatorAccountTabProps) => {
     creatorName;
 
   useEffect(() => {
-    const storedDate = localStorage.getItem("creator_created_at");
-    if (storedDate) {
-      setCreatedAt(new Date(storedDate));
-    } else {
-      const now = new Date();
-      localStorage.setItem("creator_created_at", now.toISOString());
-      setCreatedAt(now);
-    }
+    let active = true;
+    invokeApi<{ createdAt?: string | null }>("manage-profile", {
+      action: "get_handle",
+      token: localStorage.getItem("creator_token") || "",
+    })
+      .then((data) => {
+        if (active && data.createdAt) setCreatedAt(new Date(data.createdAt));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

@@ -1,50 +1,45 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { translations } from "./translations.ts";
+import { resolve } from "node:path";
+import { translations } from "./translations";
+
+// Resolved from the repo root: under jsdom `import.meta.url` is an http url,
+// which readFileSync rejects.
+function readRepoFile(relativePath: string) {
+  return readFileSync(resolve(process.cwd(), relativePath), "utf8");
+}
 
 test("seller name placeholder is short name-or-title copy", () => {
-  assert.equal(translations.ru.sellerNamePlaceholder, "Название или имя");
-  assert.equal(translations.kk.sellerNamePlaceholder, "Атау немесе есім");
-  assert.equal(translations.ru.sellerNameLabel, "Как будет видно покупателям");
-  assert.equal(translations.kk.sellerNameLabel, "Сатып алушыларға қалай көрінеді");
+  expect(translations.ru.sellerNamePlaceholder).toBe("Название или имя");
+  expect(translations.kk.sellerNamePlaceholder).toBe("Атау немесе есім");
+  expect(translations.ru.sellerNameLabel).toBe("Как будет видно покупателям");
+  expect(translations.kk.sellerNameLabel).toBe("Сатып алушыларға қалай көрінеді");
 });
 
 test("add-profile button stays visible and both seller modes stay available", () => {
-  const rows = readFileSync(new URL("../components/layout/ProfileAccountRows.tsx", import.meta.url), "utf8");
-  assert.equal(rows.includes("canAddSeller"), false);
-  assert.equal(rows.includes("showProfilesHeading"), false);
-  assert.match(rows, /\{newProfileControl\}/);
+  const rows = readRepoFile("src/components/layout/ProfileAccountRows.tsx");
+  expect(rows.includes("canAddSeller")).toBe(false);
+  expect(rows.includes("showProfilesHeading")).toBe(false);
+  expect(rows).toMatch(/\{newProfileControl\}/);
 
-  const dialog = readFileSync(
-    new URL("../components/layout/AddSellerProfileDialog.tsx", import.meta.url),
-    "utf8",
-  );
-  assert.match(dialog, /const SELLER_TYPES: ProfileType\[\] = \["creator", "school"\]/);
-  assert.match(dialog, /types=\{SELLER_TYPES\}/);
+  const dialog = readRepoFile("src/components/layout/AddSellerProfileDialog.tsx");
+  expect(dialog).toMatch(/const SELLER_TYPES: ProfileType\[\] = \["creator", "school"\]/);
+  expect(dialog).toMatch(/types=\{SELLER_TYPES\}/);
 
-  const switchProfile = readFileSync(
-    new URL("../../supabase/functions/switch-profile/index.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(switchProfile, /createSellerProfile/);
-  assert.doesNotMatch(
-    switchProfile,
+  const switchProfile = readRepoFile("supabase/functions/switch-profile/index.ts");
+  expect(switchProfile).toMatch(/createSellerProfile/);
+  expect(switchProfile).not.toMatch(
     /target = await findOrCreateProfile\(supabase, authUserId!, createType, displayName\)/,
   );
 
-  const profiles = readFileSync(
-    new URL("../../supabase/functions/_shared/profiles.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(profiles, /export async function createSellerProfile/);
-  assert.doesNotMatch(profiles, /byAuthType/);
+  const profiles = readRepoFile("supabase/functions/_shared/profiles.ts");
+  expect(profiles).toMatch(/export async function createSellerProfile/);
+  expect(profiles).not.toMatch(/byAuthType/);
 
-  const migration = readFileSync(
-    new URL("../../supabase/migrations/20260829180000_allow_multiple_seller_profiles.sql", import.meta.url),
-    "utf8",
+  const migration = readRepoFile(
+    "supabase/migrations/20260829180000_allow_multiple_seller_profiles.sql",
   );
-  assert.match(migration, /DROP INDEX IF EXISTS public\.profiles_auth_user_id_type_idx/);
-  assert.match(migration, /DROP INDEX IF EXISTS public\.creator_accounts_auth_user_id_type_idx/);
-  assert.match(migration, /profiles_one_buyer_per_auth_user_idx|Buyer stays unique|покупатель/i);
+  expect(migration).toMatch(/DROP INDEX IF EXISTS public\.profiles_auth_user_id_type_idx/);
+  expect(migration).toMatch(/DROP INDEX IF EXISTS public\.creator_accounts_auth_user_id_type_idx/);
+  expect(migration).toMatch(/profiles_one_buyer_per_auth_user_idx|Buyer stays unique|покупатель/i);
 });

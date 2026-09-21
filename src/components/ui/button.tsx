@@ -11,13 +11,16 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        // Secondary buttons sit next to an orange primary one, so they light up a
+        // pale orange on hover rather than flooding solid orange. Their text keeps
+        // its own colour: white-on-pale-orange would be unreadable.
+        outline: "border border-input bg-background hover:bg-primary/10 hover:border-primary/40",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-primary/10",
+        ghost: "hover:bg-primary/10",
         link: "text-primary underline-offset-4 hover:underline min-h-0",
         cta: "gradient-primary text-primary-foreground shadow-cta hover:shadow-lg motion-safe:hover:scale-[1.02] motion-safe:active:scale-[0.98] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:scale-100 disabled:opacity-100 disabled:[background-image:none]",
         success: "bg-success text-success-foreground hover:bg-success/90",
-        toggle: "border border-input bg-background text-foreground hover:bg-muted hover:text-foreground",
+        toggle: "border border-input bg-background text-foreground hover:bg-primary/10 hover:text-foreground",
       },
       size: {
         default: "h-11 px-5 py-2",

@@ -64,10 +64,32 @@ export type SellerStorefront = {
   avatar_url: string | null;
   type: string;
   bio: string | null;
+  created_at: string | null;
+  avg_rating: number;
+  review_count: number;
+  sales_count: number;
   products: CatalogProduct[];
 };
 
 export const CATALOG_FILTER_THRESHOLD = 12;
+
+function pluralRu(count: number, one: string, few: string, many: string) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+export function sellerReviewsLabel(count: number, language: string) {
+  if (language === "kk") return `${count} пікір`;
+  return `${count} ${pluralRu(count, "отзыв", "отзыва", "отзывов")}`;
+}
+
+export function sellerSalesLabel(count: number, language: string) {
+  if (language === "kk") return `${count} сатылым`;
+  return `${count} ${pluralRu(count, "продажа", "продажи", "продаж")}`;
+}
 
 export function productHref(product: { id: string; slug?: string | null }) {
   return `/p/${encodeURIComponent(product.slug || product.id)}`;

@@ -27,6 +27,7 @@ import { unregisterPushToken } from "@/lib/firebase";
 import AvatarSettings from "@/components/account/AvatarSettings";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import NotificationPreferences from "@/components/NotificationPreferences";
+import BioSettingsCard from "@/components/account/BioSettingsCard";
 import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
 import { format, parseISO } from "date-fns";
@@ -300,6 +301,8 @@ export const AccountSettingsView = ({
                   )}
                 </CardContent>
               </Card>
+
+              {isSeller && <BioSettingsCard />}
 
               {/* Buyer Purchases */}
               {role === "buyer" && (

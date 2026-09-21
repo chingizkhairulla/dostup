@@ -23,6 +23,7 @@ import NewProductsPage from './pages/NewProductsPage'
 import LoginPage from './pages/LoginPage'
 import StorefrontPage from './pages/StorefrontPage'
 import ProductPage from './pages/ProductPage'
+import ProductPreviewRoute from './pages/ProductPreviewRoute'
 import ProductRedirect from './pages/ProductRedirect'
 import ProductPurchasePage from './pages/ProductPurchasePage'
 import Dashboard from './pages/Dashboard'
@@ -93,6 +94,7 @@ function AppRoutes() {
 					<Route path='/privacy' element={<LegalPage docId='privacy' />} />
 					<Route path='/s/:handle' element={<StorefrontPage />} />
 					<Route path='/p/:productId' element={<ProductPage />} />
+					<Route path='/preview/product' element={<ProductPreviewRoute />} />
 					<Route path='/auth/callback' element={<AuthCallback />} />
 					<Route path='/product/:productId' element={<ProductRedirect />} />
 					<Route

@@ -23,12 +23,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useProduct, useProductProgram, type ProductProgramItem } from "@/hooks/useProducts";
+import { useProduct, useProductProgram, type Product, type ProductProgramItem } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { formatPriceTenge, formatCatalogPrice, isBillingPeriod } from "@/lib/catalog";
 import { touchRecentProduct } from "@/lib/buyerActivity";
 import { sellerInitial } from "@/lib/productCover";
+import { PRODUCT_TITLE_CLASS, productTitleSize } from "@/lib/productTitle";
 import { invokeApi } from "@/lib/sessionApi";
 import { rememberAuthNext } from "@/lib/creatorAuth";
 import { loginPath, loginState } from "@/lib/loginModal";
@@ -157,14 +158,21 @@ const BuyButton = ({
   );
 };
 
-const ProductPage = () => {
+type ProductPageProps = {
+  isPreview?: boolean;
+  previewProduct?: Product | null;
+};
+
+const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPageProps) => {
   const { productId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t, language } = useLanguage();
   const { user, profileType, profiles, switchProfile } = useSimpleAuth();
-  const { data: product, isLoading } = useProduct(productId);
-  const { data: program = [] } = useProductProgram(product?.id);
+  const { data: fetchedProduct, isLoading: fetchedLoading } = useProduct(isPreview ? undefined : productId);
+  const product = isPreview ? previewProduct : fetchedProduct;
+  const isLoading = isPreview ? false : fetchedLoading;
+  const { data: program = [] } = useProductProgram(isPreview ? undefined : product?.id);
   const [switchBuyerOpen, setSwitchBuyerOpen] = useState(false);
   const [switchingBuyer, setSwitchingBuyer] = useState(false);
 
@@ -198,6 +206,7 @@ const ProductPage = () => {
   }, [product?.id, searchParams, activeOption?.id]);
 
   const handleBuy = () => {
+    if (isPreview) return;
     if (isSellerProfile) {
       setSwitchBuyerOpen(true);
       return;
@@ -240,10 +249,11 @@ const ProductPage = () => {
         sessionToken: localStorage.getItem("creator_token") || "",
       });
     },
-    enabled: Boolean(user && product?.id && (effectiveHasTrial || product?.has_free_trial)),
+    enabled: Boolean(!isPreview && user && product?.id && (effectiveHasTrial || product?.has_free_trial)),
   });
 
   const handleActivateTrial = async () => {
+    if (isPreview) return;
     if (!user) {
       toast.error(t("loginRequiredCheckout") || "Для активации необходимо войти");
       const next = `/p/${product?.slug || product?.id}`;
@@ -277,6 +287,7 @@ const ProductPage = () => {
   };
 
   useEffect(() => {
+    if (isPreview) return;
     if (!product?.slug || !productId) return;
     if (isUuid(productId) && product.slug !== productId) {
       navigate(`/p/${encodeURIComponent(product.slug)}${window.location.search}`, { replace: true });
@@ -284,9 +295,10 @@ const ProductPage = () => {
   }, [product?.slug, productId, navigate]);
 
   useEffect(() => {
+    if (isPreview) return;
     if (!user?.id || !product?.id) return;
     touchRecentProduct(user.id, product.id);
-  }, [user?.id, product?.id]);
+  }, [user?.id, product?.id, isPreview]);
 
   const productMedia: Array<{ type: "image" | "video"; url: string }> = useMemo(() => {
     if (Array.isArray((product as any)?.media) && (product as any).media.length > 0) {
@@ -329,7 +341,7 @@ const ProductPage = () => {
         myReview: { rating: number; comment: string | null } | null;
         canReview: boolean;
       }>("manage-reviews", { action: "list", productId: product?.id ?? "", sessionToken: buyerSessionToken }),
-    enabled: Boolean(product?.id),
+    enabled: Boolean(!isPreview && product?.id),
   });
 
   const [reviewRating, setReviewRating] = useState(0);
@@ -344,15 +356,18 @@ const ProductPage = () => {
   }, [reviewsQuery.data?.myReview, reviewFormTouched]);
 
   const submitReview = useMutation({
-    mutationFn: () =>
-      invokeApi("manage-reviews", {
+    mutationFn: async () => {
+      if (isPreview) return null;
+      return invokeApi("manage-reviews", {
         action: "upsert",
         productId: product?.id ?? "",
         rating: reviewRating,
         comment: reviewComment,
         sessionToken: buyerSessionToken,
-      }),
+      });
+    },
     onSuccess: () => {
+      if (isPreview) return;
       toast.success(t("reviewsThanks"));
       setReviewFormTouched(false);
       queryClient.invalidateQueries({ queryKey: ["product-reviews", product?.id] });
@@ -365,11 +380,11 @@ const ProductPage = () => {
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <MarketplaceHeader />
+        {!isPreview && <MarketplaceHeader />}
         <div className="flex flex-1 justify-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-        <PublicFooter />
+        {!isPreview && <PublicFooter />}
       </div>
     );
   }
@@ -377,18 +392,22 @@ const ProductPage = () => {
   if (!product) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <MarketplaceHeader />
+        {!isPreview && <MarketplaceHeader />}
         <PublicContainer className="flex-1 py-6">
-          <Link
-            to="/"
-            className="mb-8 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>{t("back")}</span>
-          </Link>
-          <p className="public-body text-[#6B7280]">{t("productNotFound")}</p>
+          {!isPreview && (
+            <Link
+              to="/"
+              className="mb-8 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{t("back")}</span>
+            </Link>
+          )}
+          <p className="public-body text-[#6B7280]">
+            {isPreview ? t("previewEmpty") : t("productNotFound")}
+          </p>
         </PublicContainer>
-        <PublicFooter />
+        {!isPreview && <PublicFooter />}
       </div>
     );
   }
@@ -433,11 +452,8 @@ const ProductPage = () => {
   }).format(new Date());
   const priceLabel = formatPriceTenge(effectivePrice);
 
-  const sellerBlock = product.seller_handle ? (
-    <Link
-      to={`/s/${encodeURIComponent(product.seller_handle)}`}
-      className="flex items-center gap-3 rounded-md focus-ring"
-    >
+  const sellerIdentity = (
+    <>
       <Avatar className="h-10 w-10">
         {product.seller_avatar_url && (
           <AvatarImage src={product.seller_avatar_url} alt="" />
@@ -446,16 +462,22 @@ const ProductPage = () => {
       </Avatar>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-foreground">{sellerName}</span>
-        <span className="public-meta">/s/{product.seller_handle}</span>
+        {product.seller_handle && (
+          <span className="public-meta">/s/{product.seller_handle}</span>
+        )}
       </span>
+    </>
+  );
+
+  const sellerBlock = product.seller_handle && !isPreview ? (
+    <Link
+      to={`/s/${encodeURIComponent(product.seller_handle)}`}
+      className="flex items-center gap-3 rounded-md focus-ring"
+    >
+      {sellerIdentity}
     </Link>
   ) : (
-    <div className="flex items-center gap-3">
-      <Avatar className="h-10 w-10">
-        <AvatarFallback>{sellerInitial(sellerName)}</AvatarFallback>
-      </Avatar>
-      <span className="text-sm font-medium text-foreground">{sellerName}</span>
-    </div>
+    <div className="flex items-center gap-3">{sellerIdentity}</div>
   );
 
   const purchaseBody = (
@@ -541,17 +563,19 @@ const ProductPage = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <MarketplaceHeader />
+      {!isPreview && <MarketplaceHeader />}
       <PublicContainer className="flex-1 pb-28 pt-4 lg:pb-16 lg:pt-6">
-        <Link
-          to="/"
-          className="mb-4 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>{t("back")}</span>
-        </Link>
+        {!isPreview && (
+          <Link
+            to="/"
+            className="mb-4 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>{t("back")}</span>
+          </Link>
+        )}
 
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
           <div>
             <div className="space-y-3">
               <div
@@ -629,11 +653,16 @@ const ProductPage = () => {
               )}
             </div>
 
-            <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
-              <h1 className="public-display text-foreground text-balance min-w-0 flex-1 whitespace-pre-wrap break-words">
+            <div className="mt-6">
+              <h1
+                className={cn(
+                  PRODUCT_TITLE_CLASS[productTitleSize(product.title)],
+                  "text-foreground text-balance min-w-0 whitespace-pre-wrap break-words",
+                )}
+              >
                 {renderSafeFormattedContent(product.title)}
               </h1>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ShareProductButton
                   title={product.title}
                   id={product.id}
@@ -824,7 +853,7 @@ const ProductPage = () => {
         </div>
       </PublicContainer>
 
-      <PublicFooter className="pb-28 lg:pb-0" />
+      {!isPreview && <PublicFooter className="pb-28 lg:pb-0" />}
 
       <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/90 p-3 backdrop-blur-lg safe-area-inset lg:hidden">
         <PublicContainer className="flex flex-col gap-2">

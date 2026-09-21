@@ -190,6 +190,43 @@
     }
   }
 
+  /* Smaller steps of .public-display for long product titles. Each is a
+     complete class (not a modifier), so exactly one applies and there is no
+     cascade order to get wrong. */
+  .public-display-long {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 26px;
+    line-height: 1.2;
+  }
+
+  .public-display-xlong {
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  @media (min-width: 768px) {
+    .public-display-long {
+      font-size: 32px;
+    }
+
+    .public-display-xlong {
+      font-size: 26px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .public-display-long {
+      font-size: 40px;
+    }
+
+    .public-display-xlong {
+      font-size: 32px;
+    }
+  }
+
   .public-body {
     font-size: 16px;
     line-height: 1.6;

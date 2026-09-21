@@ -168,6 +168,8 @@ Deno.serve(async (req) => {
         displayName: row.display_name ?? null,
         handle: row.handle ?? null,
         avatarUrl: row.avatar_url ?? null,
+        bio: row.bio ?? null,
+        createdAt: row.created_at ?? null,
         type: row.type,
       })
     }
@@ -235,6 +237,26 @@ Deno.serve(async (req) => {
         return json({ error: 'Failed to remove avatar' }, 500)
       }
       return json({ ok: true, avatarUrl: null })
+    }
+
+    if (action === 'set_bio') {
+      if (row.type !== 'creator' && row.type !== 'school') {
+        return json({ error: 'Only sellers have a public description' }, 400)
+      }
+      const raw = typeof body.bio === 'string' ? body.bio.trim() : ''
+      if (raw.length > 500) return json({ error: 'bio_too_long' }, 400)
+      const bio = raw.length > 0 ? raw : null
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ bio })
+        .eq('id', row.id)
+
+      if (error) {
+        console.error('set_bio error:', error)
+        return json({ error: 'Failed to save description' }, 500)
+      }
+      return json({ ok: true, bio })
     }
 
     if (action === 'delete_profile') {

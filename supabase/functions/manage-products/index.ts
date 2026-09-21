@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
           kaspi_link: product.kaspi_link || null,
           telegram_link: product.telegram_link || null,
           has_schedule: product.has_schedule || false,
-          is_active: product.is_active ?? true,
+          is_active: product.is_active ?? false,
           image_url: product.image_url || null,
           video_url: product.video_url || null,
           media: Array.isArray(product.media) ? product.media : [],

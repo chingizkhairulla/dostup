@@ -5,7 +5,7 @@ export type ProfileType = 'buyer' | 'creator' | 'school'
 export type AccountType = 'course_creator' | 'online_school'
 
 export const PROFILE_COLUMNS =
-  'id, auth_user_id, type, display_name, handle, avatar_url, last_used_at, created_at'
+  'id, auth_user_id, type, display_name, handle, avatar_url, bio, last_used_at, created_at'
 
 export type ProfileRow = {
   id: string
@@ -14,6 +14,7 @@ export type ProfileRow = {
   display_name: string | null
   handle: string | null
   avatar_url: string | null
+  bio: string | null
   last_used_at: string | null
   created_at: string
 }

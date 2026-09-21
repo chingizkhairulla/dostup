@@ -12,7 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Eye, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
+import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Sparkles, Wand2, ArrowRight } from "lucide-react";
 import { predictProductCategory, isTopicMatch, isExactTopicMatch, type CategoryPrediction, suggestCustomTopicWithEmoji } from "@/lib/aiCategory";
 import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } from "@/lib/taxonomyData";
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
@@ -57,37 +57,18 @@ import { cn } from "@/lib/utils";
 import { useCoverCrop, type CoverCropResult } from "@/hooks/useCoverCrop";
 import CoverCropEditor from "./CoverCropEditor";
 import ProductVideoPlayer, { videoBlobCache } from "@/components/media/ProductVideoPlayer";
+import ProductEditorLayout from "./ProductEditorLayout";
+import ProductVisibilityMenu, { visibilityState, type VisibilityState } from "./ProductVisibilityMenu";
+import { draftToPreviewProduct } from "@/lib/productDraftPreview";
+import { createDefaultPricingOption, type PricingOptionFormItem } from "@/lib/pricingOptions";
+import { saveKey, validateProductForm } from "@/lib/productPayload";
+import AutoSaveIndicator from "./AutoSaveIndicator";
+import { persistProduct, type PersistDeps } from "@/lib/persistProduct";
+import { useAutoSave } from "@/hooks/useAutoSave";
+import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 
-export interface PricingOptionFormItem {
-  id: string;
-  paymentType: "one_time" | "recurring";
-  price: string;
-  recurringInterval: string;
-  recurringCustomDays: number;
-  hasFreeTrial: boolean;
-  trialPreset: "3" | "7" | "30" | "custom";
-  trialCustomDays: number;
-  kaspiMethod: "link" | "phone";
-  kaspiLink: string;
-  kaspiPhone: string;
-}
-
-export const createDefaultPricingOption = (
-  id?: string,
-  defaultKaspi?: { method?: "link" | "phone"; link?: string; phone?: string }
-): PricingOptionFormItem => ({
-  id: id || Math.random().toString(36).slice(2, 10),
-  paymentType: "recurring",
-  price: "49000",
-  recurringInterval: "1m",
-  recurringCustomDays: 30,
-  hasFreeTrial: false,
-  trialPreset: "7",
-  trialCustomDays: 7,
-  kaspiMethod: defaultKaspi?.method || "link",
-  kaspiLink: defaultKaspi?.link || "",
-  kaspiPhone: defaultKaspi?.phone || "",
-});
+export { createDefaultPricingOption };
+export type { PricingOptionFormItem };
 
 export function getPricingOptionSummary(opt: PricingOptionFormItem) {
   const priceNum = Number(opt.price) || 0;
@@ -177,12 +158,13 @@ interface FormData {
   pricingOptions: PricingOptionFormItem[];
 }
 
+export type ProductDraftFormData = FormData;
+
 interface ProductFormProps {
   onSubmit: (e: React.FormEvent) => void;
   isEdit?: boolean;
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
-  isPending: boolean;
   t: (key: string) => string;
   editingProductId?: string | null;
   pendingImageFile?: File | null;
@@ -195,32 +177,6 @@ interface ProductFormProps {
 
 function categorySlugById(categories: CatalogCategory[], categoryId: string) {
   return categories.find((category) => category.id === categoryId)?.slug ?? "";
-}
-
-function buildTaxonomyPayload(
-  formData: FormData,
-  categories: CatalogCategory[],
-) {
-  const currentCategory = categories.find((c) => c.id === formData.categoryId);
-  const currentSubcategory = currentCategory?.subcategories.find((s) => s.id === formData.subcategoryId);
-  const isLessons = currentCategory?.slug === "online-lessons";
-
-  return {
-    category_id: formData.categoryId,
-    subcategory_id: formData.subcategoryId,
-    lesson_format: isLessons ? (currentSubcategory?.slug === "group" ? "group" : "individual") : null,
-    event_starts_at: null,
-    capacity: null,
-    billing_period: null,
-    topic: formData.topic || null,
-  };
-}
-
-function validateTaxonomyFields(formData: FormData, _categories: CatalogCategory[]) {
-  if (!formData.categoryId || !formData.subcategoryId) {
-    return "Выберите категорию и подкатегорию";
-  }
-  return null;
 }
 
 function stripHtml(html: string): string {
@@ -239,7 +195,6 @@ const ProductForm = ({
   isEdit = false,
   formData,
   setFormData,
-  isPending,
   t,
   editingProductId,
   pendingImageFile,
@@ -2377,21 +2332,6 @@ const ProductForm = ({
       </CollapsibleContent>
     </Collapsible>
 
-    <Button 
-      type="submit" 
-      variant="cta" 
-      className="w-full"
-      disabled={isPending}
-    >
-      {isPending ? (
-        <span className="flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          {isEdit ? "Сохранение..." : "Создание..."}
-        </span>
-      ) : (
-        isEdit ? "Сохранить изменения" : "Создать продукт"
-      )}
-    </Button>
         </div>
       )}
   </form>
@@ -2445,6 +2385,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       });
   }, [taxonomyRaw]);
   const sellerHandle = typeof window !== "undefined" ? localStorage.getItem("profile_handle") : null;
+  const { profiles } = useSimpleAuth();
+  const activeProfile = profiles.find(
+    (profile) =>
+      profile.id === (typeof window !== "undefined" ? localStorage.getItem("profile_id") : null),
+  );
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -2454,15 +2399,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
-  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [pausingProduct, setPausingProduct] = useState<Product | null>(null);
-
-  useEffect(() => {
-    if (previewProduct) {
-      setPreviewLoading(true);
-    }
-  }, [previewProduct?.id]);
   const [pauseMessage, setPauseMessage] = useState<string>("");
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
@@ -2496,6 +2433,29 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     trialCustomDays: 7,
     pricingOptions: [createDefaultPricingOption()],
   });
+
+  const [debouncedForm, setDebouncedForm] = useState(formData);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedForm(formData), 200);
+    return () => clearTimeout(timer);
+  }, [formData]);
+
+  const draftPreview = useMemo(
+    () =>
+      draftToPreviewProduct(
+        debouncedForm,
+        taxonomyCategories,
+        {
+          displayName:
+            (typeof window !== "undefined" && localStorage.getItem("profile_display_name")) ||
+            creatorName,
+          handle: sellerHandle,
+          avatarUrl: activeProfile?.avatarUrl ?? null,
+        },
+        editingProduct,
+      ),
+    [debouncedForm, taxonomyCategories, creatorName, sellerHandle, activeProfile?.avatarUrl, editingProduct],
+  );
 
   const resetForm = () => {
     const defaultOpt = createDefaultPricingOption();
@@ -2534,172 +2494,148 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
   // copyLink function removed - now using ShareLinkDialog for all link copying
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // ---- Editor window: saved as you go, no Create / Save / Cancel buttons -------------
+  // A brand-new product is created (private) once its required fields are filled,
+  // and every later change is written to that same product.
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const sessionRef = useRef(0);
+  const createdProductRef = useRef<Product | null>(null);
 
-    const taxonomyError = validateTaxonomyFields(formData, taxonomyCategories);
-    if (!formData.title || taxonomyError) {
-      toast.error(taxonomyError || "Заполните обязательные поля");
-      return;
-    }
-
-    const options = formData.pricingOptions && formData.pricingOptions.length > 0
-      ? formData.pricingOptions
-      : [createDefaultPricingOption()];
-
-    if (formData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
-      toast.error("Укажите цену для всех вариантов оплаты");
-      return;
-    }
-
-    const primaryOpt = options[0];
-    let primaryAccessDays: number | null = null;
-    let primaryBillingPeriod: string | null = null;
-    if (formData.isPaid && primaryOpt.paymentType === "recurring") {
-      primaryBillingPeriod =
-        primaryOpt.recurringInterval === "1m"
-          ? "month"
-          : primaryOpt.recurringInterval === "3m"
-          ? "quarter"
-          : primaryOpt.recurringInterval === "1y"
-          ? "year"
-          : primaryOpt.recurringInterval;
-
-      if (primaryOpt.recurringInterval === "7d") primaryAccessDays = 7;
-      else if (primaryOpt.recurringInterval === "14d") primaryAccessDays = 14;
-      else if (primaryOpt.recurringInterval === "1m") primaryAccessDays = 30;
-      else if (primaryOpt.recurringInterval === "3m") primaryAccessDays = 90;
-      else if (primaryOpt.recurringInterval === "1y") primaryAccessDays = 365;
-      else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
-    }
-
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
-    const serializedOptions = formData.isPaid
-      ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
-                ? "quarter"
-                : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
-          };
-        })
-      : [];
-
-    try {
-      const created = await createProduct.mutateAsync({
-        title: formData.title,
-        headline: formData.headline || null,
-        description: formData.description || null,
-        price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
-        telegram_link: null,
-        payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
-        recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
-        access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
-        pricing_options: serializedOptions,
-        has_schedule: false,
-        is_active: true,
-        faq: (formData.faq || [])
-          .filter(it => (it?.question || "").trim() || (it?.answer || "").trim())
-          .map(it => ({ question: (it?.question || "").trim(), answer: (it?.answer || "").trim() })),
-        ...buildTaxonomyPayload(formData, taxonomyCategories),
-      });
-
-      // Upload pending media (if any)
-      const finalMedia: Array<{ type: "image" | "video"; url: string; objectPosition?: string }> = [];
-      for (const item of (formData.media || [])) {
-        if (item.file && created?.id) {
-          const toastId = toast.loading(`Загрузка ${item.type === "video" ? "видео (0%)..." : "фото..."}`);
-          try {
-            let fileToUpload = item.file;
-            if (item.type === "video" && item.file.size > COMPRESSION_THRESHOLD) {
-              toast.loading("Оптимизация видео...", { id: toastId });
-              fileToUpload = await compressVideoIfNeeded(item.file, (pct) => {
-                toast.loading(`Оптимизация видео (${pct}%)...`, { id: toastId });
-              });
-            }
-            const uploadedUrl = await uploadProductMedia(fileToUpload, created.id, item.type, (pct) => {
-              if (item.type === "video") {
-                toast.loading(`Загрузка видео (${pct}%)...`, { id: toastId });
-              }
-            });
-            toast.dismiss(toastId);
-            finalMedia.push({ type: item.type, url: uploadedUrl, objectPosition: item.objectPosition });
-          } catch (err: any) {
-            toast.dismiss(toastId);
-            toast.error(err?.message || `Ошибка загрузки ${item.type === "video" ? "видео" : "фото"}`);
-          }
-        } else if (item.url && !item.url.startsWith("blob:")) {
-          finalMedia.push({ type: item.type, url: item.url, objectPosition: item.objectPosition });
-        }
-      }
-
-      if (created?.id && finalMedia.length > 0) {
-        const firstImg = finalMedia.find((m) => m.type === "image");
-        const firstVid = finalMedia.find((m) => m.type === "video");
-        try {
-          await updateProduct.mutateAsync({
-            id: created.id,
-            media: finalMedia,
-            image_url: firstImg?.url || null,
-            video_url: firstVid?.url || null,
+  const persistDeps: PersistDeps = {
+    createProduct: async (payload) => {
+      const created = await createProduct.mutateAsync(
+        payload as Parameters<typeof createProduct.mutateAsync>[0],
+      );
+      // Remembered right away: a save that runs before React re-renders must
+      // update this product, not create a second one.
+      createdProductRef.current = created as unknown as Product;
+      return created;
+    },
+    updateProduct: (payload) =>
+      updateProduct.mutateAsync(payload as Parameters<typeof updateProduct.mutateAsync>[0]),
+    uploadMedia: async (item, productId) => {
+      const toastId = toast.loading(`Загрузка ${item.type === "video" ? "видео (0%)..." : "фото..."}`);
+      try {
+        let fileToUpload = item.file as File;
+        if (item.type === "video" && fileToUpload.size > COMPRESSION_THRESHOLD) {
+          toast.loading("Оптимизация видео...", { id: toastId });
+          fileToUpload = await compressVideoIfNeeded(fileToUpload, (pct) => {
+            toast.loading(`Оптимизация видео (${pct}%)...`, { id: toastId });
           });
-        } catch {
-          // already toasted above
         }
+        const url = await uploadProductMedia(fileToUpload, productId, item.type, (pct) => {
+          if (item.type === "video") {
+            toast.loading(`Загрузка видео (${pct}%)...`, { id: toastId });
+          }
+        });
+        toast.dismiss(toastId);
+        return url;
+      } catch (err: any) {
+        toast.dismiss(toastId);
+        toast.error(err?.message || `Ошибка загрузки ${item.type === "video" ? "видео" : "фото"}`);
+        throw err;
       }
+    },
+  };
 
-      toast.success("Продукт создан!");
-      setIsCreating(false);
-      resetForm();
+  const saveEditor = async ({ form, product }: { form: FormData; product: Product | null }) => {
+    const productId = product?.id ?? createdProductRef.current?.id ?? null;
+    try {
+      const result = await persistProduct(
+        { form, categories: taxonomyCategories, productId },
+        persistDeps,
+      );
+      if (result.status !== "saved") return;
+
+      if (Object.keys(result.uploaded).length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          media: (prev.media || []).map((m) =>
+            result.uploaded[m.id]
+              ? { ...m, url: result.uploaded[m.id], previewUrl: m.previewUrl ?? m.url }
+              : m,
+          ),
+        }));
+      }
+      if (result.created && createdProductRef.current) {
+        setEditingProduct(createdProductRef.current);
+        toast(t("productCreatedPrivate"));
+      }
     } catch (error: any) {
-      console.error("Create product error:", error);
-      toast.error(error?.message || "Ошибка при создании продукта");
+      console.error("Autosave failed:", error);
+      toast.error(error?.message || t("autosaveError"));
+      throw error;
     }
   };
 
+  const formSaveKey = useMemo(() => saveKey(formData, taxonomyCategories), [formData, taxonomyCategories]);
+
+  const autoSave = useAutoSave({
+    value: { form: formData, product: editingProduct },
+    saveKey: formSaveKey,
+    enabled: isCreating || !!editingProduct,
+    canSave: validateProductForm(formData) === null,
+    save: saveEditor,
+  });
+
+  const openCreate = () => {
+    sessionRef.current += 1;
+    createdProductRef.current = null;
+    resetForm();
+    setEditingProduct(null);
+    setIsCroppingMedia(false);
+    setIsCreating(true);
+    setDialogOpen(true);
+  };
+
+  const closeEditor = async () => {
+    const session = sessionRef.current;
+    setDialogOpen(false);
+
+    const hadUnsaved = autoSave.hasUnsaved();
+    await autoSave.flush();
+    // Closing must never silently throw typed-in work away.
+    if (hadUnsaved && autoSave.hasUnsaved()) {
+      const reason = validateProductForm(formData);
+      if (reason) toast.warning(t("autosaveIncomplete"), { description: reason });
+    }
+
+    // A different window may have been opened while this one was still saving.
+    if (sessionRef.current !== session) return;
+    setIsCreating(false);
+    setEditingProduct(null);
+    resetForm();
+    setIsCroppingMedia(false);
+    createdProductRef.current = null;
+  };
+
+  const handleVisibilityChange = (product: Product, next: VisibilityState) => {
+    if (next === "paused") {
+      setPauseMessage(
+        (product as any).paused_message ||
+          (language === "ru"
+            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
+            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
+      );
+      setPausingProduct(product);
+      return;
+    }
+    const payload =
+      next === "private"
+        ? { id: product.id, is_active: false }
+        : { id: product.id, is_active: true, is_paused: false };
+    updateProduct.mutate(payload as any, {
+      onSuccess: () => toast.success(t("visibilityChanged")),
+      onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
+    });
+  };
+
   const handleEdit = (product: Product) => {
+    sessionRef.current += 1;
+    createdProductRef.current = null;
+    setIsCreating(false);
+    setIsCroppingMedia(false);
+    setDialogOpen(true);
     setEditingProduct(product);
     const eventLocal =
       product.event_starts_at && !Number.isNaN(Date.parse(product.event_starts_at))
@@ -2810,128 +2746,6 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     });
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const taxonomyError = validateTaxonomyFields(formData, taxonomyCategories);
-    if (!editingProduct || !formData.title || taxonomyError) {
-      toast.error(taxonomyError || "Заполните обязательные поля");
-      return;
-    }
-
-    const options = formData.pricingOptions && formData.pricingOptions.length > 0
-      ? formData.pricingOptions
-      : [createDefaultPricingOption()];
-
-    if (formData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
-      toast.error("Укажите цену для всех вариантов оплаты");
-      return;
-    }
-
-    const primaryOpt = options[0];
-    let primaryAccessDays: number | null = null;
-    let primaryBillingPeriod: string | null = null;
-    if (formData.isPaid && primaryOpt.paymentType === "recurring") {
-      primaryBillingPeriod =
-        primaryOpt.recurringInterval === "1m"
-          ? "month"
-          : primaryOpt.recurringInterval === "3m"
-          ? "quarter"
-          : primaryOpt.recurringInterval === "1y"
-          ? "year"
-          : primaryOpt.recurringInterval;
-
-      if (primaryOpt.recurringInterval === "7d") primaryAccessDays = 7;
-      else if (primaryOpt.recurringInterval === "14d") primaryAccessDays = 14;
-      else if (primaryOpt.recurringInterval === "1m") primaryAccessDays = 30;
-      else if (primaryOpt.recurringInterval === "3m") primaryAccessDays = 90;
-      else if (primaryOpt.recurringInterval === "1y") primaryAccessDays = 365;
-      else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
-    }
-
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
-    const serializedOptions = formData.isPaid
-      ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
-                ? "quarter"
-                : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
-          };
-        })
-      : [];
-
-    try {
-      await updateProduct.mutateAsync({
-        id: editingProduct.id,
-        title: formData.title,
-        headline: formData.headline || null,
-        description: formData.description || null,
-        price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
-        payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
-        recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
-        access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
-        pricing_options: serializedOptions,
-        image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,
-        video_url: (formData.media || []).find((m) => m.type === "video")?.url || null,
-        media: (formData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
-        faq: (formData.faq || [])
-          .filter(it => (it?.question || "").trim() || (it?.answer || "").trim())
-          .map(it => ({ question: (it?.question || "").trim(), answer: (it?.answer || "").trim() })),
-        ...buildTaxonomyPayload(formData, taxonomyCategories),
-      });
-      
-      toast.success("Продукт обновлён!");
-      setEditingProduct(null);
-      resetForm();
-    } catch (error: any) {
-      console.error("Failed to update product:", error);
-      toast.error(error?.message || "Ошибка при обновлении продукта");
-    }
-  };
-
   const handleDelete = async () => {
     if (!deletingProduct) return;
 
@@ -2994,51 +2808,37 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{t("products")}</h2>
-        <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) { resetForm(); setIsCroppingMedia(false); } }}>
-          <DialogTrigger asChild>
-            <Button variant="default" size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              {t("create")}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
-            <DialogHeader>
-              <DialogTitle>{isCroppingMedia ? "Настройка обложки" : "Создать продукт"}</DialogTitle>
-            </DialogHeader>
-            <ProductForm 
-              onSubmit={handleCreate} 
+        <Button variant="default" size="sm" onClick={openCreate}>
+          <Plus className="w-4 h-4 mr-2" />
+          {t("create")}
+        </Button>
+      </div>
+
+      {/* Create / edit window: no bottom buttons — it saves itself, and a click outside closes it */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) void closeEditor(); }}>
+        <DialogContent className="flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden overflow-x-hidden min-w-0 h-[85vh] sm:w-full lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {isCroppingMedia ? "Настройка обложки" : isCreating ? "Создать продукт" : `${t("edit")} продукт`}
+              <AutoSaveIndicator status={autoSave.status} />
+            </DialogTitle>
+          </DialogHeader>
+          <ProductEditorLayout previewProduct={draftPreview} previewHidden={isCroppingMedia}>
+            <ProductForm
+              onSubmit={() => void autoSave.flush()}
+              isEdit={!!editingProduct}
               formData={formData}
               setFormData={setFormData}
-              isPending={createProduct.isPending}
               t={t}
               taxonomyCategories={taxonomyCategories}
               pendingImageFile={pendingImageFile}
               pendingVideoFile={pendingVideoFile}
               setPendingImageFile={setPendingImageFile}
               setPendingVideoFile={setPendingVideoFile}
+              editingProductId={editingProduct?.id || null}
               onCroppingChange={setIsCroppingMedia}
             />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) { setEditingProduct(null); resetForm(); setIsCroppingMedia(false); } }}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
-          <DialogHeader>
-            <DialogTitle>{isCroppingMedia ? "Настройка обложки" : `${t("edit")} продукт`}</DialogTitle>
-          </DialogHeader>
-          <ProductForm 
-            onSubmit={handleUpdate} 
-            isEdit 
-            formData={formData}
-            setFormData={setFormData}
-            isPending={updateProduct.isPending}
-            t={t}
-            taxonomyCategories={taxonomyCategories}
-            editingProductId={editingProduct?.id || null}
-            onCroppingChange={setIsCroppingMedia}
-          />
+          </ProductEditorLayout>
         </DialogContent>
       </Dialog>
 
@@ -3112,6 +2912,13 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
                   {/* Badges */}
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {visibilityState(product) !== "published" && (
+                      <span className={`bg-muted text-muted-foreground px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                        {visibilityState(product) === "private"
+                          ? t("visibilityPrivate")
+                          : t("visibilityPaused")}
+                      </span>
+                    )}
                     {product.billing_period && (
                       <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
                         {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
@@ -3143,52 +2950,17 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPreviewProduct(product as Product)}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span className="ml-1">{language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => handleEdit(product)}
                   className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
                 >
                   <Edit className="w-3.5 h-3.5" />
                   <span className="ml-1">{t("edit")}</span>
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if ((product as any).is_paused) {
-                      updateProduct.mutate(
-                        { id: product.id, is_paused: false } as any,
-                        {
-                          onSuccess: () => toast.success(language === "ru" ? "Продукт возобновлён" : "Өнім қайта іске қосылды"),
-                          onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                        }
-                      );
-                    } else {
-                      setPauseMessage(
-                        (product as any).paused_message ||
-                          (language === "ru"
-                            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
-                            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
-                      );
-                      setPausingProduct(product as Product);
-                    }
-                  }}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                  <span className="ml-1">
-                    {(product as any).is_paused
-                      ? (language === "ru" ? "Возобновить" : "Қайта қосу")
-                      : (language === "ru" ? "Приостановить" : "Тоқтату")}
-                  </span>
-                </Button>
+                <ProductVisibilityMenu
+                  state={visibilityState(product)}
+                  isMobile={isMobile}
+                  onSelect={(next) => handleVisibilityChange(product as Product, next)}
+                />
                 <Button
                   variant="outline"
                   size="sm"
@@ -3220,41 +2992,6 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         onClose={() => setMaterialsProduct(null)}
       />
     )}
-
-    {/* Preview Dialog */}
-    <Dialog open={!!previewProduct} onOpenChange={(open) => { if (!open) setPreviewProduct(null); }}>
-      <DialogContent className="max-w-md w-[95vw] p-4 dialog-mobile-fullscreen flex flex-col max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 pr-8">
-            <span className="truncate text-base sm:text-lg">
-              {language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}: {previewProduct?.title}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 min-h-0 flex justify-center items-stretch bg-muted/30 rounded-lg p-2 sm:p-3 overflow-auto relative">
-          {previewProduct && (
-            <>
-              {previewLoading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm rounded-lg">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">
-                    {language === "ru" ? "Загрузка страницы…" : "Бет жүктелуде…"}
-                  </span>
-                </div>
-              )}
-              <iframe
-                key={previewProduct.id}
-                src={previewProduct.slug ? `/p/${encodeURIComponent(previewProduct.slug)}` : `/p/${previewProduct.id}`}
-                title="preview"
-                className="bg-background border border-border rounded-lg shadow-lg max-w-full h-full relative z-0"
-                style={{ width: "min(390px, 100%)", minHeight: 600 }}
-                onLoad={() => setPreviewLoading(false)}
-              />
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
 
     {/* Pause Dialog */}
     <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>

@@ -19,6 +19,10 @@ export function useSellerStorefront(handle: string | undefined) {
         avatar_url?: string | null;
         type?: string;
         bio?: string | null;
+        created_at?: string | null;
+        avg_rating?: number | string | null;
+        review_count?: number | null;
+        sales_count?: number | null;
         products?: CatalogProduct[] | string;
       };
       if (!raw.handle) return null;
@@ -31,6 +35,10 @@ export function useSellerStorefront(handle: string | undefined) {
         avatar_url: raw.avatar_url ?? null,
         type: raw.type || "creator",
         bio: raw.bio ?? null,
+        created_at: raw.created_at ?? null,
+        avg_rating: Number(raw.avg_rating) || 0,
+        review_count: Number(raw.review_count) || 0,
+        sales_count: Number(raw.sales_count) || 0,
         products: products.map((item) => ({
           ...item,
           price: Number(item.price) || 0,

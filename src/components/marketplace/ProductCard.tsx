@@ -52,11 +52,18 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
 
   const currentMedia = mediaList[activeIdx];
 
+  const sellerIdentity = (
+    <>
+      <Avatar className="h-5 w-5">
+        {product.seller_avatar_url && <AvatarImage src={product.seller_avatar_url} alt="" />}
+        <AvatarFallback className="text-[10px]">{initial}</AvatarFallback>
+      </Avatar>
+      <span className="public-meta truncate">{sellerName}</span>
+    </>
+  );
+
   return (
-    <Link
-      to={productHref(product)}
-      className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card focus-ring motion-safe:transition-shadow motion-safe:hover:shadow-md"
-    >
+    <div className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card motion-safe:transition-shadow motion-safe:hover:shadow-md">
       {isNew && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-[#FF6B00] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
           {t("newProductBadge")}
@@ -163,7 +170,12 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
       )}
       <div className="flex min-w-0 flex-col px-4 pb-4 pt-3">
         <h3 className="line-clamp-2 w-full min-w-0 text-base font-semibold leading-snug text-foreground">
-          {product.title}
+          <Link
+            to={productHref(product)}
+            className="rounded-md focus-ring after:absolute after:inset-0 after:content-['']"
+          >
+            {product.title}
+          </Link>
         </h3>
         {reviewCount > 0 && (
           <div className="mt-1 flex items-center gap-1 text-sm text-[#6B7280]">
@@ -187,17 +199,18 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
             </span>
           )}
         </div>
-        <div className="mt-2 flex min-w-0 items-center gap-2">
-          <Avatar className="h-5 w-5">
-            {product.seller_avatar_url && (
-              <AvatarImage src={product.seller_avatar_url} alt="" />
-            )}
-            <AvatarFallback className="text-[10px]">{initial}</AvatarFallback>
-          </Avatar>
-          <span className="public-meta truncate">{sellerName}</span>
-        </div>
+        {product.seller_handle ? (
+          <Link
+            to={`/s/${encodeURIComponent(product.seller_handle)}`}
+            className="relative z-10 mt-2 flex min-w-0 items-center gap-2 self-start rounded-md focus-ring hover:underline"
+          >
+            {sellerIdentity}
+          </Link>
+        ) : (
+          <div className="mt-2 flex min-w-0 items-center gap-2">{sellerIdentity}</div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 };
 

@@ -34,6 +34,8 @@ export default defineConfig(({ mode }) => {
     host: "::",
     port: 8080,
     strictPort: true,
+    // Allows demoing the dev server through a Cloudflare quick tunnel.
+    allowedHosts: [".trycloudflare.com"],
   },
   plugins: [
     react(),

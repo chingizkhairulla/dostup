@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, Star } from "lucide-react";
 import { useParams } from "react-router-dom";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
@@ -8,10 +8,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSellerStorefront } from "@/hooks/useSellerStorefront";
 import { sellerInitial } from "@/lib/productCover";
+import { sellerReviewsLabel, sellerSalesLabel } from "@/lib/catalog";
 
 const StorefrontPage = () => {
   const { handle } = useParams();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { data: seller, isLoading } = useSellerStorefront(handle);
 
   return (
@@ -42,6 +43,29 @@ const StorefrontPage = () => {
                 <p className="public-meta">
                   {seller.type === "school" ? t("sellerRoleSchool") : t("sellerRoleCreator")}
                 </p>
+                {seller.created_at && (
+                  <p className="public-meta">
+                    {t("sellerJoinedYear", { year: new Date(seller.created_at).getFullYear() })}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {seller.review_count > 0 ? (
+                    <span className="flex items-center gap-1 text-sm text-[#6B7280]">
+                      <Star className="h-4 w-4 fill-[#FFB020] text-[#FFB020]" />
+                      <span className="font-medium text-foreground">
+                        {seller.avg_rating.toFixed(1)}
+                      </span>
+                      <span>· {sellerReviewsLabel(seller.review_count, language)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-sm text-[#6B7280]">{t("sellerNoReviews")}</span>
+                  )}
+                  {seller.sales_count > 0 && (
+                    <span className="text-sm text-[#6B7280]">
+                      {sellerSalesLabel(seller.sales_count, language)}
+                    </span>
+                  )}
+                </div>
                 {seller.bio && (
                   <p className="public-body max-w-2xl whitespace-pre-wrap text-[#6B7280]">
                     {seller.bio}
