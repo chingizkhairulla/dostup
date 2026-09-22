@@ -160,8 +160,27 @@ interface FormData {
 
 export type ProductDraftFormData = FormData;
 
+/** The id tying the pinned Save button to the product form. */
+export const PRODUCT_FORM_ID = "product-editor-form";
+
+/**
+ * The editor window: two panes reaching the window's edges, with a definite
+ * height so the panes' scroll areas have real space to divide.
+ */
+export const EDITOR_DIALOG_CLASS =
+  "flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden min-w-0 h-[85vh] gap-0 p-0 sm:w-full lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]";
+
+/**
+ * Cover cropping takes the window back to its former compact size: the cropper
+ * is only 384px wide, and the full two-pane window dwarfed it.
+ */
+export const CROP_DIALOG_CLASS =
+  "flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-y-auto overflow-x-hidden min-w-0 max-h-[90vh] sm:w-full";
+
 interface ProductFormProps {
   onSubmit: (e: React.FormEvent) => void;
+  /** Lets the pinned Save button submit this form from outside its scroll area. */
+  formId?: string;
   isEdit?: boolean;
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
@@ -192,6 +211,7 @@ const ReqStar = () => (
 
 const ProductForm = ({
   onSubmit,
+  formId,
   isEdit = false,
   formData,
   setFormData,
@@ -209,7 +229,7 @@ const ProductForm = ({
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [removeImageOpen, setRemoveImageOpen] = useState(false);
   const [removeVideoOpen, setRemoveVideoOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(!isEdit);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [activeFaqIndex, setActiveFaqIndex] = useState(0);
@@ -1111,7 +1131,7 @@ const ProductForm = ({
   ];
 
   return (
-    <form onSubmit={handleFormSubmit} noValidate className="space-y-4 mt-4 w-full min-w-0 max-w-full overflow-x-hidden">
+    <form id={formId} onSubmit={handleFormSubmit} noValidate className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden">
       {Boolean(coverCrop.source) ? (
         <div className="space-y-4 py-1 animate-in fade-in-50 duration-200">
           <CoverCropEditor
@@ -2609,6 +2629,15 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     createdProductRef.current = null;
   };
 
+  // The pinned Save button submits the form, so the form's own check runs first
+  // and highlights the first missing field. A save that fails keeps the window
+  // open rather than closing on work that was never stored.
+  const finishEditing = async () => {
+    await autoSave.flush();
+    if (autoSave.hasUnsaved()) return;
+    await closeEditor();
+  };
+
   const handleVisibilityChange = (product: Product, next: VisibilityState) => {
     if (next === "paused") {
       setPauseMessage(
@@ -2814,18 +2843,46 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         </Button>
       </div>
 
-      {/* Create / edit window: no bottom buttons — it saves itself, and a click outside closes it */}
+      {/* Create / edit window: sections on the left, live preview on the right. */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) void closeEditor(); }}>
-        <DialogContent className="flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden overflow-x-hidden min-w-0 h-[85vh] sm:w-full lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {isCroppingMedia ? "Настройка обложки" : isCreating ? "Создать продукт" : `${t("edit")} продукт`}
-              <AutoSaveIndicator status={autoSave.status} />
-            </DialogTitle>
-          </DialogHeader>
-          <ProductEditorLayout previewProduct={draftPreview} previewHidden={isCroppingMedia}>
+        <DialogContent
+          alwaysShowCloseButton
+          className={isCroppingMedia ? CROP_DIALOG_CLASS : EDITOR_DIALOG_CLASS}
+        >
+          {isCroppingMedia ? (
+            <DialogHeader>
+              <DialogTitle>Настройка обложки</DialogTitle>
+            </DialogHeader>
+          ) : null}
+          <ProductEditorLayout
+            previewProduct={draftPreview}
+            previewHidden={isCroppingMedia}
+            title={
+              isCroppingMedia ? undefined : (
+                <>
+                  <DialogTitle className="text-base">
+                    {isCreating ? "Создать продукт" : `${t("edit")} продукт`}
+                  </DialogTitle>
+                  <AutoSaveIndicator status={autoSave.status} />
+                </>
+              )
+            }
+            footer={
+              <Button
+                type="submit"
+                form={PRODUCT_FORM_ID}
+                disabled={autoSave.status === "saving"}
+              >
+                {autoSave.status === "saving" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t("save")}
+              </Button>
+            }
+          >
             <ProductForm
-              onSubmit={() => void autoSave.flush()}
+              formId={PRODUCT_FORM_ID}
+              onSubmit={() => void finishEditing()}
               isEdit={!!editingProduct}
               formData={formData}
               setFormData={setFormData}

@@ -1,53 +1,66 @@
 import { useState, type ReactNode } from "react";
 import ProductPreviewPane from "@/components/creator/ProductPreviewPane";
 import type { Product } from "@/hooks/useProducts";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsDesktop } from "@/hooks/use-mobile";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 type ProductEditorLayoutProps = {
   previewProduct: Product | null;
-  /** Cropping takes over the full dialog, so the preview is hidden while it runs. */
+  /** Cropping takes over the whole window, so both panes step aside. */
   previewHidden?: boolean;
+  /** Left pane's top bar: the window title and the save indicator. */
+  title?: ReactNode;
+  /** Left pane's pinned bottom bar: the save button. */
+  footer?: ReactNode;
+  /** Right end of the preview's top bar: the window's close control. */
+  headerRight?: ReactNode;
   children: ReactNode;
 };
 
 /**
- * Two-pane product editor: form on the left, live preview on the right. On small
- * screens the panes become tabs so the form is never horizontally squeezed.
+ * The product editor window: sections on the left, live preview on the right.
  *
- * The form (`children`) holds local state — the picked cover photo, the cropper —
- * so it must never be unmounted by a layout change. Every mode therefore renders
- * the same three slots in the same order (tabs, form, preview); modes only change
- * classes and which of the neighbouring slots are empty. Returning a differently
- * shaped tree per mode would make React remount the form and silently drop the
- * photo the moment it was picked.
+ * Two rules hold this together and are covered by tests:
+ *
+ * 1. The form (`children`) owns local state — the picked cover photo and the
+ *    cropper. It must never be unmounted by a layout change, so every mode
+ *    renders the same three slots in the same order; modes only change classes
+ *    and which neighbouring slots are empty.
+ * 2. The sections are centred with auto margins, not `justify-center`. Centring
+ *    the scroll container itself pushes the first section above the scroll
+ *    origin once the sections are expanded, where it cannot be reached.
  */
 const ProductEditorLayout = ({
   previewProduct,
   previewHidden = false,
+  title,
+  footer,
+  headerRight,
   children,
 }: ProductEditorLayoutProps) => {
-  const isMobile = useIsMobile();
+  const isDesktop = useIsDesktop();
   const { t } = useLanguage();
   const [tab, setTab] = useState<"editor" | "preview">("editor");
 
-  const splitView = !isMobile && !previewHidden;
-  const showTabs = isMobile && !previewHidden;
+  const splitView = isDesktop && !previewHidden;
+  const showTabs = !isDesktop && !previewHidden;
   const previewTabActive = showTabs && tab === "preview";
-  const showPreview = !previewHidden && (!isMobile || previewTabActive);
+  const showPreview = !previewHidden && (isDesktop || previewTabActive);
 
   return (
     <div
       className={cn(
         "min-h-0 flex-1",
         splitView
-          ? "grid gap-6 lg:grid-cols-[minmax(420px,1fr)_minmax(0,1.1fr)]"
-          : "flex flex-col gap-3",
+          ? "grid lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]"
+          : "flex flex-col",
       )}
     >
       {showTabs ? (
-        <div className="flex shrink-0 rounded-full border border-border bg-muted/40 p-1">
+        // The extra right margin keeps the tabs clear of the window's close
+        // cross, which sits at the top right corner.
+        <div className="mb-3 ml-3 mr-12 mt-3 flex shrink-0 rounded-full border border-border bg-muted/40 p-1">
           {(["editor", "preview"] as const).map((value) => (
             <button
               key={value}
@@ -66,20 +79,46 @@ const ProductEditorLayout = ({
           ))}
         </div>
       ) : null}
+
       <div
         className={cn(
-          "min-h-0 min-w-0 overflow-y-auto",
-          splitView ? "pr-1" : "flex-1",
+          // `flex-1` matters in the stacked layout, where the pane must fill the
+          // window so its footer sits at the bottom; grid items ignore it.
+          "flex min-h-0 min-w-0 flex-1 flex-col",
           previewTabActive && "hidden",
         )}
       >
-        {children}
+        {title && !previewHidden ? (
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+            {title}
+          </div>
+        ) : null}
+
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-y-auto",
+            previewHidden ? "min-w-0" : "px-4 py-4",
+          )}
+        >
+          <div className="my-auto w-full min-w-0">{children}</div>
+        </div>
+
+        {footer && !previewHidden ? (
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-3">
+            {footer}
+          </div>
+        ) : null}
       </div>
+
       {showPreview ? (
         <ProductPreviewPane
           product={previewProduct}
-          phoneOnly={isMobile}
-          className={isMobile ? "min-h-0 flex-1" : "hidden min-h-0 lg:flex"}
+          phoneOnly={!isDesktop}
+          headerRight={headerRight}
+          // `flex-1` for the same reason as the left pane: in the stacked
+          // layout the pane must fill the window, or its stage measures zero
+          // and the frame falls back to a size that overflows.
+          className={cn("min-h-0 flex-1", isDesktop && "border-l border-border")}
         />
       ) : null}
     </div>

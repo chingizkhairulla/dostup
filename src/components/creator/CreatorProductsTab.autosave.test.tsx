@@ -96,7 +96,11 @@ vi.mock("@/lib/sessionApi", () => ({
   invokeApi: vi.fn().mockResolvedValue({}),
   creatorCreds: () => ({}),
 }));
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+  useIsDesktop: () => true,
+  useMediaQuery: () => true,
+}));
 
 vi.mock("@/integrations/supabase/client", () => {
   const chain: object = new Proxy(() => chain, {
@@ -127,8 +131,12 @@ function renderTab() {
 const PAY_LINK = "https://kaspi.kz/pay/test";
 
 async function openEditor(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /Создать/ }));
-  return screen.findByRole("dialog");
+  await user.click(screen.getByRole("button", { name: /^Создать$/ }));
+  const dialog = await screen.findByRole("dialog");
+  // Every section starts collapsed now, as the customer asked.
+  await user.click(screen.getByRole("button", { name: /^Детали/ }));
+  await screen.findByLabelText("description");
+  return dialog;
 }
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
@@ -166,14 +174,42 @@ afterEach(() => {
 });
 
 describe("creating a product saves itself", () => {
-  it("has no Create, Save or Cancel button at the bottom of the window", async () => {
+  it("offers a Save button and no Cancel", async () => {
     renderTab();
     const dialog = await openEditor(user);
 
-    for (const label of [/Создать продукт/, /Сохранить/, /Отмена/, /Cancel/i]) {
+    expect(screen.getByRole("button", { name: /Сохранить/ })).toBeInTheDocument();
+    for (const label of [/Отмена/, /Cancel/i]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
     expect(dialog).toBeInTheDocument();
+  });
+
+  // Save runs the form's own check first, which highlights the first missing
+  // field instead of silently doing nothing.
+  it("Save keeps the window open and reports what is missing when the form is incomplete", async () => {
+    renderTab();
+    await openEditor(user);
+
+    await user.type(document.getElementById("title") as HTMLElement, "SAT Preparation");
+    await user.click(screen.getByRole("button", { name: /Сохранить/ }));
+    await settle(100);
+
+    expect(createMutate).not.toHaveBeenCalled();
+    expect(toastFn.error).toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("Save stores the product and closes the window when the form is complete", async () => {
+    renderTab();
+    await openEditor(user);
+    await fillRequired(user);
+
+    await user.click(screen.getByRole("button", { name: /Сохранить/ }));
+    await settle(200);
+
+    expect(createMutate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("creates nothing while the required fields are still missing", async () => {
@@ -370,10 +406,11 @@ async function openExisting(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("editing an existing product saves itself", () => {
-  it("has no Save or Cancel button either", async () => {
+  it("offers the same pinned Save and no Cancel", async () => {
     await openExisting(user);
 
-    for (const label of [/Сохранить/, /Отмена/, /Cancel/i]) {
+    expect(screen.getByRole("button", { name: /Сохранить/ })).toBeInTheDocument();
+    for (const label of [/Отмена/, /Cancel/i]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
   });
@@ -426,8 +463,7 @@ describe("editing an existing product saves itself", () => {
     await settle(300);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: /Создать/ }));
-    await screen.findByRole("dialog");
+    await openEditor(user);
 
     expect((document.getElementById("title") as HTMLInputElement).value).toBe("");
   });

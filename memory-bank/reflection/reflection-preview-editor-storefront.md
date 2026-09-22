@@ -178,3 +178,76 @@ The user set up a Cloudflare quick tunnel to demo the work and tested the editor
 3. Smoke-test as a logged-in seller once deployed — the component tests cover the UI contracts, but nothing has exercised the real database.
 4. Phase 10 (fake-product cleanup) — report-only against production, gated on the literal confirmation "Да, удаляй fake products."
 5. Consider wiring `npm test` and `npm run typecheck` into CI so the gate is enforced rather than remembered.
+
+
+---
+
+# Round 2 Reflection: Editor Window Rework
+
+Customer design feedback round 2 · Level 3 · six phases · 338 tests (from 310) · built 2026-09-22, checked by the user, **not yet reviewed by the customer**
+
+## Summary
+
+The customer asked for the product editor window to look like whop.com's "Add product" screen: preview at 70 % and enlarged with the phone scrollable, sections at 30 % and closed by default, a "Предпросмотр" heading, a close cross at the top right, the Save button back and pinned to the bottom, and cover editing returned to its former compact size. Two reference photos arrived after the plan was written and settled several open questions.
+
+All of it was built. The layout switch also moved to a 1024 px media query, closing a known gap where between 768 and 1023 px the editor showed neither a preview nor tabs.
+
+## What Went Well
+
+**The creative phase found a real bug before a line of code was written.** The customer asked for collapsed sections to sit centred in the window. The obvious implementation is `justify-content: center` on the scrolling container. Measured in a real browser across three candidate patterns, that turned out to push the first section *above the scroll origin* once sections expand, where it can never be reached — `gapTop: −52 px`, and the screenshot showed "Раздел 1" simply missing. Auto margins were the only option that centres when short and clips nothing when tall. Deciding by measurement instead of by instinct is what prevented shipping a window whose first section disappears the moment anyone opens it.
+
+**The reference photos converted prose into numbers.** "Preview 70 % and enlarged" is not buildable as written; the photos gave the phone card at ~50 % of the pane and the desktop card at ~94 %, both reaching the pane's bottom edge. That turned the open creative question about preview scale into a measurement, and the built result matches: `grid-template-columns: 414.109px 966.281px` — exactly 30/70 — with the phone's 390 px viewport shown at 483 px.
+
+**Contract tests moved from regexing JSX to reading exported constants.** The window's two class sets are now `EDITOR_DIALOG_CLASS` and `CROP_DIALOG_CLASS`, and the tests import them. The previous version scraped `<DialogContent className="...">` out of the source with a regex and broke the moment the className became an expression.
+
+**Mutation testing confirmed the new guards bite**: centring via `justify-center` fails the centring tests, and moving the footer inside the scroll area fails the pinned-footer tests.
+
+## Challenges
+
+**Three defects got past the tests and were caught only by screenshots.**
+
+1. On a phone the Save button floated 324 px above the window bottom instead of being pinned.
+2. On a phone the preview tab rendered a blank white pane.
+3. In that same preview tab the phone card rendered at half life size.
+
+The first two share one cause: a grid stretches its items, a flex column does not. In the stacked layout both panes needed `flex-1`, and without it the preview's stage measured zero — the same class of collapse that produced the "rectangular strip" bug in round 1.
+
+What is uncomfortable is that **I fixed exactly this for the left pane, screenshotted, saw it fixed, and did not check the sibling pane that had the identical problem**. The second screenshot found it. A fix of the form "this element needs `flex-1` in the stacked layout" should immediately prompt: which other children of that same container need it too?
+
+The third is a different kind of mistake. `stageFraction: 0.5` was derived from the desktop reference photo, where the pane is ~966 px wide. In the phone's own preview tab the pane is 358 px, and half of that is 179 px — the card rendered at 46 % of life size, half the size it would be on the actual phone. The rule was correct for the context it came from and silently wrong in the other context it was applied to.
+
+**A tooling trap cost real time.** Writing a regex into a test file through a shell heredoc containing Python turned `\b` into an actual backspace character (0x08) inside the file. The test then failed for a reason that had nothing to do with the code, and the assertion *looked* correct in every listing. It was only visible under `cat -A`. Files with escape-heavy content belong in the Write tool, not in nested heredocs.
+
+## Lessons Learned
+
+**Measure the thing the decision rests on.** This is now the second round where the obvious implementation was defeated by a measurement: round 1's inline-vs-iframe reversal, round 2's centring trap. Both were cheap to check and expensive to ship wrong.
+
+**jsdom tests can pin a fix but cannot find a layout bug.** Every layout defect in this task — the strip, the vanishing photo, the broken title, and all three from this round — was found by pixels or geometry. The class-level assertions written afterwards are worth having, but they are a ratchet, not a detector.
+
+**A proportion derived in one context needs checking at both extremes.** "Half the pane" was right at 966 px and wrong at 358 px. When encoding a fraction, ask what it produces at the smallest and largest sizes it will actually meet.
+
+**Fix the class, not the instance.** Two of the three defects were the same missing `flex-1` on sibling elements.
+
+## Process Improvements
+
+**The screenshot harness is now a proven tool and is documented in `progress.md`.** A temporary Vite entry rendering the real components, driven over the Chrome DevTools Protocol, gives both a picture and hard geometry (`grid-template-columns`, element rects, whether a frame scrolls internally). It works without logging in and without touching production data. This should be the default for any layout question in this project, not a last resort.
+
+**Temporary files must live outside `public/`** — files there ship in the production build. Both the probe pages and the harness were deleted, and `git status` was checked afterwards.
+
+## Technical Improvements
+
+**`CreatorProductsTab.tsx` is still over 3,300 lines and `ProductForm` is still trapped inside it.** That is the direct reason the browser verification used a stand-in for the form: the real one cannot be rendered in a harness without dragging the entire tab and its data hooks along. Extracting `ProductForm` into its own file would make the next layout check cover the real thing.
+
+**The pre-existing debt is unchanged**: 22 type errors and 253 lint problems, none introduced by this work and none fixed, per the spec's instruction to fix only errors caused by these changes.
+
+## What Is Not Verified
+
+- **The customer has not reviewed it.** The user checked it and reported it looks right; the customer's own review is still outstanding.
+- **The real `ProductForm` inside the new two-pane window** was never rendered in a browser — only a stand-in with the same three collapsible sections.
+- **The full save flow end to end** against the real backend: the pinned Save button's path is covered by component tests, not by a real product being written.
+- **The cross position is still ambiguous**: the customer's words say top right, their reference photo shows top left. Built to the words, one class to change.
+- **Nothing is deployed.** The migration `20260917120000_private_products_and_seller_metrics.sql` is still unapplied and `manage-products` / `manage-profile` are still not redeployed, so private-by-default and the storefront metrics are not live.
+
+## Next Step
+
+`/archive` once the customer has reviewed the window and the migration and edge functions are deployed. Until then this round is complete but unconfirmed.

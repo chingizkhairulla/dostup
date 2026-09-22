@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Monitor, Smartphone } from "lucide-react";
 import type { Product } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   dataMessage,
-  fitScale,
   isPreviewMessage,
   PREVIEW_ROUTE,
-  PREVIEW_VIEWPORT_HEIGHT,
-  PREVIEW_VIEWPORT_WIDTH,
+  PREVIEW_TOP_GAP,
+  PREVIEW_VIEWPORT,
+  previewFrameMetrics,
+  type PreviewFrameMetrics,
   type PreviewViewport,
 } from "@/lib/productPreview";
 import { cn } from "@/lib/utils";
@@ -17,21 +18,27 @@ type ProductPreviewPaneProps = {
   product: Product | null;
   /** Hides the desktop option where a desktop preview is not useful. */
   phoneOnly?: boolean;
+  /** Rendered at the right end of the pane's top bar (the window's close control). */
+  headerRight?: ReactNode;
   className?: string;
 };
 
-const ProductPreviewPane = ({ product, phoneOnly = false, className }: ProductPreviewPaneProps) => {
+const ProductPreviewPane = ({
+  product,
+  phoneOnly = false,
+  headerRight,
+  className,
+}: ProductPreviewPaneProps) => {
   const { t } = useLanguage();
   const [viewport, setViewport] = useState<PreviewViewport>("phone");
-  const [scale, setScale] = useState(1);
+  const [metrics, setMetrics] = useState<PreviewFrameMetrics>(() =>
+    previewFrameMetrics({ width: 0, height: 0 }, "phone"),
+  );
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const readyRef = useRef(false);
   const productRef = useRef(product);
   productRef.current = product;
-
-  const width = PREVIEW_VIEWPORT_WIDTH[viewport];
-  const height = PREVIEW_VIEWPORT_HEIGHT[viewport];
 
   const post = useCallback(() => {
     if (!readyRef.current) return;
@@ -57,19 +64,21 @@ const ProductPreviewPane = ({ product, phoneOnly = false, className }: ProductPr
     post();
   }, [product, post]);
 
-  // Scale the whole device box to fit the pane on both axes, so the full
-  // "card" is always visible instead of being cropped to a short strip.
+  // The frame is sized from the measured stage on both axes, so it fills the
+  // pane and the page scrolls inside it like it would on a real device.
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
     const measure = () => {
-      setScale(fitScale(stage.clientWidth, stage.clientHeight, width, height));
+      setMetrics(
+        previewFrameMetrics({ width: stage.clientWidth, height: stage.clientHeight }, viewport),
+      );
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [width, height]);
+  }, [viewport]);
 
   const options: Array<{ value: PreviewViewport; label: string; Icon: typeof Smartphone }> = [
     { value: "phone", label: t("previewPhone"), Icon: Smartphone },
@@ -77,10 +86,11 @@ const ProductPreviewPane = ({ product, phoneOnly = false, className }: ProductPr
   ];
 
   return (
-    <div className={cn("flex min-h-0 flex-col gap-3", className)}>
-      {!phoneOnly && (
-        <div className="flex shrink-0 justify-center">
-          <div className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+    <div className={cn("flex min-h-0 min-w-0 flex-col", className)}>
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+        <span className="text-sm font-semibold text-foreground">{t("previewTab")}</span>
+        {!phoneOnly && (
+          <div className="mx-auto inline-flex rounded-full border border-border bg-muted/40 p-1">
             {options.map(({ value, label, Icon }) => (
               <button
                 key={value}
@@ -99,27 +109,27 @@ const ProductPreviewPane = ({ product, phoneOnly = false, className }: ProductPr
               </button>
             ))}
           </div>
-        </div>
-      )}
-      <div
-        ref={stageRef}
-        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-muted/30 p-3"
-      >
+        )}
+        {headerRight ? <div className="ml-auto flex items-center">{headerRight}</div> : null}
+      </div>
+      <div ref={stageRef} className="relative min-h-0 flex-1 overflow-hidden bg-muted/30">
         <div
+          className="absolute left-1/2 -translate-x-1/2"
           style={{
-            width: width * scale,
-            height: height * scale,
+            top: PREVIEW_TOP_GAP,
+            width: metrics.displayWidth,
+            height: Math.max(metrics.frameHeight * metrics.scale, 0),
           }}
         >
           <iframe
             ref={frameRef}
             src={PREVIEW_ROUTE}
             title={t("previewTab")}
-            className="rounded-lg border border-border bg-background shadow-lg"
+            className="rounded-t-xl border border-border bg-background shadow-lg"
             style={{
-              width,
-              height,
-              transform: `scale(${scale})`,
+              width: PREVIEW_VIEWPORT[viewport].width,
+              height: metrics.frameHeight,
+              transform: `scale(${metrics.scale})`,
               transformOrigin: "top left",
             }}
           />

@@ -4,13 +4,16 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
-function Harness({ hideCloseButton = false }: { hideCloseButton?: boolean }) {
+function Harness({
+  hideCloseButton = false,
+  alwaysShowCloseButton = false,
+}: { hideCloseButton?: boolean; alwaysShowCloseButton?: boolean }) {
   const [open, setOpen] = useState(true);
   return (
     <>
       <span data-testid="state">{open ? "open" : "closed"}</span>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent hideCloseButton={hideCloseButton}>
+        <DialogContent hideCloseButton={hideCloseButton} alwaysShowCloseButton={alwaysShowCloseButton}>
           <DialogTitle>Окно</DialogTitle>
           <p>content</p>
         </DialogContent>
@@ -26,6 +29,15 @@ describe("shared dialog chrome", () => {
 
     const close = screen.getByRole("button", { name: "Close" });
     expect(close.className).toMatch(/(^|\s)sm:hidden(\s|$)/);
+  });
+
+  // The product editor asks for a cross at every size: it is a full-window
+  // editor, where a click outside is easy to miss.
+  it("keeps the cross on every screen size when the dialog opts in", () => {
+    render(<Harness alwaysShowCloseButton />);
+
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.className).not.toMatch(/(^|\s)sm:hidden(\s|$)/);
   });
 
   it("does not add a cross when the dialog asks to hide it", () => {

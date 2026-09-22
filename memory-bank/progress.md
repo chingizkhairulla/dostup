@@ -2,30 +2,26 @@
 
 ## Memory Bank
 - [x] `memory-bank/` structure created (2026-09-17)
-- [x] Task defined: `.claude/dostup_claude_code_prompt.md` (Level 4)
 
-## Task phases
-- [x] VAN — audit of 13 spec questions complete
-- [x] PLAN — 10-phase implementation plan, 5 creative decisions flagged
-- [x] CREATIVE — all 5 design decisions settled (`memory-bank/creative/`); Phase 1 approach reversed to iframe-based
-- [x] BUILD — Phases 0-7 and 9 complete; build green, typecheck clean against baseline, 310 tests passing
-- [x] BUILD — Phase 8 acceptance criteria covered by component tests; **three real bugs found via actual on-device testing and fixed** (phone preview showed only a scrollable strip; cover photo vanished when picked because the layout remounted the form; long product titles stacked letter-by-letter and overflowed the phone — see reflection doc); all three need re-verification on a real phone
-- [ ] Phase 10 — fake product cleanup (gated on explicit user confirmation + DB access)
-- [x] REFLECT — `memory-bank/reflection/reflection-preview-editor-storefront.md` (updated after the test round and again after the on-device bug)
-- [ ] ARCHIVE
+## Archived tasks
+- **Product Preview / Editor / Storefront** — archived 2026-09-22 as development-complete, not yet deployed or reviewed by the customer. Full history, lessons and outstanding items: `memory-bank/archive/archive-preview-editor-storefront.md`.
+- **Round 2 — Editor window rework** (customer's whop.com-style feedback: 70/30 preview split, collapsed sections, pinned Save) was then built on top of the archived task — full detail in the reflection doc's "Round 2" section and `memory-bank/creative/creative-editor-window-round2.md`. Also complete but **not yet reviewed by the customer**, and not yet deployed. If either round's review turns up something to fix, that starts as a new task via `/van`, not a reopening of this one.
 
-## Build observations
-- Test infrastructure now exists: vitest + jsdom + testing-library, `npm test` runs **310 tests across 27 files**. Config is in `vitest.config.ts`, setup in `src/test/setup.ts` (jest-dom matchers, cleanup, and stubs for `matchMedia`, `ResizeObserver`, `hasPointerCapture`, `scrollIntoView` — the last two are needed by Radix).
-- Three pre-existing `node:test` files were found (missed in the original audit, which only checked `package.json`) and converted to vitest; nothing had ever run them because there was no `test` script.
+## This branch (`предпросмотер`)
+No other task is tracked here. The active English-language/settings/white-on-orange task is tracked on the `английский-язык` branch (`memory-bank/tasks.md` there).
+
+## Repo-wide technical notes
+- Test infrastructure exists: vitest + jsdom + testing-library, `npm test` (338 tests across 27 files as of round 2). Config in `vitest.config.ts`, setup in `src/test/setup.ts` (jest-dom matchers, cleanup, stubs for `matchMedia`, `ResizeObserver`, `hasPointerCapture`, `scrollIntoView` — the last two needed by Radix).
 - `npx tsc --noEmit` fails on the project-references setup — use `npm run typecheck` (`tsc -p tsconfig.app.json --noEmit`).
-- Baseline of 22 pre-existing type errors and 253 pre-existing lint problems; none were fixed, per the spec's "fix only errors related to these changes".
-- The app cannot start without `VITE_SUPABASE_*` env vars; there is no `.env` in the repo (the user has since created one locally, not committed).
-- **jsdom has no real layout engine**, so a `flex-1`/percentage-height collapse — the class of bug that caused the phone-preview strip — is invisible to component tests. That bug was only found by testing on a real device. Keep this in mind before treating jsdom-passing tests as proof of correct layout.
-
-## Pending user actions before this work is live
-1. **Re-check the phone preview fix on an actual phone** through the demo tunnel.
-2. Apply `supabase/migrations/20260917120000_private_products_and_seller_metrics.sql`.
-3. Redeploy edge functions `manage-products`, `manage-profile` (and the shared `_shared/profiles.ts`).
+- Baseline of 22 pre-existing type errors and roughly 253 pre-existing lint problems, unrelated to any task here; fix only what a task's own changes cause.
+- The app cannot start without `VITE_SUPABASE_*` env vars; there is no `.env` committed (the user has one locally).
+- **jsdom has no real layout engine.** Any layout/CSS question needs verification in a real browser, not just jsdom component tests — see the tooling note below. Every layout defect found in this task (round 1's preview strip, round 2's three screenshot-only bugs) was invisible to component tests and only found by rendering real pixels.
 
 ## Verification tooling note
-Headless Chrome is installed (`C:\Program Files\Google\Chrome\Application\chrome.exe`) and can screenshot the real dev-server routes: `chrome --headless=new --window-size=W,H --virtual-time-budget=20000 --screenshot=<file> <url>`. Use it for any layout question — jsdom cannot see layout. The `/preview/product` route can be driven without login by embedding it in an iframe on a throwaway page and answering its `ready` postMessage with a draft product. Any such throwaway page must live outside `public/` or be deleted afterwards (files in `public/` ship in the production build). Under PowerShell use `Start-Process -Wait -PassThru` — a plain `&` call reports a spurious exit code 1.
+Headless Chrome is installed (`C:\Program Files\Google\Chrome\Application\chrome.exe`) and can screenshot real dev-server routes: `chrome --headless=new --window-size=W,H --virtual-time-budget=20000 --screenshot=<file> <url>`. A temporary Vite entry (deleted afterward, confirmed via `git status`) can render real components without logging in, driven over the Chrome DevTools Protocol for both a screenshot and hard geometry (computed styles, element rects). Temporary files must live outside `public/` — anything there ships in the production build. Under PowerShell use `Start-Process -Wait -PassThru`; a plain `&` call reports a spurious exit code 1.
+
+## Pending before this task is live
+1. Customer review of round 2's editor window (cross position is ambiguous between the customer's words and their reference photo — built to the words).
+2. Apply `supabase/migrations/20260917120000_private_products_and_seller_metrics.sql`.
+3. Redeploy edge functions `manage-products`, `manage-profile` (and the shared `_shared/profiles.ts`).
+4. Re-verify round 1's on-device fixes and round 2's phone-preview sizing on an actual phone.

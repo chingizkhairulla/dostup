@@ -4,34 +4,80 @@ export const PREVIEW_ROUTE = "/preview/product";
 
 export type PreviewViewport = "phone" | "desktop";
 
-// A fixed "device" box per viewport (matches a real phone's aspect ratio for
-// phone mode) so the frame always scales as a whole rather than being cropped
-// to whatever height its container happens to have.
-export const PREVIEW_VIEWPORT_WIDTH: Record<PreviewViewport, number> = {
-  phone: 390,
-  desktop: 1280,
+/** Gap between the pane's top bar and the frame, in screen pixels. */
+export const PREVIEW_TOP_GAP = 16;
+
+/**
+ * Each viewport renders at a **real** device width and is then scaled to the
+ * target share of the pane. Rendering at the target width instead would give
+ * the page a viewport no device has, and would make the text smaller rather
+ * than larger — the opposite of an enlarged preview.
+ *
+ * `stageFraction` and the caps come from the reference design: the phone card
+ * is about half the pane wide, the desktop card nearly all of it, and a desktop
+ * page is never magnified past its natural size.
+ */
+export const PREVIEW_VIEWPORT: Record<
+  PreviewViewport,
+  {
+    width: number;
+    fallbackHeight: number;
+    stageFraction: number;
+    maxScale: number;
+    /**
+     * Keeps the frame at least life size when the pane can fit it. Only the
+     * phone wants this: in its own preview tab the pane is barely wider than a
+     * phone, and taking half of it would render the card at half life size.
+     * The desktop frame is always a downscale, so a floor would just stretch it.
+     */
+    atLeastLifeSize: boolean;
+  }
+> = {
+  phone: { width: 390, fallbackHeight: 844, stageFraction: 0.5, maxScale: 1.5, atLeastLifeSize: true },
+  desktop: { width: 1280, fallbackHeight: 800, stageFraction: 0.94, maxScale: 1, atLeastLifeSize: false },
 };
 
-export const PREVIEW_VIEWPORT_HEIGHT: Record<PreviewViewport, number> = {
-  phone: 844,
-  desktop: 800,
+export type PreviewFrameMetrics = {
+  /** CSS transform scale applied to the frame. */
+  scale: number;
+  /** How wide the frame appears on screen, in pixels. */
+  displayWidth: number;
+  /** The frame's own height in CSS pixels, before scaling. */
+  frameHeight: number;
 };
 
 /**
- * Scale factor that fits a device-sized box inside the available space on
- * both axes at once, so the whole "card" is always visible with no internal
- * scrolling of the frame itself. Never scales up past 1 (no upscaling blur),
- * and degrades to 1 if the container has no measurable size yet (e.g. before
- * first layout, or in a non-layout test environment).
+ * Sizes the preview frame for a measured stage. The frame fills the stage's
+ * height so the page inside scrolls, exactly like a real device.
+ *
+ * Every value is an explicit pixel number derived from a measurement: a height
+ * inherited from the surrounding layout is what once collapsed the preview into
+ * an unreadable strip. When the stage has no measurable size yet, a usable
+ * device-sized frame is returned rather than a zero-sized one.
  */
-export function fitScale(
-  availableWidth: number,
-  availableHeight: number,
-  deviceWidth: number,
-  deviceHeight: number,
-): number {
-  if (availableWidth <= 0 || availableHeight <= 0) return 1;
-  return Math.min(1, availableWidth / deviceWidth, availableHeight / deviceHeight);
+export function previewFrameMetrics(
+  stage: { width: number; height: number },
+  viewport: PreviewViewport,
+): PreviewFrameMetrics {
+  const device = PREVIEW_VIEWPORT[viewport];
+
+  if (stage.width <= 0 || stage.height <= 0) {
+    return { scale: 1, displayWidth: device.width, frameHeight: device.fallbackHeight };
+  }
+
+  let target = stage.width * device.stageFraction;
+  if (device.atLeastLifeSize) {
+    target = Math.max(target, Math.min(device.width, stage.width));
+  }
+
+  const scale = Math.min(target / device.width, device.maxScale);
+  const available = Math.max(stage.height - PREVIEW_TOP_GAP, 1);
+
+  return {
+    scale,
+    displayWidth: scale * device.width,
+    frameHeight: available / scale,
+  };
 }
 
 type PreviewReadyMessage = { source: "dostup-preview"; type: "ready" };

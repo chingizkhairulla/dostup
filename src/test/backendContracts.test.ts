@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  CROP_DIALOG_CLASS,
+  EDITOR_DIALOG_CLASS,
+} from "@/components/creator/CreatorProductsTab";
 
 // These guard the parts of the change that cannot be executed here: SQL and
 // edge functions run against Supabase, not in this test environment. They
@@ -125,24 +129,32 @@ describe("seller description", () => {
   });
 });
 
-// Regression: the editor dialog used to size itself with only max-h-[90vh]
+// Regression: the editor window used to size itself with only max-h-[90vh]
 // below the `lg` breakpoint (1024px), which is a cap, not a definite height.
-// A flex/grid container without a definite main-axis size gives flex-1
-// children nothing to grow into, so the live-preview iframe's height:100%
-// chain collapsed to a sliver that needed scrolling — reported as "only a
-// rectangular strip is visible" when tested on an actual phone. The fix is a
-// definite height (h-[...]) at every breakpoint, not just at lg.
-describe("editor dialog has a definite height below the desktop breakpoint", () => {
-  it("the create/edit window sets an explicit height, not just a cap", () => {
-    const tab = readRepoFile("src/components/creator/CreatorProductsTab.tsx");
-    const dialogClassAttrs = [...tab.matchAll(/<DialogContent className="([^"]*flex-col[^"]*)"/g)].map(
-      (m) => m[1],
-    );
+// A flex container without a definite main-axis size gives flex-1 children
+// nothing to grow into, so the live-preview frame collapsed into a sliver that
+// needed scrolling — reported as "only a rectangular strip is visible" on a
+// real phone. The two-pane window must keep a definite height at every size.
+describe("editor window sizing", () => {
+  const tokens = (classes: string) => classes.split(/\s+/).filter(Boolean);
+  const hasDefiniteHeight = (classes: string) =>
+    tokens(classes).some((token) => /^h-\[\d/.test(token));
 
-    // Create and edit are one window now; it must still have a definite height.
-    expect(dialogClassAttrs.length).toBeGreaterThanOrEqual(1);
-    for (const classes of dialogClassAttrs) {
-      expect(classes).toMatch(/(?<!max-)\bh-\[\d/);
-    }
+  it("gives the two-pane window a definite height at every size, not just a cap", () => {
+    expect(hasDefiniteHeight(EDITOR_DIALOG_CLASS)).toBe(true);
+    expect(tokens(EDITOR_DIALOG_CLASS).some((t) => /^lg:h-\[\d/.test(t))).toBe(true);
+  });
+
+  it("lets the two panes reach the window edges", () => {
+    expect(tokens(EDITOR_DIALOG_CLASS)).toContain("p-0");
+  });
+
+  // Cover cropping goes back to the former compact window: the cropper is only
+  // 384px wide and was dwarfed by the full two-pane window.
+  it("shrinks back to the former compact window while cropping", () => {
+    expect(tokens(CROP_DIALOG_CLASS)).toContain("max-w-lg");
+    expect(tokens(CROP_DIALOG_CLASS)).toContain("max-h-[90vh]");
+    expect(tokens(CROP_DIALOG_CLASS)).not.toContain("lg:w-[96vw]");
+    expect(hasDefiniteHeight(CROP_DIALOG_CLASS)).toBe(false);
   });
 });
