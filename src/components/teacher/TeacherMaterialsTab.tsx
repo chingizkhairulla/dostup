@@ -12,7 +12,7 @@ interface TeacherMaterialsTabProps {
 }
 
 const TeacherMaterialsTab = ({ productIds, teacherName }: TeacherMaterialsTabProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
 
   const { data: teacherUser } = useQuery({
     queryKey: ["teacher-user-id", teacherName],
@@ -51,12 +51,10 @@ const TeacherMaterialsTab = ({ productIds, teacherName }: TeacherMaterialsTabPro
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">
-          {language === "ru" ? "Мои материалы" : "Менің материалдарым"}
+          {l({ ru: "Мои материалы", kk: "Менің материалдарым", en: "My materials" })}
         </h2>
         <p className="text-sm text-muted-foreground mt-1 mb-4">
-          {language === "ru"
-            ? "Материалы, которые вы добавляете, будут доступны только вашим ученикам"
-            : "Сіз қосқан материалдар тек сіздің оқушыларыңызға қол жетімді болады"}
+          {l({ ru: "Материалы, которые вы добавляете, будут доступны только вашим ученикам", kk: "Сіз қосқан материалдар тек сіздің оқушыларыңызға қол жетімді болады", en: "The materials you add are only available to your students" })}
         </p>
 
         <div className="mb-4">
@@ -81,7 +79,7 @@ const TeacherMaterialsTab = ({ productIds, teacherName }: TeacherMaterialsTabPro
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
             <p className="text-sm">
-              {language === "ru" ? "Нет доступных продуктов" : "Қолжетімді өнімдер жоқ"}
+              {l({ ru: "Нет доступных продуктов", kk: "Қолжетімді өнімдер жоқ", en: "No products available" })}
             </p>
           </div>
         )}

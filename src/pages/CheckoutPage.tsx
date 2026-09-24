@@ -16,7 +16,7 @@ import heroBackground from "@/assets/hero-background.jpg";
 const CheckoutPage = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { data: product, isLoading } = useCheckoutProduct(productId);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -93,9 +93,7 @@ const CheckoutPage = () => {
   const isPaused = Boolean((product as any)?.is_paused);
   const pausedMessage: string =
     ((product as any)?.paused_message && String((product as any).paused_message).trim()) ||
-    (language === "kk"
-      ? "Автор осы сілтемені уақытша өшірді."
-      : "Автор отключил ссылку.");
+    (l({ ru: "Автор отключил ссылку.", kk: "Автор осы сілтемені уақытша өшірді.", en: "The author has disabled this link." }));
 
   if (product && isPaused) {
     return (

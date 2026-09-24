@@ -15,13 +15,11 @@ interface RejectRescheduleDialogProps {
 }
 
 const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: RejectRescheduleDialogProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [reasonType, setReasonType] = useState<"cant" | "custom">("cant");
   const [customComment, setCustomComment] = useState("");
 
-  const defaultReason = language === "ru"
-    ? "Не могу перенести"
-    : "Ауыстыра алмаймын";
+  const defaultReason = l({ ru: "Не могу перенести", kk: "Ауыстыра алмаймын", en: "I cannot reschedule" });
 
   const handleConfirm = () => {
     const comment = reasonType === "cant" ? defaultReason : customComment.trim();
@@ -42,7 +40,7 @@ const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: Rejec
       <DialogContent className="max-w-md" mobileFullScreen>
         <DialogHeader>
           <DialogTitle>
-            {language === "ru" ? "Причина отклонения" : "Бас тарту себебі"}
+            {l({ ru: "Причина отклонения", kk: "Бас тарту себебі", en: "Reason for rejecting" })}
           </DialogTitle>
         </DialogHeader>
 
@@ -50,13 +48,13 @@ const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: Rejec
           <div className="flex items-start space-x-3">
             <RadioGroupItem value="cant" id="reject-cant" className="mt-0.5" />
             <Label htmlFor="reject-cant" className="text-sm leading-snug cursor-pointer">
-              {language === "ru" ? "Не могу перенести" : "Ауыстыра алмаймын"}
+              {l({ ru: "Не могу перенести", kk: "Ауыстыра алмаймын", en: "I cannot reschedule" })}
             </Label>
           </div>
           <div className="flex items-start space-x-3">
             <RadioGroupItem value="custom" id="reject-custom" className="mt-0.5" />
             <Label htmlFor="reject-custom" className="text-sm leading-snug cursor-pointer">
-              {language === "ru" ? "Своя причина" : "Өз себебі"}
+              {l({ ru: "Своя причина", kk: "Өз себебі", en: "Another reason" })}
             </Label>
           </div>
         </RadioGroup>
@@ -65,14 +63,14 @@ const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: Rejec
           <Textarea
             value={customComment}
             onChange={(e) => setCustomComment(e.target.value)}
-            placeholder={language === "ru" ? "Опишите причину..." : "Себебін жазыңыз..."}
+            placeholder={l({ ru: "Опишите причину...", kk: "Себебін жазыңыз...", en: "Describe the reason..." })}
             className="min-h-[80px]"
           />
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>
-            {language === "ru" ? "Отмена" : "Бас тарту"}
+            {l({ ru: "Отмена", kk: "Бас тарту", en: "Cancel" })}
           </Button>
           <Button
             variant="destructive"
@@ -80,7 +78,7 @@ const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: Rejec
             disabled={isPending || (reasonType === "custom" && !customComment.trim())}
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {language === "ru" ? "Отклонить" : "Қабылдамау"}
+            {l({ ru: "Отклонить", kk: "Қабылдамау", en: "Reject" })}
           </Button>
         </DialogFooter>
       </DialogContent>

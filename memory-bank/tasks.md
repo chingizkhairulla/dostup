@@ -136,8 +136,112 @@ Tests: `_shared/i18n.ts` picks the recipient's language with `ru` fallback; migr
 | Longer English strings breaking fixed-width buttons/labels | medium | Included in the Phase 6 screenshot matrix explicitly |
 
 ### Status
-VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → next: **`/build`**, starting Phase 0 → 1 → 2 (quick, independent), then Phase 3 (i18n foundation) → 4 → 5 → 6.
+VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD in progress: Phase 0 ✅, Phase 1 ✅, Phase 2 next.**
 
 Two creative decisions changed the plan and must be carried into the build:
 1. The taxonomy migration is **cancelled** (C2) — Phase 5 shrinks to server-side notification language only.
 2. The codemod is **two passes, not one** (C1) — the 155 KK-first sites invert operands and would otherwise swap Russian and Kazakh silently.
+
+---
+
+# Build Log
+
+## Phase 0 — Baseline ✅ (2026-09-22, branch `английский-язык`)
+| Gate | Result |
+|---|---|
+| `npm test` | **310 passed / 27 files** |
+| `npm run typecheck` | **18 pre-existing errors** (`tsconfig.app.json` covers `src` only) |
+| `npm run build` | green |
+
+Note: `progress.md` had claimed 338 tests — that count belongs to the `предпросмотер` branch (round 2's tests), which this branch does not contain. Corrected.
+
+## Phase 1 — White text on orange ✅ (2026-09-22)
+
+**Written first, confirmed failing, then fixed** (TDD): `src/test/whiteOnOrange.test.ts` (17 tests) over a new pure helper `src/lib/orangeSurfaces.ts`.
+
+The helper matches **per Tailwind variant**, not per class string. That mattered: a naive same-string check flags correct code such as `hover:bg-accent text-muted-foreground hover:text-white` (grey at rest, white on the orange hover) and `bg-accent text-white md:bg-accent/10 md:text-foreground`. Both shapes are real and in the repo, and both are now regression tests.
+
+**Repo-wide static scan result: exactly one offender** — `ui/dialog.tsx`. The audit's claim that the app is already white-on-orange held up.
+
+Three source fixes:
+1. `ui/dropdown-menu.tsx:28` — `SubTrigger` set `data-[state=open]:bg-accent focus:bg-accent` with **no text colour for either state**, so the label inherited the page's dark text. Added the matching `text-accent-foreground`.
+2. `ui/dialog.tsx:56` — the phone close ✕ paired `data-[state=open]:bg-accent` with `text-muted-foreground` (grey on orange). Now `text-accent-foreground`.
+3. `ui/command.tsx:108` — the background used `data-[selected='true']` and the text colour `data-[selected=true]`. CSS treats quoted and unquoted attribute values alike so it worked, but the mismatch was only found because the test compares variants literally. Normalised.
+
+**Runtime verification** (the part static reading cannot do — inherited colour): new `scripts/audit-orange.mjs` drives real Chrome over the DevTools Protocol against a harness of the real components (`scripts/orange-harness/`, outside `public/`, so nothing ships; `tsconfig.app.json` includes only `src`, so it adds no type errors). It walks every element, finds orange backgrounds by hue/saturation, focuses each `[data-scan]` target to make `focus:` states real, and reports the computed text colour and contrast.
+
+Result: **PASS — 0 elements with non-white text on orange** across menus, controls, calendar and dialog scenes. Screenshot confirms the fix visually: the sub-menu trigger now renders white on orange.
+
+**Honest scope of those fixes.** All three are *latent*, not live: `DropdownMenuSubTrigger` is used 0 times in the app (only `ContextMenuSubTrigger` is, and it was already correct), `command.tsx`/`menubar.tsx`/`navigation-menu.tsx` are unused entirely, and Radix's `Close` never sets `data-state`, so the dialog ✕ is never orange in practice. So Phase 1 did not repair a visible defect — it **proved by measurement** that the customer's rule already holds, and closed three ways it could silently break later.
+
+**Two findings recorded, both decisions for the user (not applied):**
+- **Calendar `cell` is not a defect.** `ui/calendar.tsx:31` puts a solid `bg-accent` on the `<td>` with no text colour, which the plan flagged for runtime checking. Measured: the day button fully covers the cell and supplies its own white-on-orange, so selected days read white (verified for a 5-day range and for "today"). Left as is.
+- **The two oranges are near-identical.** Raw `#FF6B00` (55 uses) vs the `--primary` token `#F97015`: rgb delta (6, −5, −21), **identical luminance** (0.3178 vs 0.3178), white contrast 2.86 vs 2.85. Unifying is therefore safe for accessibility in either direction but is a visible brand change either way, so **Phase 1 step 3 (unify the orange) is deferred to the user's choice** rather than applied silently — a deliberate deviation from the plan, recorded here per the build rules. The measured 2.85:1 also confirms the WCAG caveat already reported.
+
+| Gate | Result |
+|---|---|
+| `npm test` | **327 passed / 28 files** (+17, all green) |
+| `npm run typecheck` | **18** — unchanged from baseline, no new errors |
+| `npm run build` | green; `dist` contains no harness reference |
+| `node scripts/audit-orange.mjs` | **PASS — 0 dark-on-orange** |
+
+## Phase 2 — Settings renames ✅ (2026-09-23)
+Tests written first (6, all failing on the old strings), then the rename. `appSettings` → «Скачать приложение» / «Қолданбаны жүктеп алу», `notificationSettings` → «Уведомления» / «Хабарландырулар»; English added with Phase 3. Both keys are shared with `ModeratorSettingsDialog`, so its labels changed too, as planned.
+
+One test of mine was wrong, not the product: asserting that searching «скачать» hides the profile section failed because the section list filters but the open section's own pane keeps rendering on the right. Assertion corrected to check a section that only ever appears in the list.
+
+`npm test`: **333 passed / 29 files**.
+
+## Phase 3 — i18n foundation ✅ (2026-09-23)
+
+**`src/lib/language.ts`** is now the only place that knows which languages exist: `LANGUAGES` (code, native label, short code, locale) derives `Language`, `Translated`, `isLanguage`, `toLanguage`, `pickLanguage`, `localeTag` and `pluralForm`. Both switchers render from that list, so a fourth language cannot leave a switcher behind.
+
+**`translations.ts` restructured** so a missing translation is a compile error: the three dictionaries are built as `dictionaries`, and the export is typed `Record<Language, Record<TranslationKey, string>>`. Writing the 547-key English dictionary produced **no key errors**, confirming completeness at compile time rather than by inspection.
+
+**The codemod ran as two passes** (`scripts/codemod-l.mjs`), per C1. Two guard failures in the script caught real problems before anything was written:
+1. The post-condition compared Russian/Kazakh literals as a *list*, so it refused every file — seeding `en` from the Russian side duplicates that literal on purpose. Changed to compare distinct **Cyrillic words**, which also fixed a second false alarm where a ternary living inside a template literal legitimately reshapes that literal.
+2. `MaterialsTab.tsx` was the case that exposed it.
+
+Result: **714 sites rewritten in 38 files**, 16 handled by hand (date-fns locales, two plural forms, an `isKk` shorthand, a nested plural ternary). `l` was then wired into 37 components' `useLanguage()` destructuring; three sub-components that take `language` as a *prop* (`MaterialNode`, `CreatorTrashList`, `SlotCreationWizard`) needed their own hook call.
+
+**The operand inversion was verified, not assumed.** `src/test/languageSlots.test.ts` parses every `l({…})` back out of the source and checks the slots by alphabet: no Kazakh-only letter (ә, і, ң, ғ, ү, ұ, қ, ө, һ) in any `ru` slot, and `en` never seeded from the Kazakh side. All 649 single-line phrases pass — the 155 KK-first sites were inverted correctly.
+
+Also done: `ErrorBoundary` validates stored language instead of casting (and gained English), `catalog.ts` label helpers widened to `Language` with English plural rules for reviews/sales, `formatEventDate` gained English months, `LanguageContext` gained `l` plus a dev-time warning naming any fallback hit.
+
+**C2 implemented**: `src/lib/taxonomyEn.ts` maps 5 category and 35 subcategory slugs to English; a test reads the seed migration itself so the map cannot fall behind the database. No migration was written.
+
+| Gate | Result |
+|---|---|
+| `npm test` | **375 passed / 34 files** |
+| `npm run typecheck` | **18** — still exactly the baseline |
+| `npm run build` | green |
+| Real browser, all three languages | **verified** — see below |
+
+**Browser check on the running app** (`scripts/shoot-languages.mjs`, real dev server, three languages): the header toggle renders `RU / KK / EN`, `document.documentElement.lang` follows, headings translate ("Buy. Learn. Sell."), category chips show the C2 map working ("Online lessons", "Materials", "Subscriptions"), and **no button or link overflows its box in any language** — the specific risk of longer English strings. Seller-written product titles correctly stay as their authors wrote them.
+
+## Phase 4 — English coverage ✅ (2026-09-23)
+
+709 inline phrases needed English, but only **377 were distinct** — the same sentence ("Ошибка", "Отмена", "Ошибка при удалении") appears in up to 17 places. Translating each once and applying it by exact Russian text both halved the work and made the wording consistent across screens.
+
+Three small scripts do it, all kept as tooling: `i18n-extract.mjs` (dump the distinct untranslated phrases), `i18n-apply.mjs` (write English into the `en` slot only, matching by Russian text) and `i18n-todo.mjs` (what is left).
+
+**A real bug in that tooling was caught before it wrote anything.** The phrase regex used a lazy `.*?` for the string bodies, which let a quote character through; on a multi-line `l({…})` it therefore paired the opening `l({` with a `})` much further down the file. Running it would have rewritten the wrong span of code. It surfaced as a nonsense reading — `MaterialsProtectionNotice.tsx` reported 2 untranslated phrases although all 4 of its phrases were already English. Fixed by spelling the string bodies per quote character with that quote excluded (`[^"\\]`, `[^'\\]`, …), and moved into one shared module, `scripts/i18n-phrases.mjs`, so extract/apply/report cannot drift apart again.
+
+`i18n-apply.mjs` carries the same post-condition as the codemod: a file is refused if any Cyrillic word appears in it that was not there before — replacing Russian with English can only ever remove Cyrillic words, never add one. No file was refused.
+
+Two date phrases were translated with `{ locale: enGB }` in place of `{ locale: ru }` inside their interpolation, so an English reader gets "5 Sep" rather than "5 сент". That deliberately did not compile until `enGB` was imported — the compiler named all three files that needed it (`CreatorScheduleTab`, `TeacherScheduleTab`, `ScheduleTab`).
+
+**Result: 716 phrases, 0 still Russian.** The `[i18n]` line printed by the test suite now reads `649/649 translated`.
+
+Also worth recording: a raw `grep 'en: "…[а-я]'` suggests 6 leftovers, but all six are key names ending in "en" — `slotTak`**`en: "`**`Занято"`, `loginAlreadyTaken`, `handleTaken` — inside the Russian and Kazakh dictionaries, where Cyrillic belongs. The parser-based count of 0 is the correct one.
+
+| Gate | Result |
+|---|---|
+| `npm test` | **375 passed / 34 files**, `[i18n] 649/649 translated` |
+| `npm run typecheck` | **18** — baseline |
+| `npm run build` | green |
+| Real browser, 3 languages × 1280px and 390px | headings, chips and toggle all translate; **no overflowing control in any language at either width** |
+
+### What is left
+- **Phase 5** — server-generated text (`profiles.language` column + `_shared/i18n.ts` for the edge functions). Notifications and emails are still Russian-only for everyone, which already under-serves Kazakh users; this is the one part of the task that needs a production migration, prepared here but applied by the user.
+- **Phase 6** — the final verification matrix on authenticated seller screens, which is where most of the 716 translated phrases actually live. They are covered by typecheck, tests and the parser, but have not been seen on screen in English.

@@ -61,7 +61,7 @@ interface CreatorUsersTabProps {
 const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [revokeDialog, setRevokeDialog] = useState<{ id: string; name: string } | null>(null);
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const queryClient = useQueryClient();
 
   const { data: purchases = [], isLoading } = useQuery({
@@ -189,10 +189,10 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
-      toast.success(language === "ru" ? "Расписание изменено" : "Кесте өзгертілді");
+      toast.success(l({ ru: "Расписание изменено", kk: "Кесте өзгертілді", en: "Schedule changed" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка при изменении" : "Өзгерту қатесі");
+      toast.error(l({ ru: "Ошибка при изменении", kk: "Өзгерту қатесі", en: "Could not change it" }));
     },
   });
 
@@ -297,11 +297,11 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                           onValueChange={(value) => handleTeacherChange(purchase.id, value)}
                         >
                           <SelectTrigger className="h-7 text-xs flex-1 max-w-[180px]">
-                            <SelectValue placeholder={language === "ru" ? "Расписание" : "Кесте"} />
+                            <SelectValue placeholder={l({ ru: "Расписание", kk: "Кесте", en: "Schedule" })} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="author">
-                              {language === "ru" ? "Автор" : "Автор"}
+                              {l({ ru: "Автор", kk: "Автор", en: "Author" })}
                             </SelectItem>
                             {productTeachers.map((teacher) => (
                               <SelectItem key={teacher.id} value={teacher.id}>
@@ -309,7 +309,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                               </SelectItem>
                             ))}
                             <SelectItem value="choose">
-                              {language === "ru" ? "Выбирает сам" : "Өзі таңдайды"}
+                              {l({ ru: "Выбирает сам", kk: "Өзі таңдайды", en: "They choose" })}
                             </SelectItem>
                           </SelectContent>
                         </Select>

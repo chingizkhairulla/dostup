@@ -35,7 +35,7 @@ export const ModeratorSettingsDialog = ({
   onOpenChange,
   onLogout,
 }: ModeratorSettingsDialogProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const isAppInstalled = usePWADetection();
   const [activeSection, setActiveSection] = useState<ModeratorSettingsSectionKey>("profile");
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,17 +70,15 @@ export const ModeratorSettingsDialog = ({
         label: t("profile"),
         icon: User,
         description:
-          language === "ru"
-            ? "Данные аккаунта модератора"
-            : "Модератор аккаунтының деректері",
+          l({ ru: "Данные аккаунта модератора", kk: "Модератор аккаунтының деректері", en: "Moderator account details" }),
         keywords: ["профиль", "аватар", "имя", "аккаунт", "почта", "profile", "name", "account", "email"],
       },
       {
         id: "language" as ModeratorSettingsSectionKey,
-        label: language === "ru" ? "Язык приложения" : "Қолданба тілі",
+        label: l({ ru: "Язык приложения", kk: "Қолданба тілі", en: "App language" }),
         icon: Globe,
         description:
-          language === "ru" ? "Выбор языка интерфейса" : "Интерфейс тілін таңдау",
+          l({ ru: "Выбор языка интерфейса", kk: "Интерфейс тілін таңдау", en: "Choose the interface language" }),
         keywords: ["язык", "русский", "казахский", "қазақша", "language", "locale"],
       },
       {
@@ -88,9 +86,7 @@ export const ModeratorSettingsDialog = ({
         label: t("notificationSettings"),
         icon: Bell,
         description:
-          language === "ru"
-            ? "Системные уведомления платформы"
-            : "Платформаның жүйелік хабарландырулары",
+          l({ ru: "Системные уведомления платформы", kk: "Платформаның жүйелік хабарландырулары", en: "Platform system notifications" }),
         keywords: ["уведомления", "оповещения", "напоминания", "notifications"],
       },
       {
@@ -98,9 +94,7 @@ export const ModeratorSettingsDialog = ({
         label: t("appSettings"),
         icon: Download,
         description:
-          language === "ru"
-            ? "Установка приложения на устройство"
-            : "Қолданбаны құрылғыға орнату",
+          l({ ru: "Установка приложения на устройство", kk: "Қолданбаны құрылғыға орнату", en: "Installing the app on your device" }),
         keywords: ["приложение", "установить", "скачать", "pwa", "телефон", "app", "install", "download"],
       },
     ],
@@ -180,7 +174,7 @@ export const ModeratorSettingsDialog = ({
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Globe className="w-4 h-4 text-primary" />
-                {language === "ru" ? "Язык приложения" : "Қолданба тілі"}
+                {l({ ru: "Язык приложения", kk: "Қолданба тілі", en: "App language" })}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -230,7 +224,7 @@ export const ModeratorSettingsDialog = ({
               </p>
               {isAppInstalled ? (
                 <p className="text-sm font-medium text-primary">
-                  ✓ {language === "ru" ? "Приложение уже установлено" : "Қолданба орнатылған"}
+                  ✓ {l({ ru: "Приложение уже установлено", kk: "Қолданба орнатылған", en: "The app is already installed" })}
                 </p>
               ) : (
                 <Link to="/install">

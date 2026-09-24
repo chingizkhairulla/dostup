@@ -27,7 +27,7 @@ const EditSlotTimeDialog = ({
   slot,
   isPending = false,
 }: EditSlotTimeDialogProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [newStartTime, setNewStartTime] = useState("");
   const [newEndTime, setNewEndTime] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("1");
@@ -89,19 +89,17 @@ const EditSlotTimeDialog = ({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {language === "ru" ? "Редактировать слот" : "Слотты өңдеу"}
+            {l({ ru: "Редактировать слот", kk: "Слотты өңдеу", en: "Edit the slot" })}
           </DialogTitle>
           <DialogDescription>
-            {language === "ru"
-              ? `Текущее время: ${slot?.start_time.slice(0, 5)} - ${slot?.end_time.slice(0, 5)}`
-              : `Ағымдағы уақыт: ${slot?.start_time.slice(0, 5)} - ${slot?.end_time.slice(0, 5)}`}
+            {l({ ru: `Текущее время: ${slot?.start_time.slice(0, 5)} - ${slot?.end_time.slice(0, 5)}`, kk: `Ағымдағы уақыт: ${slot?.start_time.slice(0, 5)} - ${slot?.end_time.slice(0, 5)}`, en: `Current time: ${slot?.start_time.slice(0, 5)} - ${slot?.end_time.slice(0, 5)}` })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-2">
             <Label>
-              {language === "ru" ? "Начало" : "Басталуы"}
+              {l({ ru: "Начало", kk: "Басталуы", en: "Start" })}
             </Label>
             <Input
               type="time"
@@ -111,7 +109,7 @@ const EditSlotTimeDialog = ({
           </div>
           <div className="space-y-2">
             <Label>
-              {language === "ru" ? "Конец" : "Аяқталуы"}
+              {l({ ru: "Конец", kk: "Аяқталуы", en: "End" })}
             </Label>
             <Input
               type="time"
@@ -123,7 +121,7 @@ const EditSlotTimeDialog = ({
 
         <div className="space-y-2 py-2">
           <Label>
-            {language === "ru" ? "Количество участников" : "Қатысушылар саны"}
+            {l({ ru: "Количество участников", kk: "Қатысушылар саны", en: "Number of participants" })}
           </Label>
           <Input
             type="number"
@@ -139,13 +137,13 @@ const EditSlotTimeDialog = ({
 
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
-            {language === "ru" ? "Отмена" : "Бас тарту"}
+            {l({ ru: "Отмена", kk: "Бас тарту", en: "Cancel" })}
           </Button>
           <Button onClick={handleConfirm} disabled={isPending || !isValid}>
             {isPending ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : null}
-            {language === "ru" ? "Сохранить" : "Сақтау"}
+            {l({ ru: "Сохранить", kk: "Сақтау", en: "Save" })}
           </Button>
         </div>
       </DialogContent>

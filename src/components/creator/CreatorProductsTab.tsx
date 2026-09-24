@@ -204,7 +204,7 @@ const ProductForm = ({
   taxonomyCategories = [],
   onCroppingChange,
 }: ProductFormProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [removeImageOpen, setRemoveImageOpen] = useState(false);
@@ -2343,7 +2343,7 @@ interface CreatorProductsTabProps {
 }
 
 const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const isMobile = useIsMobile();
   const { data: products = [], isLoading } = useCreatorProducts(creatorName);
   const { data: subsData } = useQuery({
@@ -2613,9 +2613,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     if (next === "paused") {
       setPauseMessage(
         (product as any).paused_message ||
-          (language === "ru"
-            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
-            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
+          (l({ ru: "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток.", kk: "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.", en: "The author has disabled this link. We have enough students for now — watch out for the next intake." }))
       );
       setPausingProduct(product);
       return;
@@ -2626,7 +2624,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         : { id: product.id, is_active: true, is_paused: false };
     updateProduct.mutate(payload as any, {
       onSuccess: () => toast.success(t("visibilityChanged")),
-      onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
+      onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
     });
   };
 
@@ -2793,7 +2791,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                     </div>
                     <p className="text-muted-foreground whitespace-nowrap">
                       {t("nextRenewal")}:{" "}
-                      {new Intl.DateTimeFormat(language === "kk" ? "kk-KZ" : "ru-RU", {
+                      {new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }), {
                         day: "numeric",
                         month: "short",
                         year: "numeric",
@@ -2926,7 +2924,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                     )}
                     {product.has_schedule && (
                       <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        {language === "ru" ? "Расписание" : "Кесте"}
+                        {l({ ru: "Расписание", kk: "Кесте", en: "Schedule" })}
                       </span>
                     )}
                     {product.kaspi_link && (
@@ -2998,30 +2996,26 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
+            {l({ ru: "Приостановить продукт", kk: "Өнімді тоқтату", en: "Pause the product" })}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
-            {language === "ru"
-              ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
+            {l({ ru: "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже.", kk: "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі.", en: "The product link will still open, but instead of a buy button visitors will see the message below." })}
           </p>
           <div className="space-y-2">
             <Label htmlFor="pause-message">
-              {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
+              {l({ ru: "Сообщение для посетителей", kk: "Хабарлама", en: "Message for visitors" })}
             </Label>
             <Textarea
               id="pause-message"
               rows={4}
               value={pauseMessage}
               onChange={(e) => setPauseMessage(e.target.value)}
-              placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
+              placeholder={l({ ru: "Автор отключил ссылку.", kk: "Автор сілтемені өшірді.", en: "The author has disabled this link." })}
             />
             <p className="text-xs text-muted-foreground">
-              {language === "ru"
-                ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
-                : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
+              {l({ ru: "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его.", kk: "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды.", en: "Nobody can buy or open the product until you resume it." })}
             </p>
           </div>
         </div>
@@ -3040,10 +3034,10 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                 } as any,
                 {
                   onSuccess: () => {
-                    toast.success(language === "ru" ? "Продукт приостановлен" : "Өнім тоқтатылды");
+                    toast.success(l({ ru: "Продукт приостановлен", kk: "Өнім тоқтатылды", en: "Product paused" }));
                     setPausingProduct(null);
                   },
-                  onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
+                  onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
                 }
               );
             }}
@@ -3052,7 +3046,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
             {updateProduct.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              language === "ru" ? "Приостановить" : "Тоқтату"
+              l({ ru: "Приостановить", kk: "Тоқтату", en: "Pause" })
             )}
           </Button>
         </div>

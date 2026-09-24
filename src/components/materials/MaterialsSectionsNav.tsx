@@ -24,21 +24,21 @@ export const MaterialsSectionsNav = ({
   trashCount = 0,
   showStorage = false,
 }: Props) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
   const phantomRef = useRef<HTMLDivElement>(null);
   const [iconsOnly, setIconsOnly] = useState(isMobile);
 
   const items: { key: MaterialsSection; label: string; icon: typeof Library }[] = [
-    { key: "library", label: language === "kk" ? "Кітапхана" : "Библиотека", icon: Library },
-    { key: "bookmarks", label: language === "kk" ? "Белгіленгендер" : "Помеченные", icon: Star },
+    { key: "library", label: l({ ru: "Библиотека", kk: "Кітапхана", en: "Library" }), icon: Library },
+    { key: "bookmarks", label: l({ ru: "Помеченные", kk: "Белгіленгендер", en: "Flagged" }), icon: Star },
   ];
   if (showTrash) {
-    items.push({ key: "trash", label: language === "kk" ? "Себет" : "Корзина", icon: Trash2 });
+    items.push({ key: "trash", label: l({ ru: "Корзина", kk: "Себет", en: "Trash" }), icon: Trash2 });
   }
   if (showStorage) {
-    items.push({ key: "storage", label: language === "kk" ? "Қойма" : "Хранилище", icon: HardDrive });
+    items.push({ key: "storage", label: l({ ru: "Хранилище", kk: "Қойма", en: "Storage" }), icon: HardDrive });
   }
 
   useLayoutEffect(() => {

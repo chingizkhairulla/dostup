@@ -65,7 +65,7 @@ export const AccountSettingsView = ({
   purchasesLoading = false,
   onClose,
 }: AccountSettingsViewProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const navigate = useNavigate();
   const { logout, profileType, profiles, switchProfile, setProfileName, applySession, removeProfile } = useSimpleAuth();
   const isAppInstalled = usePWADetection();
@@ -94,28 +94,28 @@ export const AccountSettingsView = ({
       id: "profile" as SettingsSectionKey,
       label: t("profile"),
       icon: User,
-      description: language === "ru" ? "Имя, фото профиля и данные аккаунта" : "Аты, профиль фотосы және аккаунт деректері",
+      description: l({ ru: "Имя, фото профиля и данные аккаунта", kk: "Аты, профиль фотосы және аккаунт деректері", en: "Name, profile photo and account details" }),
       keywords: ["профиль", "аватар", "фото", "имя", "название", "аккаунт", "покупки", "удалить", "profile", "avatar", "name", "account", "purchases", "delete"],
     },
     {
       id: "language" as SettingsSectionKey,
-      label: language === "ru" ? "Язык приложения" : "Қолданба тілі",
+      label: l({ ru: "Язык приложения", kk: "Қолданба тілі", en: "App language" }),
       icon: Globe,
-      description: language === "ru" ? "Выбор языка интерфейса" : "Интерфейс тілін таңдау",
+      description: l({ ru: "Выбор языка интерфейса", kk: "Интерфейс тілін таңдау", en: "Choose the interface language" }),
       keywords: ["язык", "русский", "казахский", "қазақша", "language", "locale"],
     },
     {
       id: "notifications" as SettingsSectionKey,
       label: t("notificationSettings"),
       icon: Bell,
-      description: language === "ru" ? "Напоминания об уроках и push-уведомления" : "Сабақтар туралы еске салулар және хабарландырулар",
+      description: l({ ru: "Напоминания об уроках и push-уведомления", kk: "Сабақтар туралы еске салулар және хабарландырулар", en: "Lesson reminders and push notifications" }),
       keywords: ["уведомления", "напоминания", "время", "уроки", "занятия", "notifications", "reminders", "push"],
     },
     {
       id: "app" as SettingsSectionKey,
       label: t("appSettings"),
       icon: Download,
-      description: language === "ru" ? "Установка приложения на устройство" : "Қолданбаны құрылғыға орнату",
+      description: l({ ru: "Установка приложения на устройство", kk: "Қолданбаны құрылғыға орнату", en: "Installing the app on your device" }),
       keywords: ["приложение", "установить", "скачать", "pwa", "телефон", "app", "install", "download"],
     },
   ], [t, language]);
@@ -159,7 +159,7 @@ export const AccountSettingsView = ({
         setNameError("Это название уже используется. Выберите другое.");
         toast.error("Это название уже используется. Выберите другое.");
       } else {
-        toast.error(language === "ru" ? "Не удалось сохранить имя" : "Атын сақтау мүмкін болмады");
+        toast.error(l({ ru: "Не удалось сохранить имя", kk: "Атын сақтау мүмкін болмады", en: "Could not save the name" }));
       }
     } finally {
       setSavingName(false);
@@ -181,7 +181,7 @@ export const AccountSettingsView = ({
         "";
 
       if (!token || !currentProfileId) {
-        toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+        toast.error(l({ ru: "Не удалось удалить профиль", kk: "Профильді жою мүмкін болмады", en: "Could not delete the profile" }));
         return;
       }
 
@@ -196,7 +196,7 @@ export const AccountSettingsView = ({
       });
 
       if (!res.ok) {
-        toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+        toast.error(l({ ru: "Не удалось удалить профиль", kk: "Профильді жою мүмкін болмады", en: "Could not delete the profile" }));
         return;
       }
 
@@ -206,13 +206,13 @@ export const AccountSettingsView = ({
         res.session ?? null,
       );
 
-      toast.success(language === "ru" ? "Профиль удалён" : "Профиль жойылды");
+      toast.success(l({ ru: "Профиль удалён", kk: "Профиль жойылды", en: "Profile deleted" }));
       setShowDeleteProfileConfirm(false);
       onClose?.();
       navigate("/");
     } catch (err) {
       console.error("Delete profile error:", err);
-      toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+      toast.error(l({ ru: "Не удалось удалить профиль", kk: "Профильді жою мүмкін болмады", en: "Could not delete the profile" }));
     } finally {
       setDeletingProfile(false);
     }
@@ -389,7 +389,7 @@ export const AccountSettingsView = ({
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Globe className="w-4 h-4 text-primary" />
-                {language === "ru" ? "Язык приложения" : "Қолданба тілі"}
+                {l({ ru: "Язык приложения", kk: "Қолданба тілі", en: "App language" })}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -424,7 +424,7 @@ export const AccountSettingsView = ({
               </p>
               {isAppInstalled ? (
                 <p className="text-sm font-medium text-primary">
-                  ✓ {language === "ru" ? "Приложение уже установлено" : "Қолданба орнатылған"}
+                  ✓ {l({ ru: "Приложение уже установлено", kk: "Қолданба орнатылған", en: "The app is already installed" })}
                 </p>
               ) : (
                 <Link to="/install">

@@ -24,7 +24,7 @@ interface TeacherAccountTabProps {
 }
 
 const TeacherAccountTab = ({ teacherName, teacherId }: TeacherAccountTabProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -64,7 +64,7 @@ const TeacherAccountTab = ({ teacherName, teacherId }: TeacherAccountTabProps) =
             <div>
               <p className="font-semibold text-lg">{teacherName}</p>
               <p className="text-sm text-muted-foreground">
-                {language === "ru" ? "Учитель" : "Мұғалім"}
+                {l({ ru: "Учитель", kk: "Мұғалім", en: "Teacher" })}
               </p>
             </div>
           </div>
@@ -76,7 +76,7 @@ const TeacherAccountTab = ({ teacherName, teacherId }: TeacherAccountTabProps) =
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Globe className="w-4 h-4" />
-            {language === "ru" ? "Язык приложения" : "Қолданба тілі"}
+            {l({ ru: "Язык приложения", kk: "Қолданба тілі", en: "App language" })}
           </CardTitle>
         </CardHeader>
         <CardContent>

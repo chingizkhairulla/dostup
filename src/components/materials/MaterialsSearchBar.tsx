@@ -11,9 +11,9 @@ interface Props {
 }
 
 const MaterialsSearchBar = ({ value, onChange, resultCount, className }: Props) => {
-  const { language } = useLanguage();
-  const placeholder = language === "kk" ? "Атау бойынша іздеу…" : "Поиск по названию…";
-  const found = language === "kk" ? "Табылды" : "Найдено";
+  const { language, l } = useLanguage();
+  const placeholder = l({ ru: "Поиск по названию…", kk: "Атау бойынша іздеу…", en: "Search by title…" });
+  const found = l({ ru: "Найдено", kk: "Табылды", en: "Found" });
   return (
     <div className={className}>
       <div className="relative">

@@ -40,7 +40,7 @@ const CancellationReasonDialog = ({
   title,
   description,
 }: CancellationReasonDialogProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [selectedReasons, setSelectedReasons] = useState<CancellationReasonKey[]>([]);
   const [comment, setComment] = useState("");
 
@@ -54,7 +54,7 @@ const CancellationReasonDialog = ({
 
   const handleConfirm = () => {
     const reasonTexts = selectedReasons.map(
-      (key) => CANCELLATION_REASONS[key][language === "kk" ? "kk" : "ru"]
+      (key) => CANCELLATION_REASONS[key][l({ ru: "ru", kk: "kk", en: "ru" })]
     );
     onConfirm(reasonTexts, comment.trim());
   };
@@ -65,11 +65,9 @@ const CancellationReasonDialog = ({
     onClose();
   };
 
-  const defaultTitle = language === "ru" ? "Отменить запись?" : "Жазбадан бас тарту?";
+  const defaultTitle = l({ ru: "Отменить запись?", kk: "Жазбадан бас тарту?", en: "Cancel this booking?" });
   const defaultDescription =
-    language === "ru"
-      ? "Пожалуйста, укажите причину отмены"
-      : "Бас тарту себебін көрсетіңіз";
+    l({ ru: "Пожалуйста, укажите причину отмены", kk: "Бас тарту себебін көрсетіңіз", en: "Please give a reason for cancelling" });
 
   return (
     <AlertDialog open={isOpen} onOpenChange={handleClose}>
@@ -93,7 +91,7 @@ const CancellationReasonDialog = ({
                   onCheckedChange={() => handleReasonToggle(key)}
                 />
                 <span className="text-sm">
-                  {CANCELLATION_REASONS[key][language === "kk" ? "kk" : "ru"]}
+                  {CANCELLATION_REASONS[key][l({ ru: "ru", kk: "kk", en: "ru" })]}
                 </span>
               </label>
             )
@@ -102,9 +100,7 @@ const CancellationReasonDialog = ({
           <div className="pt-2">
             <Textarea
               placeholder={
-                language === "ru"
-                  ? "Дополнительный комментарий"
-                  : "Қосымша түсініктеме"
+                l({ ru: "Дополнительный комментарий", kk: "Қосымша түсініктеме", en: "Extra comment" })
               }
               value={comment}
               onChange={(e) => setComment(e.target.value)}
@@ -116,7 +112,7 @@ const CancellationReasonDialog = ({
 
         <AlertDialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
-            {language === "ru" ? "Назад" : "Артқа"}
+            {l({ ru: "Назад", kk: "Артқа", en: "Back" })}
           </Button>
           <Button
             variant="destructive"
@@ -126,7 +122,7 @@ const CancellationReasonDialog = ({
             {isPending ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : null}
-            {language === "ru" ? "Отменить запись" : "Жазбадан бас тарту"}
+            {l({ ru: "Отменить запись", kk: "Жазбадан бас тарту", en: "Cancel the booking" })}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

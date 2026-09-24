@@ -94,7 +94,7 @@ interface FormData {
  }
  
  const ProductMaterialsManager = ({ productId, productTitle, isOpen, onClose, mode = "edit", initialFolderId = null }: ProductMaterialsManagerProps) => {
-   const { t, language } = useLanguage();
+   const { t, language, l } = useLanguage();
    const { data: allMaterials = [], isLoading } = useProductMaterials(productId, { creatorOnly: true });
    const createMaterial = useCreateMaterial();
    const updateMaterial = useUpdateMaterial();
@@ -578,7 +578,7 @@ interface FormData {
         return (
           <div className="flex items-center gap-2 flex-wrap p-2 bg-muted/30 rounded-md">
             <span className="text-xs text-muted-foreground">
-              {language === "kk" ? "Қайда қосу:" : "Куда добавить:"}
+              {l({ ru: "Куда добавить:", kk: "Қайда қосу:", en: "Where to add it:" })}
             </span>
             <div className="flex items-center gap-1 text-sm font-medium">
               {targetFolder ? (
@@ -589,7 +589,7 @@ interface FormData {
               ) : (
                 <>
                   <FolderOpen className="w-4 h-4 text-primary" />
-                  <span>{language === "kk" ? "Үй" : "Дом"}</span>
+                  <span>{l({ ru: "Дом", kk: "Үй", en: "Home" })}</span>
                 </>
               )}
             </div>
@@ -604,8 +604,8 @@ interface FormData {
                   >
                     <FolderOpen className="w-3.5 h-3.5 mr-1" />
                     {targetFolder
-                      ? (language === "kk" ? "Өзгерту" : "Изменить")
-                      : (language === "kk" ? "Папканы таңдау" : "Выбрать папку")}
+                      ? (l({ ru: "Изменить", kk: "Өзгерту", en: "Change" }))
+                      : (l({ ru: "Выбрать папку", kk: "Папканы таңдау", en: "Choose a folder" }))}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-64 p-1 max-h-72 overflow-y-auto" align="end">
@@ -616,7 +616,7 @@ interface FormData {
                       className="w-full text-left px-2 py-1.5 hover:bg-accent hover:text-accent-foreground rounded text-sm flex items-center gap-2"
                     >
                       <Home className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{language === "kk" ? "Үй" : "Дом"}</span>
+                      <span className="truncate">{l({ ru: "Дом", kk: "Үй", en: "Home" })}</span>
                     </button>
                   )}
                   {renderFolderTree(null, 0)}
@@ -652,7 +652,7 @@ interface FormData {
               <RadioGroupItem value="link" id="type-link" />
               <Label htmlFor="type-link" className="cursor-pointer flex items-center gap-2">
                 <LinkIcon className="w-4 h-4" />
-                {language === "kk" ? "Сілтеме" : "Ссылка"}
+                {l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })}
               </Label>
             </div>
           </RadioGroup>
@@ -675,13 +675,13 @@ interface FormData {
           <div className="space-y-2">
               <Label>Название (необязательно)</Label>
               <Input
-                placeholder={language === "kk" ? "Бос болса — сілтеменің өзі көрсетіледі" : "Если пусто — показывается сама ссылка"}
+                placeholder={l({ ru: "Если пусто — показывается сама ссылка", kk: "Бос болса — сілтеменің өзі көрсетіледі", en: "Leave it empty and the link itself is shown" })}
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
-              <Label>{language === "kk" ? "Сілтеме *" : "Ссылка *"}</Label>
+              <Label>{l({ ru: "Ссылка *", kk: "Сілтеме *", en: "Link *" })}</Label>
               <Textarea
                 placeholder="https://..."
                 value={formData.linkUrl}
@@ -1006,8 +1006,8 @@ interface FormData {
            <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {mode === "add"
-                  ? (language === "kk" ? "Материал қосу" : "Добавить материалы")
-                  : (language === "kk" ? "Материалдарды өңдеу" : "Редактировать материалы")}
+                  ? (l({ ru: "Добавить материалы", kk: "Материал қосу", en: "Add materials" }))
+                  : (l({ ru: "Редактировать материалы", kk: "Материалдарды өңдеу", en: "Edit the materials" }))}
               </DialogTitle>
            </DialogHeader>
  
@@ -1043,7 +1043,7 @@ interface FormData {
                                   if (!newTitle) return;
                                   try {
                                     await updateMaterial.mutateAsync({ id: folder.id, productId, title: newTitle });
-                                    toast.success(language === "kk" ? "Сақталды" : "Сохранено");
+                                    toast.success(l({ ru: "Сохранено", kk: "Сақталды", en: "Saved" }));
                                     setRenamingFolder(false);
                                   } catch {
                                     toast.error("Ошибка");
@@ -1080,7 +1080,7 @@ interface FormData {
                                     size="icon"
                                     variant="ghost"
                                     className="h-6 w-6"
-                                    title={language === "kk" ? "Қалтаның атын өзгерту" : "Переименовать папку"}
+                                    title={l({ ru: "Переименовать папку", kk: "Қалтаның атын өзгерту", en: "Rename the folder" })}
                                     onClick={() => { setFolderRenameValue(folder.title); setRenamingFolder(true); }}
                                   >
                                     <Edit className="w-3.5 h-3.5" />
@@ -1098,7 +1098,7 @@ interface FormData {
                   ) : (
                     <div className="flex items-center gap-2 text-sm">
                       <FolderOpen className="w-4 h-4 text-primary" />
-                      <span className="font-medium">{language === "kk" ? "Үй" : "Дом"}</span>
+                      <span className="font-medium">{l({ ru: "Дом", kk: "Үй", en: "Home" })}</span>
                     </div>
                   )}
                 </>
@@ -1109,8 +1109,8 @@ interface FormData {
                 <Button onClick={() => setIsAdding(true)} variant="outline" className="w-full">
                   <Plus className="w-4 h-4 mr-2" />
                   {currentFolder
-                    ? (language === "kk" ? `«${currentFolder.title}» қалтасына қосу` : `Добавить в «${currentFolder.title}»`)
-                    : (language === "kk" ? "Үйге қосу" : "Добавить в дом")}
+                    ? (l({ ru: `Добавить в «${currentFolder.title}»`, kk: `«${currentFolder.title}» қалтасына қосу`, en: `Add to "${currentFolder.title}"` }))
+                    : (l({ ru: "Добавить в дом", kk: "Үйге қосу", en: "Add to Home" }))}
                 </Button>
               )}
  
@@ -1134,7 +1134,7 @@ interface FormData {
              ) : materials.length === 0 && !isAdding ? (
                <div className="text-center py-8 text-muted-foreground">
                   {searchQuery.trim() ? (
-                    <p>{language === "kk" ? "Ештеңе табылмады" : "Ничего не найдено"}</p>
+                    <p>{l({ ru: "Ничего не найдено", kk: "Ештеңе табылмады", en: "Nothing found" })}</p>
                   ) : currentFolderId ? (
                    <>
                      <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-50" />

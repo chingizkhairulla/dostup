@@ -9,14 +9,14 @@ interface Props {
 }
 
 const NoProductsEmptyState = ({ section, onGoToProducts }: Props) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
 
   const titleMap = {
     materials: { ru: "Сначала создайте продукт, чтобы прикрепить материалы", kk: "Материалдар қосу үшін алдымен өнім жасаңыз" },
     announcements: { ru: "Сначала создайте продукт, чтобы публиковать объявления", kk: "Хабарландыру жариялау үшін алдымен өнім жасаңыз" },
     schedule: { ru: "Сначала создайте продукт, чтобы добавить расписание", kk: "Кесте жасау үшін алдымен өнім жасаңыз" },
   };
-  const text = titleMap[section][language === "kk" ? "kk" : "ru"];
+  const text = titleMap[section][l({ ru: "ru", kk: "kk", en: "ru" })];
 
   return (
     <Card>
@@ -27,7 +27,7 @@ const NoProductsEmptyState = ({ section, onGoToProducts }: Props) => {
         <p className="text-muted-foreground max-w-md mx-auto">{text}</p>
         {onGoToProducts && (
           <Button onClick={onGoToProducts} size="sm" className="gap-2">
-            {language === "kk" ? "Өнімдер бөліміне өту" : "Перейти в раздел Продукты"}
+            {l({ ru: "Перейти в раздел Продукты", kk: "Өнімдер бөліміне өту", en: "Go to Products" })}
             <ArrowRight className="w-4 h-4" />
           </Button>
         )}

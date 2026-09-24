@@ -43,7 +43,7 @@ export const useRealtimeTeacherNotifications = (
   currentBadgeCount: number = 0
 ) => {
   const queryClient = useQueryClient();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const scheduleIdsRef = useRef<string[]>(scheduleIds);
   const bookingCacheRef = useRef<Map<string, DeletedBookingInfo>>(new Map());
   const badgeCountRef = useRef<number>(currentBadgeCount);
@@ -78,7 +78,7 @@ export const useRealtimeTeacherNotifications = (
 
       // Cache the booking info for potential DELETE events
       const info: DeletedBookingInfo = {
-        userName: booking.user?.name || (language === "ru" ? "Ученик" : "Оқушы"),
+        userName: booking.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" })),
         productTitle: booking.schedule?.product?.title || "",
         date: booking.time_slot?.date || "",
         time: booking.time_slot?.start_time || "",
@@ -110,7 +110,7 @@ export const useRealtimeTeacherNotifications = (
 
       bookings?.forEach((booking: any) => {
         const info: DeletedBookingInfo = {
-          userName: booking.user?.name || (language === "ru" ? "Ученик" : "Оқушы"),
+          userName: booking.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" })),
           productTitle: booking.schedule?.product?.title || "",
           date: booking.time_slot?.date || "",
           time: booking.time_slot?.start_time || "",
@@ -165,15 +165,13 @@ export const useRealtimeTeacherNotifications = (
           playBookingSound();
 
           // Show toast notification
-          const userName = bookingDetails.user?.name || (language === "ru" ? "Ученик" : "Оқушы");
+          const userName = bookingDetails.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" }));
           const productTitle = bookingDetails.schedule?.product?.title || "";
           const date = bookingDetails.time_slot?.date || "";
           const time = bookingDetails.time_slot?.start_time || "";
 
-          const title = language === "ru" ? "Новая запись!" : "Жаңа жазба!";
-          const description = language === "ru"
-            ? `${userName} записался на "${productTitle}" на ${date} в ${time}`
-            : `${userName} "${productTitle}" сабағына ${date} күні ${time} уақытына жазылды`;
+          const title = l({ ru: "Новая запись!", kk: "Жаңа жазба!", en: "New booking!" });
+          const description = l({ ru: `${userName} записался на "${productTitle}" на ${date} в ${time}`, kk: `${userName} "${productTitle}" сабағына ${date} күні ${time} уақытына жазылды`, en: `${userName} booked "${productTitle}" for ${date} at ${time}` });
 
           toast.success(title, {
             description,
@@ -244,9 +242,7 @@ export const useRealtimeTeacherNotifications = (
           playCancellationSound();
 
           // Build description with reasons/comment
-          let description = language === "ru"
-            ? `${cachedInfo.userName} отменил запись на "${cachedInfo.productTitle}" на ${cachedInfo.date} в ${cachedInfo.time}`
-            : `${cachedInfo.userName} "${cachedInfo.productTitle}" сабағына ${cachedInfo.date} күні ${cachedInfo.time} жазбасын жойды`;
+          let description = l({ ru: `${cachedInfo.userName} отменил запись на "${cachedInfo.productTitle}" на ${cachedInfo.date} в ${cachedInfo.time}`, kk: `${cachedInfo.userName} "${cachedInfo.productTitle}" сабағына ${cachedInfo.date} күні ${cachedInfo.time} жазбасын жойды`, en: `${cachedInfo.userName} cancelled their booking of "${cachedInfo.productTitle}" for ${cachedInfo.date} at ${cachedInfo.time}` });
 
           // Add reasons or comment to description
           if (comment) {
@@ -255,7 +251,7 @@ export const useRealtimeTeacherNotifications = (
             description += `\n${reasons.join(", ")}`;
           }
 
-          const title = language === "ru" ? "Запись отменена" : "Жазба жойылды";
+          const title = l({ ru: "Запись отменена", kk: "Жазба жойылды", en: "Booking cancelled" });
 
           toast.warning(title, {
             description,
@@ -299,7 +295,7 @@ export const useRealtimeTeacherNotifications = (
 
           playBookingSound();
 
-          let studentName = language === "ru" ? "Ученик" : "Оқушы";
+          let studentName = l({ ru: "Ученик", kk: "Оқушы", en: "Student" });
           if (newRequest.simple_user_id) {
             const { data: student } = await supabase
               .from("simple_users")
@@ -309,10 +305,8 @@ export const useRealtimeTeacherNotifications = (
             if (student) studentName = student.name;
           }
 
-          const title = language === "ru" ? "Запрос на перенос" : "Ауыстыру сұранысы";
-          const description = language === "ru"
-            ? `${studentName} просит перенести "${newRequest.product_title}" с ${newRequest.old_date} ${newRequest.old_time?.slice(0, 5)} на ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}`
-            : `${studentName} "${newRequest.product_title}" сабағын ${newRequest.old_date} ${newRequest.old_time?.slice(0, 5)} күнінен ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)} күніне ауыстыруды сұрайды`;
+          const title = l({ ru: "Запрос на перенос", kk: "Ауыстыру сұранысы", en: "Reschedule request" });
+          const description = l({ ru: `${studentName} просит перенести "${newRequest.product_title}" с ${newRequest.old_date} ${newRequest.old_time?.slice(0, 5)} на ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}`, kk: `${studentName} "${newRequest.product_title}" сабағын ${newRequest.old_date} ${newRequest.old_time?.slice(0, 5)} күнінен ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)} күніне ауыстыруды сұрайды`, en: `${studentName} asks to move "${newRequest.product_title}" from ${newRequest.old_date} ${newRequest.old_time?.slice(0, 5)} to ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}` });
 
           toast.info(title, { description, duration: 10000 });
 
@@ -343,11 +337,9 @@ export const useRealtimeTeacherNotifications = (
           if (isApproved) { playBookingSound(); } else { playCancellationSound(); }
 
           const title = isApproved
-            ? (language === "ru" ? "Ученик подтвердил перенос ✅" : "Оқушы ауыстыруды растады ✅")
-            : (language === "ru" ? "Ученик отклонил перенос ❌" : "Оқушы ауыстыруды қабылдамады ❌");
-          const description = language === "ru"
-            ? `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}`
-            : `"${request.product_title}" ${isApproved ? `${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды` : "ауыстыру қабылданбады"}`;
+            ? (l({ ru: "Ученик подтвердил перенос ✅", kk: "Оқушы ауыстыруды растады ✅", en: "The student confirmed the reschedule ✅" }))
+            : (l({ ru: "Ученик отклонил перенос ❌", kk: "Оқушы ауыстыруды қабылдамады ❌", en: "The student rejected the reschedule ❌" }));
+          const description = l({ ru: `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}`, kk: `"${request.product_title}" ${isApproved ? `${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды` : "ауыстыру қабылданбады"}`, en: `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}` });
 
           toast[isApproved ? "success" : "warning"](title, { description, duration: 10000 });
 

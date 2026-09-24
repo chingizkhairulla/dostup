@@ -80,7 +80,7 @@ interface Props { creatorName: string; onGoToProducts?: () => void; }
 
 const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
   const { data: products = [], isLoading } = useCreatorProducts();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"add" | "edit" | null>(null);
   const [addParentId, setAddParentId] = useState<string | null>(null);
@@ -142,7 +142,7 @@ const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Library className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">{language === "kk" ? "Материалдар" : "Материалы"}</h2>
+          <h2 className="text-lg font-semibold">{l({ ru: "Материалы", kk: "Материалдар", en: "Materials" })}</h2>
         </div>
         <NoProductsEmptyState section="materials" onGoToProducts={onGoToProducts} />
       </div>
@@ -152,14 +152,14 @@ const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
   const addButton = (
     <Button size="sm" className="gap-2" onClick={() => { setAddParentId(currentBrowseFolderId); setMode("add"); }}>
       <Plus className="w-4 h-4" />
-      {language === "kk" ? "Қосу" : "Добавить"}
+      {l({ ru: "Добавить", kk: "Қосу", en: "Add" })}
     </Button>
   );
 
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">
-        {language === "kk" ? "Материалдар" : "Материалы"}
+        {l({ ru: "Материалы", kk: "Материалдар", en: "Materials" })}
       </h2>
       <div className="flex items-center justify-between gap-3">
         <ProductSwitcher
@@ -484,7 +484,7 @@ const CreatorMaterialsReadOnlyList = ({
   viewer: BookmarkViewer;
   onCurrentFolderChange?: (id: string | null) => void;
 }) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const { data: allMaterials = [], isLoading } = useProductMaterials(productId, { creatorOnly: true });
   const updateMaterial = useUpdateMaterial();
   const deleteMaterial = useDeleteMaterial();
@@ -696,7 +696,7 @@ const CreatorMaterialsReadOnlyList = ({
         ),
       );
     } catch {
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     }
   };
 
@@ -725,7 +725,7 @@ const CreatorMaterialsReadOnlyList = ({
         ),
       );
     } catch {
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     }
   };
 
@@ -797,7 +797,7 @@ const CreatorMaterialsReadOnlyList = ({
       const vUrl = getFileUrl(m, 'view');
       if (vUrl) { window.open(vUrl, "_blank"); return; }
       if (isOfficeDocument(m.title) && isS3Path(m.file_url)) {
-        const t = toast.loading(language === "kk" ? "Файл дайындалуда..." : "Подготовка файла...");
+        const t = toast.loading(l({ ru: "Подготовка файла...", kk: "Файл дайындалуда...", en: "Preparing the file..." }));
         try {
           const token = await requestMaterialToken(m.file_url, 'creator');
           const proxyUrl = buildProxyUrl(token);
@@ -823,13 +823,11 @@ const CreatorMaterialsReadOnlyList = ({
     };
     const files = collectFiles(folderId, []);
     if (files.length === 0) {
-      toast.info(language === "kk" ? "Қалтада жүктелетін файлдар жоқ" : "В папке нет файлов для скачивания");
+      toast.info(l({ ru: "В папке нет файлов для скачивания", kk: "Қалтада жүктелетін файлдар жоқ", en: "This folder has no files to download" }));
       return;
     }
     toast.success(
-      language === "kk"
-        ? `${files.length} файл жүктелуде...`
-        : `Скачивание ${files.length} файлов...`
+      l({ ru: `Скачивание ${files.length} файлов...`, kk: `${files.length} файл жүктелуде...`, en: `Downloading ${files.length} files...` })
     );
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
@@ -855,10 +853,10 @@ const CreatorMaterialsReadOnlyList = ({
     if (!newTitle) return;
     try {
       await updateMaterial.mutateAsync({ id: renamingId, productId, title: newTitle });
-      toast.success(language === "kk" ? "Сақталды" : "Сохранено");
+      toast.success(l({ ru: "Сохранено", kk: "Сақталды", en: "Saved" }));
       cancelRename();
     } catch {
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     }
   };
 
@@ -866,10 +864,10 @@ const CreatorMaterialsReadOnlyList = ({
     if (!deletingMat) return;
     try {
       await deleteMaterial.mutateAsync({ id: deletingMat.id, productId, file_url: deletingMat.file_url });
-      toast.success(language === "kk" ? "Жойылды" : "Удалено");
+      toast.success(l({ ru: "Удалено", kk: "Жойылды", en: "Deleted" }));
       setDeletingMat(null);
     } catch {
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     }
   };
 
@@ -921,14 +919,14 @@ const CreatorMaterialsReadOnlyList = ({
         </div>
         {!isBookmarksSection && (
         <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-          <SelectTrigger className="h-9 w-auto min-w-[160px] gap-2 flex-shrink-0" aria-label={language === "kk" ? "Сұрыптау" : "Сортировка"}>
+          <SelectTrigger className="h-9 w-auto min-w-[160px] gap-2 flex-shrink-0" aria-label={l({ ru: "Сортировка", kk: "Сұрыптау", en: "Sorting" })}>
             <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="newest">{language === "kk" ? "Алдымен жаңалары" : "Сначала новые"}</SelectItem>
-            <SelectItem value="oldest">{language === "kk" ? "Алдымен ескілері" : "Сначала старые"}</SelectItem>
-            <SelectItem value="manual">{language === "kk" ? "Қолмен" : "Вручную"}</SelectItem>
+            <SelectItem value="newest">{l({ ru: "Сначала новые", kk: "Алдымен жаңалары", en: "Newest first" })}</SelectItem>
+            <SelectItem value="oldest">{l({ ru: "Сначала старые", kk: "Алдымен ескілері", en: "Oldest first" })}</SelectItem>
+            <SelectItem value="manual">{l({ ru: "Вручную", kk: "Қолмен", en: "Manually" })}</SelectItem>
           </SelectContent>
         </Select>
         )}
@@ -943,7 +941,7 @@ const CreatorMaterialsReadOnlyList = ({
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-accent text-muted-foreground hover:text-white transition-colors ${dragOverCrumb === "home" ? "bg-accent text-white ring-2 ring-primary" : ""}`}
           >
             <Home className="w-3.5 h-3.5" />
-            {language === "kk" ? "Үй" : "Дом"}
+            {l({ ru: "Дом", kk: "Үй", en: "Home" })}
           </button>
           {folderPath.length > 0 && folderPath.map((f, i) => (
             <div key={f.id} className="flex items-center gap-1">
@@ -975,15 +973,13 @@ const CreatorMaterialsReadOnlyList = ({
       {isBookmarksSection && myBookmarksInProduct.length > 0 && (
         <div className="flex items-center justify-between gap-3 p-3 rounded-md bg-muted/40">
           <span className="text-sm text-foreground">
-            {language === "kk"
-              ? "Оқушыларға көрсету"
-              : "Показывать ученикам"}
+            {l({ ru: "Показывать ученикам", kk: "Оқушыларға көрсету", en: "Show to students" })}
           </span>
           <Switch
             checked={allMyArePublic}
             onCheckedChange={(next) => handleBulkPublic(next)}
             disabled={bulkSetPublic.isPending}
-            aria-label={language === "kk" ? "Оқушыларға көрсету" : "Показывать ученикам"}
+            aria-label={l({ ru: "Показывать ученикам", kk: "Оқушыларға көрсету", en: "Show to students" })}
           />
         </div>
       )}
@@ -991,10 +987,10 @@ const CreatorMaterialsReadOnlyList = ({
       {filtered.length === 0 ? (
         <div className="text-center py-6 text-sm text-muted-foreground">
           {q
-            ? language === "kk" ? "Ештеңе табылмады" : "Ничего не найдено"
+            ? l({ ru: "Ничего не найдено", kk: "Ештеңе табылмады", en: "Nothing found" })
             : isBookmarksSection
-              ? language === "kk" ? "Белгіленген материалдар жоқ" : "Нет помеченных материалов"
-              : language === "kk" ? "Әзірге материалдар жоқ" : "Пока нет материалов"}
+              ? l({ ru: "Нет помеченных материалов", kk: "Белгіленген материалдар жоқ", en: "No flagged materials" })
+              : l({ ru: "Пока нет материалов", kk: "Әзірге материалдар жоқ", en: "No materials yet" })}
         </div>
       ) : (
         <MaterialList
@@ -1038,17 +1034,15 @@ const CreatorMaterialsReadOnlyList = ({
       <AlertDialog open={!!deletingMat} onOpenChange={(o) => !o && setDeletingMat(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{language === "kk" ? "Жою керек пе?" : "Удалить?"}</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Удалить?", kk: "Жою керек пе?", en: "Delete?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "kk"
-                ? `"${deletingMat?.title}" жойылсын ба? Бұл әрекетті болдырмау мүмкін емес.`
-                : `Удалить "${deletingMat?.title}"? Это действие нельзя отменить.`}
+              {l({ ru: `Удалить "${deletingMat?.title}"? Это действие нельзя отменить.`, kk: `"${deletingMat?.title}" жойылсын ба? Бұл әрекетті болдырмау мүмкін емес.`, en: `Delete "${deletingMat?.title}"? This cannot be undone.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === "kk" ? "Болдырмау" : "Отмена"}</AlertDialogCancel>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
-              {language === "kk" ? "Жою" : "Удалить"}
+              {l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1126,6 +1120,9 @@ const MaterialNode = ({
   onMoveToFolder: (materialId: string, target: string | null) => void;
   onDownloadFolder: (folderId: string) => void;
 }) => {
+  // This node takes `language` as a prop for its own logic, but reads phrases
+  // from the context like everything else.
+  const { l } = useLanguage();
   const isFolder = material.type === "folder";
   const isRenaming = renamingId === material.id;
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -1149,9 +1146,9 @@ const MaterialNode = ({
   const copyToClipboard = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success(language === "kk" ? "Көшірілді" : "Скопировано");
+      toast.success(l({ ru: "Скопировано", kk: "Көшірілді", en: "Copied" }));
     } catch {
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     }
   };
 
@@ -1263,7 +1260,7 @@ const MaterialNode = ({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 min-h-0 flex-shrink-0 text-muted-foreground"
-                  title={language === "kk" ? "Атын өзгерту" : "Переименовать"}
+                  title={l({ ru: "Переименовать", kk: "Атын өзгерту", en: "Rename" })}
                   onClick={(e) => { e.stopPropagation(); startRename(material); }}
                 >
                   <Pencil className="w-3 h-3" />
@@ -1281,7 +1278,7 @@ const MaterialNode = ({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 min-h-0"
-                    title={language === "kk" ? "Барлық файлдарды жүктеу" : "Скачать все файлы"}
+                    title={l({ ru: "Скачать все файлы", kk: "Барлық файлдарды жүктеу", en: "Download every file" })}
                     onClick={(e) => { e.stopPropagation(); onDownloadFolder(material.id); }}
                   >
                     <Download className="w-4 h-4" />
@@ -1291,7 +1288,7 @@ const MaterialNode = ({
                   <a
                     href={downloadUrl}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-8 w-8"
-                    title={language === "kk" ? "Жүктеу" : "Скачать"}
+                    title={l({ ru: "Скачать", kk: "Жүктеу", en: "Download" })}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Download className="w-4 h-4" />
@@ -1302,7 +1299,7 @@ const MaterialNode = ({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 min-h-0"
-                    title={language === "kk" ? "Сілтемені көшіру" : "Скопировать ссылку"}
+                    title={l({ ru: "Скопировать ссылку", kk: "Сілтемені көшіру", en: "Copy the link" })}
                     onClick={(e) => { e.stopPropagation(); copyToClipboard(material.file_url || ""); }}
                   >
                     <Copy className="w-4 h-4" />
@@ -1313,7 +1310,7 @@ const MaterialNode = ({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 min-h-0"
-                    title={language === "kk" ? "Жаю" : "Развернуть"}
+                    title={l({ ru: "Развернуть", kk: "Жаю", en: "Expand" })}
                     onClick={(e) => { e.stopPropagation(); setViewerOpen((v) => !v); }}
                   >
                     <ChevronRight className={`w-4 h-4 transition-transform ${viewerOpen ? "rotate-90" : ""}`} />
@@ -1323,7 +1320,7 @@ const MaterialNode = ({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 min-h-0 text-destructive hover:text-destructive"
-                  title={language === "kk" ? "Жою" : "Удалить"}
+                  title={l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
                   onClick={() => onDelete(material)}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -1337,24 +1334,24 @@ const MaterialNode = ({
         <ContextMenuContent className="w-52">
           <ContextMenuItem onSelect={() => startRename(material)}>
             <Pencil className="w-4 h-4 mr-2" />
-            {language === "kk" ? "Атын өзгерту" : "Переименовать"}
+            {l({ ru: "Переименовать", kk: "Атын өзгерту", en: "Rename" })}
           </ContextMenuItem>
           <ContextMenuItem onSelect={onToggleBookmark}>
             <Star className={`w-4 h-4 mr-2 ${bookmarkState?.mine ? "text-yellow-500 fill-yellow-500" : ""}`} />
             {bookmarkState?.mine
-              ? (language === "kk" ? "Белгіні алу" : "Снять пометку")
-              : (language === "kk" ? "Белгілеу" : "Пометить")}
+              ? (l({ ru: "Снять пометку", kk: "Белгіні алу", en: "Remove the flag" }))
+              : (l({ ru: "Пометить", kk: "Белгілеу", en: "Flag" }))}
           </ContextMenuItem>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               <Folder className="w-4 h-4 mr-2" />
-              {language === "kk" ? "Папкаға жылжыту" : "Переместить в папку"}
+              {l({ ru: "Переместить в папку", kk: "Папкаға жылжыту", en: "Move to a folder" })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56 max-h-72 overflow-y-auto">
               {(material.parent_id ?? null) !== null && (
                 <ContextMenuItem onSelect={() => onMoveToFolder(material.id, null)}>
                   <Home className="w-4 h-4 mr-2" />
-                  {language === "kk" ? "Басты бет" : "Дом"}
+                  {l({ ru: "Дом", kk: "Басты бет", en: "Home" })}
                 </ContextMenuItem>
               )}
               {allFolders
@@ -1368,7 +1365,7 @@ const MaterialNode = ({
               {allFolders.filter((f) => f.id !== material.id && f.id !== (material.parent_id ?? null)).length === 0 &&
                 (material.parent_id ?? null) === null && (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    {language === "kk" ? "Папкалар жоқ" : "Нет других папок"}
+                    {l({ ru: "Нет других папок", kk: "Папкалар жоқ", en: "There are no other folders" })}
                   </div>
                 )}
             </ContextMenuSubContent>
@@ -1376,24 +1373,24 @@ const MaterialNode = ({
           {isFolder && (
             <ContextMenuItem onSelect={() => onDownloadFolder(material.id)}>
               <Download className="w-4 h-4 mr-2" />
-              {language === "kk" ? "Барлық файлдарды жүктеу" : "Скачать все файлы"}
+              {l({ ru: "Скачать все файлы", kk: "Барлық файлдарды жүктеу", en: "Download every file" })}
             </ContextMenuItem>
           )}
           {downloadUrl && (
             <ContextMenuItem onSelect={triggerDownload}>
               <Download className="w-4 h-4 mr-2" />
-              {language === "kk" ? "Жүктеу" : "Скачать"}
+              {l({ ru: "Скачать", kk: "Жүктеу", en: "Download" })}
             </ContextMenuItem>
           )}
           {material.type === "link" && material.file_url && (
             <>
               <ContextMenuItem onSelect={() => window.open(material.file_url || "", "_blank", "noopener,noreferrer")}>
                 <ExternalLink className="w-4 h-4 mr-2" />
-                {language === "kk" ? "Ашу" : "Открыть"}
+                {l({ ru: "Открыть", kk: "Ашу", en: "Open" })}
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => copyToClipboard(material.file_url || "")}>
                 <Copy className="w-4 h-4 mr-2" />
-                {language === "kk" ? "Сілтемені көшіру" : "Скопировать ссылку"}
+                {l({ ru: "Скопировать ссылку", kk: "Сілтемені көшіру", en: "Copy the link" })}
               </ContextMenuItem>
             </>
           )}
@@ -1403,7 +1400,7 @@ const MaterialNode = ({
             className="text-destructive focus:text-destructive"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            {language === "kk" ? "Жою" : "Удалить"}
+            {l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -1421,7 +1418,7 @@ const MaterialNode = ({
               onClick={(e) => { e.stopPropagation(); copyToClipboard(material.content || ""); }}
             >
               <Copy className="w-3 h-3" />
-              {language === "kk" ? "Көшіру" : "Скопировать"}
+              {l({ ru: "Скопировать", kk: "Көшіру", en: "Copy" })}
             </Button>
           </div>
         </div>
@@ -1444,7 +1441,7 @@ const MaterialNode = ({
                 onClick={() => copyToClipboard(material.content || "")}
               >
                 <Copy className="w-3 h-3" />
-                {language === "kk" ? "Көшіру" : "Скопировать"}
+                {l({ ru: "Скопировать", kk: "Көшіру", en: "Copy" })}
               </Button>
             </div>
           </DialogContent>
@@ -1465,6 +1462,7 @@ const CreatorTrashList = ({
   language: string;
   getIcon: (type: string) => JSX.Element;
 }) => {
+  const { l } = useLanguage();
   const { data: items = [], isLoading } = useDeletedMaterials(productId);
   const { data: liveMaterials = [] } = useProductMaterials(productId, { creatorOnly: true });
   const restore = useRestoreMaterial();
@@ -1497,7 +1495,7 @@ const CreatorTrashList = ({
     return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
-  const homeLabel = language === "kk" ? "Үй" : "Дом";
+  const homeLabel = l({ ru: "Дом", kk: "Үй", en: "Home" });
 
   const handleRestoreClick = (m: typeof items[number]) => {
     const origId = m.original_parent_id ?? null;
@@ -1509,11 +1507,9 @@ const CreatorTrashList = ({
         {
           onSuccess: () =>
             toast.success(
-              language === "kk"
-                ? `"${target}" қалтасына қалпына келтірілді`
-                : `Восстановлено в "${target}"`,
+              l({ ru: `Восстановлено в "${target}"`, kk: `"${target}" қалтасына қалпына келтірілді`, en: `Restored to "${target}"` }),
             ),
-          onError: () => toast.error(language === "kk" ? "Қате" : "Ошибка"),
+          onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
         },
       );
     } else {
@@ -1546,9 +1542,7 @@ const CreatorTrashList = ({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Trash2 className="w-4 h-4" />
           <span>
-            {language === "kk"
-              ? `Себет — 30 күннен кейін мәңгілікке жойылады`
-              : `Корзина — удаляется навсегда через 30 дней`}
+            {l({ ru: `Корзина — удаляется навсегда через 30 дней`, kk: `Себет — 30 күннен кейін мәңгілікке жойылады`, en: `Trash — deleted for good after 30 days` })}
           </span>
         </div>
         {items.length > 0 && (
@@ -1559,14 +1553,14 @@ const CreatorTrashList = ({
             onClick={() => setConfirmEmpty(true)}
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            {language === "kk" ? "Тазалау" : "Очистить"}
+            {l({ ru: "Очистить", kk: "Тазалау", en: "Clear" })}
           </Button>
         )}
       </div>
 
       {items.length === 0 ? (
         <div className="text-center py-10 text-sm text-muted-foreground">
-          {language === "kk" ? "Себет бос" : "Корзина пуста"}
+          {l({ ru: "Корзина пуста", kk: "Себет бос", en: "The trash is empty" })}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -1583,43 +1577,43 @@ const CreatorTrashList = ({
                     <div className="font-medium text-sm truncate">{m.title}</div>
                     <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5">
                       <span>
-                        {language === "kk" ? "Жойылған" : "Удалено"}:{" "}
+                        {l({ ru: "Удалено", kk: "Жойылған", en: "Deleted" })}:{" "}
                         {m.deleted_at
                           ? new Date(m.deleted_at).toLocaleDateString(
-                              language === "kk" ? "kk-KZ" : "ru-RU",
+                              l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }),
                             )
                           : "—"}
                       </span>
                       <span>
-                        {language === "kk" ? "Қалта" : "Папка"}:{" "}
+                        {l({ ru: "Папка", kk: "Қалта", en: "Folder" })}:{" "}
                         {m.original_parent_id
                           ? folderMap.get(m.original_parent_id) ??
-                            (language === "kk" ? "(жойылған)" : "(удалена)")
+                            (l({ ru: "(удалена)", kk: "(жойылған)", en: "(deleted)" }))
                           : homeLabel}
                       </span>
                       {m.type === "file" && (
                         <span>
-                          {language === "kk" ? "Өлшемі" : "Размер"}: {formatSize(m.file_size)}
+                          {l({ ru: "Размер", kk: "Өлшемі", en: "Size" })}: {formatSize(m.file_size)}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex flex-col items-center px-2 flex-shrink-0">
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">
-                      {language === "kk" ? "қалды" : "осталось"}
+                      {l({ ru: "осталось", kk: "қалды", en: "left" })}
                     </span>
                     <span className={`text-lg font-bold leading-tight ${isCritical ? "text-destructive" : "text-orange-500"}`}>
                       {left}
                     </span>
                     <span className="text-[10px] text-muted-foreground leading-none">
-                      {language === "kk" ? "күн" : "дн."}
+                      {l({ ru: "дн.", kk: "күн", en: "days" })}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button
                       size="icon"
                       variant="ghost"
-                      title={language === "kk" ? "Қалпына келтіру" : "Восстановить"}
+                      title={l({ ru: "Восстановить", kk: "Қалпына келтіру", en: "Restore" })}
                       onClick={() => handleRestoreClick(m)}
                       disabled={restore.isPending}
                     >
@@ -1629,7 +1623,7 @@ const CreatorTrashList = ({
                       size="icon"
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
-                      title={language === "kk" ? "Мәңгілікке жою" : "Удалить навсегда"}
+                      title={l({ ru: "Удалить навсегда", kk: "Мәңгілікке жою", en: "Delete for good" })}
                       onClick={() => setConfirmDelete({ id: m.id, title: m.title, file_url: m.file_url ?? null })}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1646,16 +1640,14 @@ const CreatorTrashList = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "kk" ? "Себетті тазалау?" : "Очистить корзину?"}
+              {l({ ru: "Очистить корзину?", kk: "Себетті тазалау?", en: "Empty the trash?" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "kk"
-                ? "Барлық материалдар мәңгілікке жойылады. Бұл әрекетті болдырмау мүмкін емес."
-                : "Все материалы будут удалены навсегда. Это действие нельзя отменить."}
+              {l({ ru: "Все материалы будут удалены навсегда. Это действие нельзя отменить.", kk: "Барлық материалдар мәңгілікке жойылады. Бұл әрекетті болдырмау мүмкін емес.", en: "Every material will be deleted for good. This cannot be undone." })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === "kk" ? "Болдырмау" : "Отмена"}</AlertDialogCancel>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() => {
@@ -1663,15 +1655,15 @@ const CreatorTrashList = ({
                   { productId },
                   {
                     onSuccess: () => {
-                      toast.success(language === "kk" ? "Себет тазаланды" : "Корзина очищена");
+                      toast.success(l({ ru: "Корзина очищена", kk: "Себет тазаланды", en: "The trash was emptied" }));
                       setConfirmEmpty(false);
                     },
-                    onError: () => toast.error(language === "kk" ? "Қате" : "Ошибка"),
+                    onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
                   },
                 );
               }}
             >
-              {language === "kk" ? "Тазалау" : "Очистить"}
+              {l({ ru: "Очистить", kk: "Тазалау", en: "Clear" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1681,16 +1673,14 @@ const CreatorTrashList = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "kk" ? "Мәңгілікке жою керек пе?" : "Удалить навсегда?"}
+              {l({ ru: "Удалить навсегда?", kk: "Мәңгілікке жою керек пе?", en: "Delete for good?" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "kk"
-                ? `"${confirmDelete?.title}" мәңгілікке жойылады.`
-                : `"${confirmDelete?.title}" будет удалён навсегда.`}
+              {l({ ru: `"${confirmDelete?.title}" будет удалён навсегда.`, kk: `"${confirmDelete?.title}" мәңгілікке жойылады.`, en: `"${confirmDelete?.title}" will be deleted for good.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === "kk" ? "Болдырмау" : "Отмена"}</AlertDialogCancel>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() => {
@@ -1699,15 +1689,15 @@ const CreatorTrashList = ({
                   { id: confirmDelete.id, productId, file_url: confirmDelete.file_url },
                   {
                     onSuccess: () => {
-                      toast.success(language === "kk" ? "Жойылды" : "Удалено");
+                      toast.success(l({ ru: "Удалено", kk: "Жойылды", en: "Deleted" }));
                       setConfirmDelete(null);
                     },
-                    onError: () => toast.error(language === "kk" ? "Қате" : "Ошибка"),
+                    onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
                   },
                 );
               }}
             >
-              {language === "kk" ? "Жою" : "Удалить"}
+              {l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1717,12 +1707,10 @@ const CreatorTrashList = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "kk" ? "Қалпына келтіру" : "Восстановить материал"}
+              {l({ ru: "Восстановить материал", kk: "Қалпына келтіру", en: "Restore the material" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "kk"
-                ? "Қалта жойылған. Файл үйге қалпына келтіріледі, немесе басқа қалтаны таңдаңыз."
-                : "Папка была удалена. Файл будет восстановлен в Дом, либо можете выбрать в какую папку хотите."}
+              {l({ ru: "Папка была удалена. Файл будет восстановлен в Дом, либо можете выбрать в какую папку хотите.", kk: "Қалта жойылған. Файл үйге қалпына келтіріледі, немесе басқа қалтаны таңдаңыз.", en: "The folder was deleted. The file will be restored to Home, or you can choose another folder." })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
@@ -1749,7 +1737,7 @@ const CreatorTrashList = ({
             </Select>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === "kk" ? "Болдырмау" : "Отмена"}</AlertDialogCancel>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (!restorePick) return;
@@ -1761,18 +1749,16 @@ const CreatorTrashList = ({
                       const name =
                         target ? folderMap.get(target) ?? "—" : homeLabel;
                       toast.success(
-                        language === "kk"
-                          ? `"${name}" қалтасына қалпына келтірілді`
-                          : `Восстановлено в "${name}"`,
+                        l({ ru: `Восстановлено в "${name}"`, kk: `"${name}" қалтасына қалпына келтірілді`, en: `Restored to "${name}"` }),
                       );
                       setRestorePick(null);
                     },
-                    onError: () => toast.error(language === "kk" ? "Қате" : "Ошибка"),
+                    onError: () => toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" })),
                   },
                 );
               }}
             >
-              {language === "kk" ? "Қалпына келтіру" : "Восстановить"}
+              {l({ ru: "Восстановить", kk: "Қалпына келтіру", en: "Restore" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1799,7 +1785,7 @@ const formatBytes = (bytes?: number | null) => {
 };
 
 const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const { data: files = [], isLoading, refetch } = useAllCreatorMaterials(creatorName);
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const [refreshing, setRefreshing] = useState(false);
@@ -1873,7 +1859,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
     const token = localStorage.getItem("creator_token") || "";
     const name = localStorage.getItem("creator_name") || creatorName;
     if (!token || !name) {
-      toast.error(language === "kk" ? "Авторизация қажет" : "Требуется вход");
+      toast.error(l({ ru: "Требуется вход", kk: "Авторизация қажет", en: "Sign-in required" }));
       return;
     }
     setRefreshing(true);
@@ -1885,14 +1871,12 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
       if (error) throw error;
       const updated = (data as { updated?: number } | null)?.updated ?? 0;
       toast.success(
-        language === "kk"
-          ? `Жаңартылды: ${updated}`
-          : `Обновлено: ${updated}`,
+        l({ ru: `Обновлено: ${updated}`, kk: `Жаңартылды: ${updated}`, en: `Updated: ${updated}` }),
       );
       await refetch();
     } catch (e) {
       console.error(e);
-      toast.error(language === "kk" ? "Қате" : "Ошибка");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     } finally {
       setRefreshing(false);
     }
@@ -1914,7 +1898,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
             <div className="flex items-center gap-2">
               <HardDrive className="w-5 h-5 text-accent" />
               <div className="font-medium">
-                {language === "kk" ? "Қойма" : "Хранилище"}
+                {l({ ru: "Хранилище", kk: "Қойма", en: "Storage" })}
               </div>
             </div>
             <div className="text-sm tabular-nums">
@@ -1928,9 +1912,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
           {missingCount > 0 && (
             <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground">
               <span>
-                {language === "kk"
-                  ? `${missingCount} файлдың өлшемі белгісіз`
-                  : `У ${missingCount} файлов размер не определён`}
+                {l({ ru: `У ${missingCount} файлов размер не определён`, kk: `${missingCount} файлдың өлшемі белгісіз`, en: `${missingCount} files have no known size` })}
               </span>
               <Button
                 size="sm"
@@ -1944,7 +1926,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                {language === "kk" ? "Өлшемдерді есептеу" : "Пересчитать размеры"}
+                {l({ ru: "Пересчитать размеры", kk: "Өлшемдерді есептеу", en: "Recalculate the sizes" })}
               </Button>
             </div>
           )}
@@ -1954,12 +1936,8 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-muted-foreground">
           {view === "files"
-            ? language === "kk"
-              ? `Барлығы файл: ${fileItems.length}`
-              : `Всего файлов: ${fileItems.length}`
-            : language === "kk"
-              ? `Барлығы қалта: ${folderItems.length}`
-              : `Всего папок: ${folderItems.length}`}
+            ? l({ ru: `Всего файлов: ${fileItems.length}`, kk: `Барлығы файл: ${fileItems.length}`, en: `Files in total: ${fileItems.length}` })
+            : l({ ru: `Всего папок: ${folderItems.length}`, kk: `Барлығы қалта: ${folderItems.length}`, en: `Folders in total: ${folderItems.length}` })}
         </div>
         <Button
           size="sm"
@@ -1969,8 +1947,8 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
         >
           <ArrowUpDown className="w-4 h-4" />
           {sortDir === "desc"
-            ? language === "kk" ? "Үлкеннен кішіге" : "От большего к меньшему"
-            : language === "kk" ? "Кішіден үлкенге" : "От меньшего к большему"}
+            ? l({ ru: "От большего к меньшему", kk: "Үлкеннен кішіге", en: "Largest first" })
+            : l({ ru: "От меньшего к большему", kk: "Кішіден үлкенге", en: "Smallest first" })}
         </Button>
       </div>
 
@@ -1984,7 +1962,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          {language === "kk" ? "Файлдар" : "Файлы"}
+          {l({ ru: "Файлы", kk: "Файлдар", en: "Files" })}
         </button>
         <button
           type="button"
@@ -1995,14 +1973,14 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          {language === "kk" ? "Қалталар" : "Папки"}
+          {l({ ru: "Папки", kk: "Қалталар", en: "Folders" })}
         </button>
       </div>
 
       {view === "folders" && (
         sortedFolders.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted-foreground">
-            {language === "kk" ? "Қалталар жоқ" : "Нет папок"}
+            {l({ ru: "Нет папок", kk: "Қалталар жоқ", en: "No folders" })}
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
@@ -2031,7 +2009,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
       {view === "files" && (
         sortedFiles.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted-foreground">
-            {language === "kk" ? "Файлдар жоқ" : "Нет файлов"}
+            {l({ ru: "Нет файлов", kk: "Файлдар жоқ", en: "No files" })}
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">

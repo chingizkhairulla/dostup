@@ -35,7 +35,7 @@ const RescheduleSlotDialog = ({
   slot,
   isPending = false,
 }: RescheduleSlotDialogProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [reasonType, setReasonType] = useState<"cant_make_it" | "own">("cant_make_it");
@@ -82,7 +82,7 @@ const RescheduleSlotDialog = ({
     let finalComment = "";
 
     if (reasonType === "cant_make_it") {
-      reasons.push(language === "ru" ? "Не успеваю" : "Үлгермеймін");
+      reasons.push(l({ ru: "Не успеваю", kk: "Үлгермеймін", en: "I cannot make it" }));
     } else {
       finalComment = comment.trim();
     }
@@ -109,20 +109,18 @@ const RescheduleSlotDialog = ({
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" mobileFullScreen>
         <DialogHeader>
           <DialogTitle>
-            {language === "ru" ? "Запрос на перенос" : "Ауыстыру сұранысы"}
+            {l({ ru: "Запрос на перенос", kk: "Ауыстыру сұранысы", en: "Reschedule request" })}
           </DialogTitle>
           <DialogDescription>
             {slot && (
-              language === "ru"
-                ? `Текущее время: ${slot.date} ${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(0, 5)}`
-                : `Ағымдағы уақыт: ${slot.date} ${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(0, 5)}`
+              l({ ru: `Текущее время: ${slot.date} ${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(0, 5)}`, kk: `Ағымдағы уақыт: ${slot.date} ${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(0, 5)}`, en: `Current time: ${slot.date} ${slot.start_time.slice(0, 5)} - ${slot.end_time.slice(0, 5)}` })
             )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label>{language === "ru" ? "Желаемая дата" : "Қалаған күн"}</Label>
+            <Label>{l({ ru: "Желаемая дата", kk: "Қалаған күн", en: "Preferred date" })}</Label>
             <Input
               type="date"
               value={newDate}
@@ -131,7 +129,7 @@ const RescheduleSlotDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>{language === "ru" ? "Желаемое время" : "Қалаған уақыт"}</Label>
+            <Label>{l({ ru: "Желаемое время", kk: "Қалаған уақыт", en: "Preferred time" })}</Label>
             <Input
               type="time"
               value={newTime}
@@ -140,7 +138,7 @@ const RescheduleSlotDialog = ({
           </div>
 
           <div className="space-y-3">
-            <Label>{language === "ru" ? "Причина" : "Себебі"}</Label>
+            <Label>{l({ ru: "Причина", kk: "Себебі", en: "Reason" })}</Label>
             <RadioGroup
               value={reasonType}
               onValueChange={(v) => setReasonType(v as "cant_make_it" | "own")}
@@ -148,13 +146,13 @@ const RescheduleSlotDialog = ({
               <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
                 <RadioGroupItem value="cant_make_it" id="cant_make_it" />
                 <label htmlFor="cant_make_it" className="text-sm cursor-pointer">
-                  {language === "ru" ? "Не успеваю" : "Үлгермеймін"}
+                  {l({ ru: "Не успеваю", kk: "Үлгермеймін", en: "I cannot make it" })}
                 </label>
               </div>
               <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
                 <RadioGroupItem value="own" id="own_reason" />
                 <label htmlFor="own_reason" className="text-sm cursor-pointer">
-                  {language === "ru" ? "Своя причина" : "Өз себебім"}
+                  {l({ ru: "Своя причина", kk: "Өз себебім", en: "Another reason" })}
                 </label>
               </div>
             </RadioGroup>
@@ -162,7 +160,7 @@ const RescheduleSlotDialog = ({
             {reasonType === "own" && (
               <Textarea
                 placeholder={
-                  language === "ru" ? "Укажите причину" : "Себебін жазыңыз"
+                  l({ ru: "Укажите причину", kk: "Себебін жазыңыз", en: "Give a reason" })
                 }
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -175,11 +173,11 @@ const RescheduleSlotDialog = ({
 
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
-            {language === "ru" ? "Отмена" : "Бас тарту"}
+            {l({ ru: "Отмена", kk: "Бас тарту", en: "Cancel" })}
           </Button>
           <Button onClick={handleConfirm} disabled={isPending || !isValid}>
             {isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            {language === "ru" ? "Отправить запрос" : "Сұраныс жіберу"}
+            {l({ ru: "Отправить запрос", kk: "Сұраныс жіберу", en: "Send the request" })}
           </Button>
         </div>
       </DialogContent>

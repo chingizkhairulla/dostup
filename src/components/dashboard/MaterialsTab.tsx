@@ -176,7 +176,7 @@ const InlineVideoPlayer = ({ url }: InlineVideoPlayerProps) => {
 const MaterialsTab = () => {
   const { data: materials, isLoading } = useSimpleMaterials();
   const { data: purchases } = useSimplePurchases();
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { user } = useSimpleAuth();
   const [expandedVideos, setExpandedVideos] = useState<Set<string>>(new Set());
   const [expandedTexts, setExpandedTexts] = useState<Set<string>>(new Set());
@@ -273,7 +273,7 @@ const MaterialsTab = () => {
    * Async handler only for Office documents that need token flow
    */
   const handleOfficeView = useCallback(async (material: { file_url: string; title: string }) => {
-    const loadingToast = toast.loading(language === "ru" ? "Подготовка файла..." : "Файл дайындалуда...");
+    const loadingToast = toast.loading(l({ ru: "Подготовка файла...", kk: "Файл дайындалуда...", en: "Preparing the file..." }));
     try {
       const token = await requestMaterialToken(material.file_url, 'student');
       const proxyUrl = buildProxyUrl(token);
@@ -282,7 +282,7 @@ const MaterialsTab = () => {
     } catch (err) {
       console.error('Error opening office doc:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(language === "ru" ? `Ошибка: ${errMsg}` : `Қате: ${errMsg}`);
+      toast.error(l({ ru: `Ошибка: ${errMsg}`, kk: `Қате: ${errMsg}`, en: `Error: ${errMsg}` }));
     } finally {
       toast.dismiss(loadingToast);
     }
@@ -325,7 +325,7 @@ const MaterialsTab = () => {
   }, {} as Record<string, typeof creatorMaterials>);
 
   const groupTeacherMaterials = teacherMaterials.reduce((acc, material) => {
-    const key = `${material.product?.title || "Продукт"} - ${material.teacher_name || (language === "ru" ? "Учитель" : "Мұғалім")}`;
+    const key = `${material.product?.title || "Продукт"} - ${material.teacher_name || (l({ ru: "Учитель", kk: "Мұғалім", en: "Teacher" }))}`;
     if (!acc[key]) {
       acc[key] = [];
     }
@@ -382,9 +382,17 @@ const MaterialsTab = () => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-foreground truncate" title={material.title}>{material.title}</h3>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    {children.length} {language === "ru" 
-                      ? (children.length === 1 ? "файл" : children.length < 5 ? "файла" : "файлов")
-                      : (children.length === 1 ? "файл" : "файл")}
+                    {children.length}{" "}
+                    {l({
+                      ru:
+                        children.length === 1
+                          ? "файл"
+                          : children.length < 5
+                            ? "файла"
+                            : "файлов",
+                      kk: "файл",
+                      en: children.length === 1 ? "file" : "files",
+                    })}
                   </p>
                 </div>
                 {isFolderExpanded ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
@@ -428,7 +436,7 @@ const MaterialsTab = () => {
                  <a
                    href={downloadUrl}
                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:bg-accent hover:text-accent-foreground h-10 w-10"
-                   title={language === "ru" ? "Скачать" : "Жүктеу"}
+                   title={l({ ru: "Скачать", kk: "Жүктеу", en: "Download" })}
                  >
                    <Download className="w-5 h-5" />
                  </a>
@@ -439,7 +447,7 @@ const MaterialsTab = () => {
                    target="_blank"
                    rel="noopener noreferrer"
                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:bg-accent hover:text-accent-foreground h-10 w-10"
-                   title={language === "ru" ? "Открыть в браузере" : "Браузерде ашу"}
+                   title={l({ ru: "Открыть в браузере", kk: "Браузерде ашу", en: "Open in the browser" })}
                  >
                    <ExternalLink className="w-5 h-5" />
                  </a>
@@ -448,7 +456,7 @@ const MaterialsTab = () => {
                    variant="ghost" 
                    size="icon"
                    onClick={() => handleOfficeView({ file_url: material.file_url!, title: material.title })}
-                   title={language === "ru" ? "Открыть в браузере" : "Браузерде ашу"}
+                   title={l({ ru: "Открыть в браузере", kk: "Браузерде ашу", en: "Open in the browser" })}
                  >
                    <ExternalLink className="w-5 h-5" />
                  </Button>
@@ -586,7 +594,7 @@ const MaterialsTab = () => {
           {isBookmarks ? (
             bookmarkedFiltered.length === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                {language === "ru" ? "Нет помеченных материалов" : "Белгіленген материалдар жоқ"}
+                {l({ ru: "Нет помеченных материалов", kk: "Белгіленген материалдар жоқ", en: "No flagged materials" })}
               </div>
             ) : (
               <div className="space-y-2">
@@ -596,7 +604,7 @@ const MaterialsTab = () => {
           ) : q ? (
             searchResults.length === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                {language === "ru" ? "Ничего не найдено" : "Ештеңе табылмады"}
+                {l({ ru: "Ничего не найдено", kk: "Ештеңе табылмады", en: "Nothing found" })}
               </div>
             ) : (
               <div className="space-y-2">
@@ -623,7 +631,7 @@ const MaterialsTab = () => {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <User className="w-4 h-4" />
                 <h3 className="font-medium">
-                  {language === "ru" ? "Материалы от учителей" : "Мұғалімдерден материалдар"}
+                  {l({ ru: "Материалы от учителей", kk: "Мұғалімдерден материалдар", en: "Materials from teachers" })}
                 </h3>
               </div>
               {Object.entries(groupTeacherMaterials).map(([groupTitle, productMaterials]) => (

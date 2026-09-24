@@ -52,7 +52,7 @@ export function useCreatorPendingPurchases(creatorName: string | null) {
 }
 
 export default function CreatorPendingPayments({ creatorName }: { creatorName: string }) {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const queryClient = useQueryClient();
   const { data: pendingPurchases = [], isLoading } = useCreatorPendingPurchases(creatorName);
 
@@ -75,7 +75,7 @@ export default function CreatorPendingPayments({ creatorName }: { creatorName: s
       invalidate();
       toast.success(t("paymentConfirmed"));
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при подтверждении" : "Растау қатесі"),
+    onError: () => toast.error(l({ ru: "Ошибка при подтверждении", kk: "Растау қатесі", en: "Could not confirm" })),
   });
 
   const rejectPayment = useMutation({
@@ -89,9 +89,9 @@ export default function CreatorPendingPayments({ creatorName }: { creatorName: s
     },
     onSuccess: () => {
       invalidate();
-      toast.success(language === "ru" ? "Запрос отклонён" : "Сұраныс қабылданбады");
+      toast.success(l({ ru: "Запрос отклонён", kk: "Сұраныс қабылданбады", en: "Request rejected" }));
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при отклонении" : "Қабылдамау қатесі"),
+    onError: () => toast.error(l({ ru: "Ошибка при отклонении", kk: "Қабылдамау қатесі", en: "Could not reject" })),
   });
 
   if (isLoading || pendingPurchases.length === 0) return null;
@@ -131,7 +131,7 @@ export default function CreatorPendingPayments({ creatorName }: { creatorName: s
                         const blob = await fetchCreatorReceiptBlob(purchase.latest_submission!.id);
                         window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
                       } catch {
-                        toast.error(language === "ru" ? "Не удалось открыть чек" : "Чекті ашу мүмкін болмады");
+                        toast.error(l({ ru: "Не удалось открыть чек", kk: "Чекті ашу мүмкін болмады", en: "Could not open the receipt" }));
                       }
                     }}
                   >
@@ -146,7 +146,7 @@ export default function CreatorPendingPayments({ creatorName }: { creatorName: s
                 variant="outline"
                 className="flex-1 text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground"
                 onClick={() => {
-                  if (window.confirm(language === "ru" ? "Отклонить запрос на оплату?" : "Төлем сұранысын қабылдамайсыз ба?")) {
+                  if (window.confirm(l({ ru: "Отклонить запрос на оплату?", kk: "Төлем сұранысын қабылдамайсыз ба?", en: "Reject this payment?" }))) {
                     rejectPayment.mutate(purchase.id);
                   }
                 }}

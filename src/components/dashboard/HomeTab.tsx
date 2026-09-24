@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, addHours, isBefore, isAfter } from "date-fns";
-import { ru, kk } from "date-fns/locale";
+import { ru, kk, enGB } from "date-fns/locale";
 import {
   useSimplePurchases,
   useSimpleSubscriptions,
@@ -32,9 +32,9 @@ interface HomeTabProps {
 
 const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   const navigate = useNavigate();
-  const { language, t } = useLanguage();
+  const { language, t, l } = useLanguage();
   const { user } = useSimpleAuth();
-  const locale = language === "kk" ? kk : ru;
+  const locale = { ru, kk, en: enGB }[language];
 
   const { data: purchases = [], isLoading: purchasesLoading } = useSimplePurchases();
   const { data: subscriptions = [], isLoading: subsLoading } = useSimpleSubscriptions();
@@ -147,9 +147,7 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
       <div className="py-4">
         <div className="flex flex-col items-center gap-4 text-center">
           <p className="text-muted-foreground">
-            {language === "ru"
-              ? "Пока ничего не куплено — начните с каталога"
-              : "Әзірге ештеңе сатып алынбады — каталогтан бастаңыз"}
+            {l({ ru: "Пока ничего не куплено — начните с каталога", kk: "Әзірге ештеңе сатып алынбады — каталогтан бастаңыз", en: "Nothing bought yet — start from the catalog" })}
           </p>
           {onBrowseCourses && (
             <Button onClick={onBrowseCourses}>{t("browseCourses")}</Button>

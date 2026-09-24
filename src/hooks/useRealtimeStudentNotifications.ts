@@ -16,7 +16,7 @@ export const useRealtimeStudentNotifications = (
   purchasedProductIds: string[] = []
 ) => {
   const queryClient = useQueryClient();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const badgeCountRef = useRef<number>(currentBadgeCount);
   const purchasedProductIdsRef = useRef<string[]>(purchasedProductIds);
   const activeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -38,10 +38,8 @@ export const useRealtimeStudentNotifications = (
     shownUnlockMaterialIdsRef.current.add(materialId);
 
     playPaymentSound();
-    const title = language === "ru" ? "Материал доступен! 📚" : "Материал қолжетімді! 📚";
-    const description = language === "ru"
-      ? `Материал "${materialTitle}" теперь доступен в курсе "${productTitle}"`
-      : `"${materialTitle}" материалы "${productTitle}" курсында қолжетімді`;
+    const title = l({ ru: "Материал доступен! 📚", kk: "Материал қолжетімді! 📚", en: "A material is available! 📚" });
+    const description = l({ ru: `Материал "${materialTitle}" теперь доступен в курсе "${productTitle}"`, kk: `"${materialTitle}" материалы "${productTitle}" курсында қолжетімді`, en: `"${materialTitle}" is now available in the "${productTitle}" course` });
     toast.success(title, { description, duration: 10000 });
     const newBadgeCount = badgeCountRef.current + 1;
     setAppBadge(newBadgeCount);
@@ -148,16 +146,14 @@ export const useRealtimeStudentNotifications = (
           }
 
           const isByTeacher = cancellation.cancelled_by === "teacher";
-          const title = language === "ru" ? "Запись отменена" : "Жазба болдырмалды";
+          const title = l({ ru: "Запись отменена", kk: "Жазба болдырмалды", en: "Booking cancelled" });
           const cancellerText = isByTeacher 
-            ? (language === "ru" ? "Учитель" : "Мұғалім")
-            : (language === "ru" ? "Автор" : "Автор");
-          let description = language === "ru"
-            ? `${cancellerText} отменил вашу запись на "${cancellation.product_title}" на ${cancellation.slot_date} в ${cancellation.slot_time?.slice(0, 5)}`
-            : `${cancellerText} сіздің "${cancellation.product_title}" сабағына ${cancellation.slot_date} күні ${cancellation.slot_time?.slice(0, 5)} жазбаңызды болдырмады`;
+            ? (l({ ru: "Учитель", kk: "Мұғалім", en: "Teacher" }))
+            : (l({ ru: "Автор", kk: "Автор", en: "Author" }));
+          let description = l({ ru: `${cancellerText} отменил вашу запись на "${cancellation.product_title}" на ${cancellation.slot_date} в ${cancellation.slot_time?.slice(0, 5)}`, kk: `${cancellerText} сіздің "${cancellation.product_title}" сабағына ${cancellation.slot_date} күні ${cancellation.slot_time?.slice(0, 5)} жазбаңызды болдырмады`, en: `${cancellerText} cancelled your booking of "${cancellation.product_title}" on ${cancellation.slot_date} at ${cancellation.slot_time?.slice(0, 5)}` });
           
           if (reasonText) {
-            description += language === "ru" ? `. Причина: ${reasonText}` : `. Себебі: ${reasonText}`;
+            description += l({ ru: `. Причина: ${reasonText}`, kk: `. Себебі: ${reasonText}`, en: `. Reason: ${reasonText}` });
           }
 
           toast.warning(title, { description, duration: 10000 });
@@ -194,10 +190,8 @@ export const useRealtimeStudentNotifications = (
               .eq("id", purchase.product_id)
               .single();
 
-            const title = language === "ru" ? "Оплата подтверждена! ✅" : "Төлем расталды! ✅";
-            const description = language === "ru"
-              ? `Ваша оплата за "${product?.title || "продукт"}" подтверждена`
-              : `"${product?.title || "өнім"}" төлеміңіз расталды`;
+            const title = l({ ru: "Оплата подтверждена! ✅", kk: "Төлем расталды! ✅", en: "Payment confirmed! ✅" });
+            const description = l({ ru: `Ваша оплата за "${product?.title || "продукт"}" подтверждена`, kk: `"${product?.title || "өнім"}" төлеміңіз расталды`, en: `Your payment for "${product?.title || "the product"}" has been confirmed` });
 
             toast.success(title, { description, duration: 10000 });
 
@@ -230,13 +224,11 @@ export const useRealtimeStudentNotifications = (
             reasonText = reschedule.reasons.join(", ");
           }
 
-          const title = language === "ru" ? "Урок перенесён" : "Сабақ ауыстырылды";
-          let description = language === "ru"
-            ? `Урок "${reschedule.product_title}" перенесён с ${reschedule.old_date} ${reschedule.old_time?.slice(0, 5)} на ${reschedule.new_date} ${reschedule.new_time?.slice(0, 5)}`
-            : `"${reschedule.product_title}" сабағы ${reschedule.old_date} ${reschedule.old_time?.slice(0, 5)} күнінен ${reschedule.new_date} ${reschedule.new_time?.slice(0, 5)} күніне ауыстырылды`;
+          const title = l({ ru: "Урок перенесён", kk: "Сабақ ауыстырылды", en: "Lesson rescheduled" });
+          let description = l({ ru: `Урок "${reschedule.product_title}" перенесён с ${reschedule.old_date} ${reschedule.old_time?.slice(0, 5)} на ${reschedule.new_date} ${reschedule.new_time?.slice(0, 5)}`, kk: `"${reschedule.product_title}" сабағы ${reschedule.old_date} ${reschedule.old_time?.slice(0, 5)} күнінен ${reschedule.new_date} ${reschedule.new_time?.slice(0, 5)} күніне ауыстырылды`, en: `"${reschedule.product_title}" moved from ${reschedule.old_date} ${reschedule.old_time?.slice(0, 5)} to ${reschedule.new_date} ${reschedule.new_time?.slice(0, 5)}` });
           
           if (reasonText) {
-            description += language === "ru" ? `. Причина: ${reasonText}` : `. Себебі: ${reasonText}`;
+            description += l({ ru: `. Причина: ${reasonText}`, kk: `. Себебі: ${reasonText}`, en: `. Reason: ${reasonText}` });
           }
 
           toast.warning(title, { description, duration: 10000 });
@@ -264,10 +256,8 @@ export const useRealtimeStudentNotifications = (
 
           playCancellationSound();
 
-          const title = language === "ru" ? "Запрос на перенос от преподавателя" : "Мұғалімнен ауыстыру сұранысы";
-          const description = language === "ru"
-            ? `Преподаватель просит перенести "${newRequest.product_title}" на ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}`
-            : `Мұғалім "${newRequest.product_title}" сабағын ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`;
+          const title = l({ ru: "Запрос на перенос от преподавателя", kk: "Мұғалімнен ауыстыру сұранысы", en: "Reschedule request from the teacher" });
+          const description = l({ ru: `Преподаватель просит перенести "${newRequest.product_title}" на ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}`, kk: `Мұғалім "${newRequest.product_title}" сабағын ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`, en: `The teacher asks to move "${newRequest.product_title}" to ${newRequest.new_date} ${newRequest.new_time?.slice(0, 5)}` });
 
           toast.info(title, { description, duration: 10000 });
 
@@ -305,16 +295,12 @@ export const useRealtimeStudentNotifications = (
           }
 
           const title = isApproved
-            ? (language === "ru" ? "Перенос подтверждён ✅" : "Ауыстыру расталды ✅")
-            : (language === "ru" ? "Перенос отклонён ❌" : "Ауыстыру қабылданбады ❌");
+            ? (l({ ru: "Перенос подтверждён ✅", kk: "Ауыстыру расталды ✅", en: "Reschedule confirmed ✅" }))
+            : (l({ ru: "Перенос отклонён ❌", kk: "Ауыстыру қабылданбады ❌", en: "Reschedule rejected ❌" }));
           
           let description = isApproved
-            ? (language === "ru"
-              ? `Урок "${request.product_title}" перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}`
-              : `"${request.product_title}" сабағы ${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды`)
-            : (language === "ru"
-              ? `Запрос на перенос "${request.product_title}" отклонён`
-              : `"${request.product_title}" ауыстыру сұранысы қабылданбады`);
+            ? (l({ ru: `Урок "${request.product_title}" перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}`, kk: `"${request.product_title}" сабағы ${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды`, en: `"${request.product_title}" moved to ${request.new_date} ${request.new_time?.slice(0, 5)}` }))
+            : (l({ ru: `Запрос на перенос "${request.product_title}" отклонён`, kk: `"${request.product_title}" ауыстыру сұранысы қабылданбады`, en: `The request to move "${request.product_title}" was rejected` }));
 
           if (request.response_comment) {
             description += `\n${request.response_comment}`;

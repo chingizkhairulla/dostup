@@ -42,7 +42,7 @@ export const useRealtimeBookingNotifications = (
   currentBadgeCount: number = 0
 ) => {
   const queryClient = useQueryClient();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const productIdsRef = useRef<string[]>(productIds);
   const bookingCacheRef = useRef<Map<string, DeletedBookingInfo>>(new Map());
   const badgeCountRef = useRef<number>(currentBadgeCount);
@@ -77,7 +77,7 @@ export const useRealtimeBookingNotifications = (
       
       // Cache the booking info for potential DELETE events
       const info: DeletedBookingInfo = {
-        userName: booking.user?.name || (language === "ru" ? "Ученик" : "Оқушы"),
+        userName: booking.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" })),
         productTitle: booking.schedule?.product?.title || "",
         date: booking.time_slot?.date || "",
         time: booking.time_slot?.start_time || "",
@@ -120,7 +120,7 @@ export const useRealtimeBookingNotifications = (
       
       bookings?.forEach((booking: any) => {
         const info: DeletedBookingInfo = {
-          userName: booking.user?.name || (language === "ru" ? "Ученик" : "Оқушы"),
+          userName: booking.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" })),
           productTitle: booking.schedule?.product?.title || "",
           date: booking.time_slot?.date || "",
           time: booking.time_slot?.start_time || "",
@@ -185,15 +185,13 @@ export const useRealtimeBookingNotifications = (
           playBookingSound();
 
           // Show toast notification
-          const userName = bookingDetails.user?.name || (language === "ru" ? "Ученик" : "Оқушы");
+          const userName = bookingDetails.user?.name || (l({ ru: "Ученик", kk: "Оқушы", en: "Student" }));
           const productTitle = bookingDetails.schedule?.product?.title || "";
           const date = bookingDetails.time_slot?.date || "";
           const time = bookingDetails.time_slot?.start_time || "";
 
-          const title = language === "ru" ? "Новая запись!" : "Жаңа жазба!";
-          const description = language === "ru" 
-            ? `${userName} записался на "${productTitle}" на ${date} в ${time}`
-            : `${userName} "${productTitle}" сабағына ${date} күні ${time} уақытына жазылды`;
+          const title = l({ ru: "Новая запись!", kk: "Жаңа жазба!", en: "New booking!" });
+          const description = l({ ru: `${userName} записался на "${productTitle}" на ${date} в ${time}`, kk: `${userName} "${productTitle}" сабағына ${date} күні ${time} уақытына жазылды`, en: `${userName} booked "${productTitle}" for ${date} at ${time}` });
 
           toast.success(title, {
             description,
@@ -255,9 +253,7 @@ export const useRealtimeBookingNotifications = (
           playCancellationSound();
 
           // Build description with reasons/comment
-          let description = language === "ru" 
-            ? `${cachedInfo.userName} отменил запись на "${cachedInfo.productTitle}" на ${cachedInfo.date} в ${cachedInfo.time}`
-            : `${cachedInfo.userName} "${cachedInfo.productTitle}" сабағына ${cachedInfo.date} күні ${cachedInfo.time} жазбасын жойды`;
+          let description = l({ ru: `${cachedInfo.userName} отменил запись на "${cachedInfo.productTitle}" на ${cachedInfo.date} в ${cachedInfo.time}`, kk: `${cachedInfo.userName} "${cachedInfo.productTitle}" сабағына ${cachedInfo.date} күні ${cachedInfo.time} жазбасын жойды`, en: `${cachedInfo.userName} cancelled their booking of "${cachedInfo.productTitle}" for ${cachedInfo.date} at ${cachedInfo.time}` });
 
           // Add reasons or comment to description
           if (comment) {
@@ -266,7 +262,7 @@ export const useRealtimeBookingNotifications = (
             description += `\n${reasons.join(", ")}`;
           }
 
-          const title = language === "ru" ? "Запись отменена" : "Жазба жойылды";
+          const title = l({ ru: "Запись отменена", kk: "Жазба жойылды", en: "Booking cancelled" });
 
           toast.warning(title, {
             description,
@@ -321,7 +317,7 @@ export const useRealtimeBookingNotifications = (
           playBookingSound();
 
           // Fetch student name
-          let studentName = language === "ru" ? "Ученик" : "Оқушы";
+          let studentName = l({ ru: "Ученик", kk: "Оқушы", en: "Student" });
           if (newRequest.simple_user_id) {
             const { data: student } = await supabase
               .from("simple_users")
@@ -331,10 +327,8 @@ export const useRealtimeBookingNotifications = (
             if (student) studentName = student.name;
           }
 
-          const title = language === "ru" ? "Запрос на перенос" : "Ауыстыру сұранысы";
-          const description = language === "ru"
-            ? `${studentName} просит перенести "${newRequest.product_title}" с ${newRequest.old_time?.slice(0, 5)} на ${newRequest.new_time?.slice(0, 5)}`
-            : `${studentName} "${newRequest.product_title}" сабағын ${newRequest.old_time?.slice(0, 5)} уақытынан ${newRequest.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`;
+          const title = l({ ru: "Запрос на перенос", kk: "Ауыстыру сұранысы", en: "Reschedule request" });
+          const description = l({ ru: `${studentName} просит перенести "${newRequest.product_title}" с ${newRequest.old_time?.slice(0, 5)} на ${newRequest.new_time?.slice(0, 5)}`, kk: `${studentName} "${newRequest.product_title}" сабағын ${newRequest.old_time?.slice(0, 5)} уақытынан ${newRequest.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`, en: `${studentName} asks to move "${newRequest.product_title}" from ${newRequest.old_time?.slice(0, 5)} to ${newRequest.new_time?.slice(0, 5)}` });
 
           toast.info(title, { description, duration: 10000 });
 
@@ -361,7 +355,7 @@ export const useRealtimeBookingNotifications = (
           if (updated.status === "pending") return;
 
           // Fetch student name
-          let studentName = language === "ru" ? "Ученик" : "Оқушы";
+          let studentName = l({ ru: "Ученик", kk: "Оқушы", en: "Student" });
           if (updated.simple_user_id) {
             const { data: student } = await supabase
               .from("simple_users")
@@ -374,17 +368,13 @@ export const useRealtimeBookingNotifications = (
           playBookingSound();
 
           if (updated.status === "approved") {
-            const title = language === "ru" ? "Перенос подтверждён" : "Ауыстыру расталды";
-            const description = language === "ru"
-              ? `${studentName} подтвердил перенос "${updated.product_title}" на ${updated.new_time?.slice(0, 5)}`
-              : `${studentName} "${updated.product_title}" сабағын ${updated.new_time?.slice(0, 5)} уақытына ауыстыруды растады`;
+            const title = l({ ru: "Перенос подтверждён", kk: "Ауыстыру расталды", en: "Reschedule confirmed" });
+            const description = l({ ru: `${studentName} подтвердил перенос "${updated.product_title}" на ${updated.new_time?.slice(0, 5)}`, kk: `${studentName} "${updated.product_title}" сабағын ${updated.new_time?.slice(0, 5)} уақытына ауыстыруды растады`, en: `${studentName} confirmed moving "${updated.product_title}" to ${updated.new_time?.slice(0, 5)}` });
             toast.success(title, { description, duration: 10000 });
           } else if (updated.status === "rejected") {
-            const title = language === "ru" ? "Перенос отклонён" : "Ауыстыру қабылданбады";
+            const title = l({ ru: "Перенос отклонён", kk: "Ауыстыру қабылданбады", en: "Reschedule rejected" });
             const responseComment = updated.response_comment || "";
-            const description = language === "ru"
-              ? `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}`
-              : `${studentName} "${updated.product_title}" ауыстыруды қабылдамады${responseComment ? `: "${responseComment}"` : ""}`;
+            const description = l({ ru: `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}`, kk: `${studentName} "${updated.product_title}" ауыстыруды қабылдамады${responseComment ? `: "${responseComment}"` : ""}`, en: `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}` });
             toast.warning(title, { description, duration: 10000 });
           }
 

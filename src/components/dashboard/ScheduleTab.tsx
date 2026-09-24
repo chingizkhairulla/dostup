@@ -3,7 +3,7 @@ import { useSimplePurchases, useSimpleSchedules, useSimpleTimeSlots, useSimpleBo
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Calendar, Clock, Users, User, Check, Loader2, X, CalendarCheck, GraduationCap, Link as LinkIcon, Copy, Timer, Video } from "lucide-react";
 import { format, addDays, isSameDay, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru, enGB } from "date-fns/locale";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
@@ -29,7 +29,7 @@ const ScheduleTab = () => {
   const { data: purchases, isLoading: purchasesLoading } = useSimplePurchases();
   const { data: schedules, isLoading: schedulesLoading } = useSimpleSchedules();
   const { data: bookings, isLoading: bookingsLoading } = useSimpleBookings();
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { user } = useSimpleAuth();
   const createBooking = useCreateSimpleBooking();
   const cancelBooking = useCancelSimpleBooking();
@@ -44,7 +44,7 @@ const ScheduleTab = () => {
       });
     },
     onSuccess: () => {
-      toast.success(language === "ru" ? "Запрос отменён" : "Сұраныс болдырмалды");
+      toast.success(l({ ru: "Запрос отменён", kk: "Сұраныс болдырмалды", en: "Request cancelled" }));
       queryClient.invalidateQueries({ queryKey: ["student-pending-reschedules"] });
     },
   });
@@ -92,10 +92,10 @@ const ScheduleTab = () => {
       queryClient.invalidateQueries({ queryKey: ["student-pending-reschedules"] });
       queryClient.invalidateQueries({ queryKey: ["simple-bookings"] });
       queryClient.invalidateQueries({ queryKey: ["simple-time-slots"] });
-      toast.success(language === "ru" ? "Перенос подтверждён" : "Ауыстыру расталды");
+      toast.success(l({ ru: "Перенос подтверждён", kk: "Ауыстыру расталды", en: "Reschedule confirmed" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка при подтверждении" : "Растау қатесі");
+      toast.error(l({ ru: "Ошибка при подтверждении", kk: "Растау қатесі", en: "Could not confirm" }));
     },
   });
 
@@ -112,10 +112,10 @@ const ScheduleTab = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["student-pending-reschedules"] });
       setRejectingRequestId(null);
-      toast.success(language === "ru" ? "Запрос отклонён" : "Сұраныс қабылданбады");
+      toast.success(l({ ru: "Запрос отклонён", kk: "Сұраныс қабылданбады", en: "Request rejected" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка" : "Қате");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     },
   });
 
@@ -148,14 +148,14 @@ const ScheduleTab = () => {
       });
     },
     onSuccess: () => {
-      toast.success(language === "ru" ? "Запрос на перенос отправлен" : "Ауыстыру сұранысы жіберілді");
+      toast.success(l({ ru: "Запрос на перенос отправлен", kk: "Ауыстыру сұранысы жіберілді", en: "Reschedule request sent" }));
       setRescheduleBooking(null);
       queryClient.invalidateQueries({ queryKey: ["student-pending-reschedules"] });
       queryClient.invalidateQueries({ queryKey: ["student-incoming-reschedules"] });
       queryClient.invalidateQueries({ queryKey: ["student-incoming-reschedules-count"] });
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка при отправке запроса" : "Сұраныс жіберу қатесі");
+      toast.error(l({ ru: "Ошибка при отправке запроса", kk: "Сұраныс жіберу қатесі", en: "Could not send the request" }));
     },
   });
 
@@ -439,7 +439,7 @@ const ScheduleTab = () => {
                         }
                       }}
                       className="text-muted-foreground hover:text-primary hover:bg-primary/10"
-                      title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
+                      title={l({ ru: "Видеозвонок", kk: "Бейне қоңырау", en: "Video call" })}
                     >
                       <Video className="w-4 h-4" />
                     </Button>
@@ -512,9 +512,7 @@ const ScheduleTab = () => {
                     return (
                       <div className="mt-2 p-3 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-700 space-y-2">
                         <div className="text-orange-600 dark:text-orange-400 text-sm font-medium">
-                          {language === "ru"
-                            ? `Преподаватель просит перенести на ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`
-                            : `Мұғалім ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`}
+                          {l({ ru: `Преподаватель просит перенести на ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`, kk: `Мұғалім ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)} уақытына ауыстыруды сұрайды`, en: `The teacher asks to move it to ${format(parseISO(pendingReq.new_date), "d MMM", { locale: enGB })} ${pendingReq.new_time?.slice(0, 5)}` })}
                         </div>
                         {((pendingReq.reasons?.length > 0) || pendingReq.comment) && (
                           <div className="text-xs text-muted-foreground italic">
@@ -531,7 +529,7 @@ const ScheduleTab = () => {
                             {approveIncomingReschedule.isPending ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                              <><Check className="w-3.5 h-3.5 mr-1" />{language === "ru" ? "Подтвердить" : "Растау"}</>
+                              <><Check className="w-3.5 h-3.5 mr-1" />{l({ ru: "Подтвердить", kk: "Растау", en: "Confirm" })}</>
                             )}
                           </Button>
                           <Button
@@ -541,7 +539,7 @@ const ScheduleTab = () => {
                             disabled={approveIncomingReschedule.isPending || rejectIncomingReschedule.isPending}
                             className="h-7 text-xs px-3 text-destructive border-destructive/30"
                           >
-                            <X className="w-3.5 h-3.5 mr-1" />{language === "ru" ? "Отклонить" : "Қабылдамау"}
+                            <X className="w-3.5 h-3.5 mr-1" />{l({ ru: "Отклонить", kk: "Қабылдамау", en: "Reject" })}
                           </Button>
                         </div>
                       </div>
@@ -552,15 +550,13 @@ const ScheduleTab = () => {
                   return (
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-orange-500 text-sm font-medium">
-                        {language === "ru"
-                          ? `Ожидание подтверждения переноса на ${pendingReq.new_time?.slice(0, 5)}`
-                          : `Ауыстыруды растауды күтуде: ${pendingReq.new_time?.slice(0, 5)}`}
+                        {l({ ru: `Ожидание подтверждения переноса на ${pendingReq.new_time?.slice(0, 5)}`, kk: `Ауыстыруды растауды күтуде: ${pendingReq.new_time?.slice(0, 5)}`, en: `Waiting for the move to ${pendingReq.new_time?.slice(0, 5)} to be confirmed` })}
                       </span>
                       <button
                         onClick={() => cancelRescheduleRequest.mutate(pendingReq.id)}
                         disabled={cancelRescheduleRequest.isPending}
                         className="text-orange-500 hover:text-destructive transition-colors p-0.5 rounded-full hover:bg-muted"
-                        title={language === "ru" ? "Отменить запрос" : "Сұранысты болдырмау"}
+                        title={l({ ru: "Отменить запрос", kk: "Сұранысты болдырмау", en: "Cancel the request" })}
                       >
                         <X className="w-4 h-4" />
                       </button>

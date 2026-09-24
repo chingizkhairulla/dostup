@@ -10,7 +10,7 @@ interface Props { creatorName: string; onGoToProducts?: () => void; }
 
 const CreatorAnnouncementsTab = ({ creatorName, onGoToProducts }: Props) => {
   const { data: products = [], isLoading } = useCreatorProducts();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ const CreatorAnnouncementsTab = ({ creatorName, onGoToProducts }: Props) => {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Megaphone className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">{language === "kk" ? "Хабарландырулар" : "Объявления"}</h2>
+          <h2 className="text-lg font-semibold">{l({ ru: "Объявления", kk: "Хабарландырулар", en: "Announcements" })}</h2>
         </div>
         <NoProductsEmptyState section="announcements" onGoToProducts={onGoToProducts} />
       </div>
@@ -46,7 +46,7 @@ const CreatorAnnouncementsTab = ({ creatorName, onGoToProducts }: Props) => {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">
-        {language === "kk" ? "Хабарландырулар" : "Объявления"}
+        {l({ ru: "Объявления", kk: "Хабарландырулар", en: "Announcements" })}
       </h2>
       <ProductSwitcher
         products={products.map((p) => ({ id: p.id, title: p.title }))}

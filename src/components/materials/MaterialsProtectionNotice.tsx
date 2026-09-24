@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 const STORAGE_KEY = "materials_warning_shown";
 
 const MaterialsProtectionNotice = () => {
-  const { language } = useLanguage();
+  const { l } = useLanguage();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -21,16 +21,17 @@ const MaterialsProtectionNotice = () => {
     }
   }, []);
 
-  const isKk = language === "kk";
 
   return (
     <>
       <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
         <ShieldAlert className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
         <p className="text-xs sm:text-sm text-destructive font-medium leading-snug">
-          {isKk
-            ? "Мазмұн қорғалған. Скриншот жасау, экранды жазу және материалдарды үшінші тарапқа жіберуге тыйым салынады"
-            : "Контент защищён. Запрещены скриншоты, запись экрана и пересылка материалов третьим лицам"}
+          {l({
+            ru: "Контент защищён. Запрещены скриншоты, запись экрана и пересылка материалов третьим лицам",
+            kk: "Мазмұн қорғалған. Скриншот жасау, экранды жазу және материалдарды үшінші тарапқа жіберуге тыйым салынады",
+            en: "This content is protected. Screenshots, screen recording and passing materials to third parties are not allowed",
+          })}
         </p>
       </div>
 
@@ -41,17 +42,19 @@ const MaterialsProtectionNotice = () => {
               <AlertTriangle className="w-6 h-6 text-destructive" />
             </div>
             <DialogTitle className="text-center">
-              {isKk ? "Контент қорғалған" : "Контент защищён"}
+              {l({ ru: "Контент защищён", kk: "Контент қорғалған", en: "This content is protected" })}
             </DialogTitle>
             <DialogDescription className="text-center leading-relaxed">
-              {isKk
-                ? "Материалдарды скриншот жасау, экранды жазу және үшінші тарапқа жіберуге тыйым салынады. Барлық материалдарда сіздің деректеріңізбен су таңбасы бар. Бұзу қол жеткізуді бұғаттауға әкеледі."
-                : "Скриншоты, запись экрана и пересылка материалов третьим лицам запрещены. Все материалы содержат водяной знак с вашими данными. Нарушение повлечёт блокировку доступа."}
+              {l({
+                ru: "Скриншоты, запись экрана и пересылка материалов третьим лицам запрещены. Все материалы содержат водяной знак с вашими данными. Нарушение повлечёт блокировку доступа.",
+                kk: "Материалдарды скриншот жасау, экранды жазу және үшінші тарапқа жіберуге тыйым салынады. Барлық материалдарда сіздің деректеріңізбен су таңбасы бар. Бұзу қол жеткізуді бұғаттауға әкеледі.",
+                en: "Screenshots, screen recording and passing materials to third parties are not allowed. Every material carries a watermark with your details. Breaking this rule will block your access.",
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button className="w-full" onClick={() => setOpen(false)}>
-              {isKk ? "Түсінікті" : "Понятно"}
+              {l({ ru: "Понятно", kk: "Түсінікті", en: "Understood" })}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,6 +2,16 @@ import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { profileHomePath } from "@/lib/creatorAuth";
+import { toLanguage } from "@/lib/language";
+
+/** Storage can throw in a private window; an error screen must never add one. */
+function safeStoredLanguage(): string | null {
+  try {
+    return localStorage.getItem("language");
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   children: ReactNode;
@@ -38,9 +48,11 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      // Get language from localStorage or default to "ru"
-      const language = (localStorage.getItem("language") as "ru" | "kk") || "ru";
-      
+      // This screen renders outside the language provider, so it reads storage
+      // itself — through the guard, since an unrecognised value here would
+      // index the table below with undefined and blank the error page.
+      const language = toLanguage(safeStoredLanguage());
+
       const translations = {
         ru: {
           title: "Что-то пошло не так",
@@ -59,6 +71,15 @@ class ErrorBoundary extends Component<Props, State> {
           option2: "Бірнеше минут күтіп, қайта көріңіз",
           reloadButton: "Бетті қайта жүктеу",
           homeButton: "Басты бетке",
+        },
+        en: {
+          title: "Something went wrong",
+          message: "Do not worry — this is a temporary technical problem.",
+          tryThese: "Try this:",
+          option1: "Reload the page",
+          option2: "Wait a couple of minutes and try again",
+          reloadButton: "Reload the page",
+          homeButton: "Go home",
         },
       };
 

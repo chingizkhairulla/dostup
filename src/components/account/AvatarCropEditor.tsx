@@ -29,7 +29,7 @@ const AvatarCropEditor = ({
   onCancel,
   onSave,
 }: AvatarCropEditorProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -42,9 +42,7 @@ const AvatarCropEditor = ({
       <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Move className="w-3.5 h-3.5" />
         <span>
-          {language === "ru"
-            ? "Перетащите фото мышкой или пальцем для выравнивания"
-            : "Фотоны реттеу үшін жылжытыңыз"}
+          {l({ ru: "Перетащите фото мышкой или пальцем для выравнивания", kk: "Фотоны реттеу үшін жылжытыңыз", en: "Drag the photo with your mouse or finger to line it up" })}
         </span>
       </div>
 

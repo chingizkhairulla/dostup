@@ -1,3 +1,6 @@
+import type { Language, Translated } from "./language";
+import { CATEGORY_NAMES_EN, SUBCATEGORY_NAMES_EN } from "./taxonomyEn";
+
 export type LessonFormat = "individual" | "group";
 export type BillingPeriod = "month" | "quarter" | "year";
 
@@ -81,12 +84,16 @@ function pluralRu(count: number, one: string, few: string, many: string) {
   return many;
 }
 
-export function sellerReviewsLabel(count: number, language: string) {
+// English has only one/other, so it needs its own branch rather than the
+// Russian one/few/many rule.
+export function sellerReviewsLabel(count: number, language: Language) {
+  if (language === "en") return `${count} ${count === 1 ? "review" : "reviews"}`;
   if (language === "kk") return `${count} пікір`;
   return `${count} ${pluralRu(count, "отзыв", "отзыва", "отзывов")}`;
 }
 
-export function sellerSalesLabel(count: number, language: string) {
+export function sellerSalesLabel(count: number, language: Language) {
+  if (language === "en") return `${count} ${count === 1 ? "sale" : "sales"}`;
   if (language === "kk") return `${count} сатылым`;
   return `${count} ${pluralRu(count, "продажа", "продажи", "продаж")}`;
 }
@@ -120,21 +127,36 @@ export function isNewProduct(createdAt: string | null | undefined): boolean {
   return Date.now() - created < NEW_PRODUCT_WINDOW_MS;
 }
 
-export function categoryLabel(category: Pick<CatalogCategory, "name_ru" | "name_kk">, language: "ru" | "kk") {
+// English names come from a slug-keyed map rather than the database; the
+// fallback is deliberately Russian, never Kazakh, so an unmapped slug shows
+// the language most of the audience reads.
+function englishOr(map: Record<string, string>, slug: string | null | undefined, fallback: string) {
+  return (slug && map[slug]) || fallback;
+}
+
+export function categoryLabel(
+  category: Pick<CatalogCategory, "slug" | "name_ru" | "name_kk">,
+  language: Language,
+) {
+  if (language === "en") return englishOr(CATEGORY_NAMES_EN, category.slug, category.name_ru);
   return language === "kk" ? category.name_kk : category.name_ru;
 }
 
 export function productCategoryLabel(
-  product: Pick<CatalogProduct, "category_name_ru" | "category_name_kk">,
-  language: "ru" | "kk",
+  product: Pick<CatalogProduct, "category_slug" | "category_name_ru" | "category_name_kk">,
+  language: Language,
 ) {
+  if (language === "en") {
+    return englishOr(CATEGORY_NAMES_EN, product.category_slug, product.category_name_ru);
+  }
   return language === "kk" ? product.category_name_kk : product.category_name_ru;
 }
 
 export function subcategoryLabel(
-  subcategory: Pick<CatalogSubcategory, "name_ru" | "name_kk">,
-  language: "ru" | "kk",
+  subcategory: Pick<CatalogSubcategory, "slug" | "name_ru" | "name_kk">,
+  language: Language,
 ) {
+  if (language === "en") return englishOr(SUBCATEGORY_NAMES_EN, subcategory.slug, subcategory.name_ru);
   return language === "kk" ? subcategory.name_kk : subcategory.name_ru;
 }
 
@@ -147,18 +169,18 @@ export function visibleTaxonomy(categories: CatalogCategory[]): CatalogCategory[
     }));
 }
 
-export function billingPeriodLabel(period: BillingPeriod, language: "ru" | "kk") {
-  const labels: Record<BillingPeriod, { ru: string; kk: string }> = {
-    month: { ru: "в месяц", kk: "айына" },
-    quarter: { ru: "в квартал", kk: "тоқсанына" },
-    year: { ru: "в год", kk: "жылына" },
+export function billingPeriodLabel(period: BillingPeriod, language: Language) {
+  const labels: Record<BillingPeriod, Translated> = {
+    month: { ru: "в месяц", kk: "айына", en: "per month" },
+    quarter: { ru: "в квартал", kk: "тоқсанына", en: "per quarter" },
+    year: { ru: "в год", kk: "жылына", en: "per year" },
   };
-  return language === "kk" ? labels[period].kk : labels[period].ru;
+  return labels[period][language];
 }
 
 export function formatCatalogPrice(
   product: Pick<CatalogProduct, "price" | "category_slug" | "billing_period">,
-  language: "ru" | "kk",
+  language: Language,
 ) {
   const price = formatPriceTenge(product.price);
   if (product.category_slug === "subscriptions" && product.billing_period) {
@@ -167,13 +189,15 @@ export function formatCatalogPrice(
   return price;
 }
 
-export function formatEventDate(iso: string, language: "ru" | "kk") {
+export function formatEventDate(iso: string, language: Language) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  const months =
-    language === "kk"
-      ? ["қаң", "ақп", "нау", "сәу", "мам", "мау", "шіл", "там", "қыр", "қаз", "қар", "жел"]
-      : ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const MONTHS: Record<Language, string[]> = {
+    ru: ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
+    kk: ["қаң", "ақп", "нау", "сәу", "мам", "мау", "шіл", "там", "қыр", "қаз", "қар", "жел"],
+    en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  };
+  const months = MONTHS[language];
   const day = date.getDate();
   const month = months[date.getMonth()] || "";
   const hours = String(date.getHours()).padStart(2, "0");

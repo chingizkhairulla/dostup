@@ -11,11 +11,13 @@ import { ChevronLeft, ChevronRight, Clock, ChevronDown, X, Trash2 } from "lucide
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/language";
 
 interface SlotCreationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  language: "ru" | "kk";
+  language: Language;
   onCreateSlots: (params: {
     daySlots?: Record<number, { start: string; end: string }[]>;
     timeIntervals: { start: string; end: string }[];
@@ -39,6 +41,7 @@ export default function SlotCreationWizard({
   onCreateSlots,
   isPending,
 }: SlotCreationWizardProps) {
+  const { l } = useLanguage();
   const [step, setStep] = useState(1);
 
   // Step 1 State: cells format is `${dayIndex}_${hour}:${minute}`, e.g. "0_09:00", "0_09:15"
@@ -564,9 +567,7 @@ export default function SlotCreationWizard({
                       {t.everyWeek}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {language === "ru"
-                        ? "Автоматически повторять выбранные часы каждую неделю"
-                        : "Таңдалған сағаттарды әр апта сайын қайталау"}
+                      {l({ ru: "Автоматически повторять выбранные часы каждую неделю", kk: "Таңдалған сағаттарды әр апта сайын қайталау", en: "Repeat the chosen hours automatically every week" })}
                     </p>
                   </div>
                   <Switch id="repeat-switch" checked={repeatWeekly} onCheckedChange={setRepeatWeekly} />
@@ -574,7 +575,7 @@ export default function SlotCreationWizard({
 
                 {repeatWeekly && (
                   <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
-                    <Label className="text-xs font-semibold">{language === "ru" ? "Срок повторения:" : "Қайталау мерзімі:"}</Label>
+                    <Label className="text-xs font-semibold">{l({ ru: "Срок повторения:", kk: "Қайталау мерзімі:", en: "Repeat until:" })}</Label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {(["2weeks", "1month", "2months", "custom"] as const).map((period) => (
                         <Button
@@ -598,7 +599,7 @@ export default function SlotCreationWizard({
 
                     {repeatPeriod === "custom" && (
                       <div className="pt-2 max-w-xs">
-                        <Label className="text-xs">{language === "ru" ? "Повторять до даты:" : "Күнге дейін қайталау:"}</Label>
+                        <Label className="text-xs">{l({ ru: "Повторять до даты:", kk: "Күнге дейін қайталау:", en: "Repeat up to the date:" })}</Label>
                         <Input
                           type="date"
                           value={repeatUntil}
@@ -721,7 +722,7 @@ export default function SlotCreationWizard({
                     <Input
                       id="wiz-title"
                       value={title}
-                      placeholder={language === "ru" ? "Например: Английский для начинающих" : "Сабақ атауы"}
+                      placeholder={l({ ru: "Например: Английский для начинающих", kk: "Сабақ атауы", en: "For example: English for beginners" })}
                       onChange={(e) => setTitle(e.target.value)}
                       className="h-9 text-sm"
                     />
@@ -733,7 +734,7 @@ export default function SlotCreationWizard({
                     <Input
                       id="wiz-desc"
                       value={description}
-                      placeholder={language === "ru" ? "Краткое описание урока..." : "Сабақ сипаттамасы..."}
+                      placeholder={l({ ru: "Краткое описание урока...", kk: "Сабақ сипаттамасы...", en: "A short description of the lesson..." })}
                       onChange={(e) => setDescription(e.target.value)}
                       className="h-9 text-sm"
                     />

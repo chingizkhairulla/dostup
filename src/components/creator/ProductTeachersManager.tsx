@@ -32,7 +32,7 @@ interface ProductTeachersManagerProps {
 }
 
 const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: ProductTeachersManagerProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { data: teachers = [], isLoading } = useProductTeachers(productId);
   const addTeacher = useAddProductTeacher();
   const removeTeacher = useRemoveProductTeacher();
@@ -45,7 +45,7 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
     e.preventDefault();
     
     if (!firstName.trim() || !lastName.trim()) {
-      toast.error(language === "ru" ? "Заполните имя и фамилию" : "Аты мен тегін толтырыңыз");
+      toast.error(l({ ru: "Заполните имя и фамилию", kk: "Аты мен тегін толтырыңыз", en: "Fill in the first and last name" }));
       return;
     }
 
@@ -56,11 +56,11 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
         productId,
         teacherName: fullName,
       });
-      toast.success(language === "ru" ? "Учитель добавлен!" : "Мұғалім қосылды!");
+      toast.success(l({ ru: "Учитель добавлен!", kk: "Мұғалім қосылды!", en: "Teacher added!" }));
       setFirstName("");
       setLastName("");
     } catch (error: any) {
-      toast.error(error.message || (language === "ru" ? "Ошибка при добавлении" : "Қосу кезінде қате"));
+      toast.error(error.message || (l({ ru: "Ошибка при добавлении", kk: "Қосу кезінде қате", en: "Could not add" })));
     }
   };
 
@@ -69,9 +69,9 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
     
     try {
       await removeTeacher.mutateAsync(removingTeacherId);
-      toast.success(language === "ru" ? "Учитель удалён" : "Мұғалім жойылды");
+      toast.success(l({ ru: "Учитель удалён", kk: "Мұғалім жойылды", en: "Teacher removed" }));
     } catch (error) {
-      toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате");
+      toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" }));
     } finally {
       setRemovingTeacherId(null);
     }
@@ -84,7 +84,7 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
-              {language === "ru" ? "Учителя" : "Мұғалімдер"}: {productTitle}
+              {l({ ru: "Учителя", kk: "Мұғалімдер", en: "Teachers" })}: {productTitle}
             </DialogTitle>
           </DialogHeader>
 
@@ -92,17 +92,17 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
           <form onSubmit={handleAddTeacher} className="space-y-4 mt-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Имя" : "Аты"}</Label>
+                <Label>{l({ ru: "Имя", kk: "Аты", en: "First name" })}</Label>
                 <Input
-                  placeholder={language === "ru" ? "Введите имя" : "Атын енгізіңіз"}
+                  placeholder={l({ ru: "Введите имя", kk: "Атын енгізіңіз", en: "Enter the first name" })}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Фамилия" : "Тегі"}</Label>
+                <Label>{l({ ru: "Фамилия", kk: "Тегі", en: "Last name" })}</Label>
                 <Input
-                  placeholder={language === "ru" ? "Введите фамилию" : "Тегін енгізіңіз"}
+                  placeholder={l({ ru: "Введите фамилию", kk: "Тегін енгізіңіз", en: "Enter the last name" })}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                 />
@@ -118,7 +118,7 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
               ) : (
                 <>
                   <UserPlus className="w-4 h-4 mr-2" />
-                  {language === "ru" ? "Добавить учителя" : "Мұғалімді қосу"}
+                  {l({ ru: "Добавить учителя", kk: "Мұғалімді қосу", en: "Add a teacher" })}
                 </>
               )}
             </Button>
@@ -127,7 +127,7 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
           {/* Teachers List */}
           <div className="mt-6 space-y-2">
             <h3 className="text-sm font-medium text-muted-foreground">
-              {language === "ru" ? "Добавленные учителя" : "Қосылған мұғалімдер"}
+              {l({ ru: "Добавленные учителя", kk: "Қосылған мұғалімдер", en: "Teachers you have added" })}
             </h3>
             
             {isLoading ? (
@@ -138,9 +138,7 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
               <div className="text-center py-6 text-muted-foreground">
                 <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">
-                  {language === "ru" 
-                    ? "Учителя ещё не добавлены" 
-                    : "Мұғалімдер әлі қосылмаған"}
+                  {l({ ru: "Учителя ещё не добавлены", kk: "Мұғалімдер әлі қосылмаған", en: "No teachers have been added yet" })}
                 </p>
               </div>
             ) : (
@@ -172,12 +170,10 @@ const ProductTeachersManager = ({ productId, productTitle, isOpen, onClose }: Pr
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "ru" ? "Удалить учителя?" : "Мұғалімді жою керек пе?"}
+              {l({ ru: "Удалить учителя?", kk: "Мұғалімді жою керек пе?", en: "Remove this teacher?" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "ru" 
-                ? "Учитель потеряет доступ к этому продукту и его расписания будут удалены."
-                : "Мұғалім бұл өнімге қол жеткізуден айырылады және оның кестелері жойылады."}
+              {l({ ru: "Учитель потеряет доступ к этому продукту и его расписания будут удалены.", kk: "Мұғалім бұл өнімге қол жеткізуден айырылады және оның кестелері жойылады.", en: "The teacher will lose access to this product and their schedules will be deleted." })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import { useCreatorSimpleBookings } from "@/hooks/useSimplePurchases";
 import { format, differenceInMinutes, differenceInHours } from "date-fns";
-import { ru, kk } from "date-fns/locale";
+import { ru, kk, enGB } from "date-fns/locale";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
@@ -57,7 +57,7 @@ interface CreatorNotificationsTabProps {
 }
 
 const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificationsTabProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const queryClient = useQueryClient();
   const { data: products } = useCreatorProducts(creatorName);
   const productIds = useMemo(() => products?.map(p => p.id) || [], [products]);
@@ -95,7 +95,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
   // State for reject reschedule dialog
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
 
-  const dateLocale = language === "kk" ? kk : ru;
+  const dateLocale = { ru, kk, en: enGB }[language];
 
   // Получить ID расписаний автора (без teacher_id)
   const { data: authorScheduleIds = [] } = useQuery({
@@ -184,10 +184,10 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-reschedule-requests"] });
-      toast.success(language === "ru" ? "Перенос подтверждён" : "Ауыстыру расталды");
+      toast.success(l({ ru: "Перенос подтверждён", kk: "Ауыстыру расталды", en: "Reschedule confirmed" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка при подтверждении" : "Растау қатесі");
+      toast.error(l({ ru: "Ошибка при подтверждении", kk: "Растау қатесі", en: "Could not confirm" }));
     },
   });
 
@@ -203,10 +203,10 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-reschedule-requests"] });
       setRejectingRequestId(null);
-      toast.success(language === "ru" ? "Запрос отклонён" : "Сұраныс қабылданбады");
+      toast.success(l({ ru: "Запрос отклонён", kk: "Сұраныс қабылданбады", en: "Request rejected" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка" : "Қате");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     },
   });
 
@@ -361,13 +361,13 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
     const minutesAgo = differenceInMinutes(now, created);
     const hoursAgo = differenceInHours(now, created);
     
-    if (minutesAgo < 1) return language === "ru" ? "только что" : "дәл қазір";
-    if (minutesAgo < 60) return language === "ru" ? `${minutesAgo} мин назад` : `${minutesAgo} мин бұрын`;
-    if (hoursAgo < 24) return language === "ru" ? `${hoursAgo} ч назад` : `${hoursAgo} сағ бұрын`;
+    if (minutesAgo < 1) return l({ ru: "только что", kk: "дәл қазір", en: "just now" });
+    if (minutesAgo < 60) return l({ ru: `${minutesAgo} мин назад`, kk: `${minutesAgo} мин бұрын`, en: `${minutesAgo} min ago` });
+    if (hoursAgo < 24) return l({ ru: `${hoursAgo} ч назад`, kk: `${hoursAgo} сағ бұрын`, en: `${hoursAgo} h ago` });
     
     const daysAgo = Math.floor(hoursAgo / 24);
-    if (daysAgo === 1) return language === "ru" ? "вчера" : "кеше";
-    if (daysAgo < 7) return language === "ru" ? `${daysAgo} дн назад` : `${daysAgo} күн бұрын`;
+    if (daysAgo === 1) return l({ ru: "вчера", kk: "кеше", en: "yesterday" });
+    if (daysAgo < 7) return l({ ru: `${daysAgo} дн назад`, kk: `${daysAgo} күн бұрын`, en: `${daysAgo} d ago` });
     
     return format(created, "d MMM", { locale: dateLocale });
   };
@@ -401,7 +401,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
           <CardHeader className="pb-2 px-3 pt-3">
             <CardTitle className="text-base flex items-center gap-2 text-primary">
               <Timer className="w-4 h-4" />
-              {language === "ru" ? "Запросы на перенос" : "Ауыстыру сұраныстары"} ({rescheduleRequests.length})
+              {l({ ru: "Запросы на перенос", kk: "Ауыстыру сұраныстары", en: "Reschedule requests" })} ({rescheduleRequests.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -435,7 +435,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                     
                     <div className="pl-8 space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        {language === "ru" ? "просит перенести" : "ауыстыруды сұрайды"}: <span className="font-medium text-foreground">{request.product_title}</span>
+                        {l({ ru: "просит перенести", kk: "ауыстыруды сұрайды", en: "asks to reschedule" })}: <span className="font-medium text-foreground">{request.product_title}</span>
                       </p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-medium text-orange-500">
@@ -476,7 +476,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                           ) : (
                             <>
                               <Check className="w-3.5 h-3.5 mr-1" />
-                              {language === "ru" ? "Подтвердить" : "Растау"}
+                              {l({ ru: "Подтвердить", kk: "Растау", en: "Confirm" })}
                             </>
                           )}
                         </Button>
@@ -492,7 +492,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                           ) : (
                             <>
                               <X className="w-3.5 h-3.5 mr-1" />
-                              {language === "ru" ? "Отклонить" : "Қабылдамау"}
+                              {l({ ru: "Отклонить", kk: "Қабылдамау", en: "Reject" })}
                             </>
                           )}
                         </Button>
@@ -650,7 +650,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                             {cancellation.cancellation_reasons && cancellation.cancellation_reasons.length > 0 && (
                               <>
                                 <p className="text-sm font-medium text-destructive mb-1.5">
-                                  {language === "ru" ? "Причины:" : "Себептері:"}
+                                  {l({ ru: "Причины:", kk: "Себептері:", en: "Reasons:" })}
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {cancellation.cancellation_reasons.map((reason, idx) => (
@@ -703,10 +703,8 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
         onClose={() => setCancelingBooking(null)}
         onConfirm={handleCancelBookingWithReason}
         isPending={cancelBooking.isPending}
-        title={language === "ru" ? "Отменить запись?" : "Жазбаны бас тарту керек пе?"}
-        description={language === "ru"
-          ? `Вы отменяете запись ученика "${cancelingBooking?.userName || "—"}". Укажите причину.`
-          : `"${cancelingBooking?.userName || "—"}" оқушысының жазбасын бас тартасыз. Себебін көрсетіңіз.`}
+        title={l({ ru: "Отменить запись?", kk: "Жазбаны бас тарту керек пе?", en: "Cancel this booking?" })}
+        description={l({ ru: `Вы отменяете запись ученика "${cancelingBooking?.userName || "—"}". Укажите причину.`, kk: `"${cancelingBooking?.userName || "—"}" оқушысының жазбасын бас тартасыз. Себебін көрсетіңіз.`, en: `You are cancelling the booking of "${cancelingBooking?.userName || "—"}". Please give a reason.` })}
       />
       <RejectRescheduleDialog
         isOpen={!!rejectingRequestId}

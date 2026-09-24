@@ -22,7 +22,7 @@ export const BookmarkStars = ({
   size = "sm",
   disabled,
 }: Props) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const mine = state?.mine ?? null;
   const authorPublic = state?.authorPublic ?? null;
   const isCreator = viewerType === "creator";
@@ -37,7 +37,7 @@ export const BookmarkStars = ({
       {showAuthorStar && (
         <span
           className="inline-flex items-center justify-center"
-          title={language === "kk" ? "Автор белгілеген" : "Отмечено автором"}
+          title={l({ ru: "Отмечено автором", kk: "Автор белгілеген", en: "Flagged by the author" })}
         >
           <Star className={`${iconSize} text-primary fill-primary/60`} />
         </span>
@@ -54,8 +54,8 @@ export const BookmarkStars = ({
         }}
         title={
           mine
-            ? language === "kk" ? "Белгіні алу" : "Снять пометку"
-            : language === "kk" ? "Белгілеу" : "Пометить"
+            ? l({ ru: "Снять пометку", kk: "Белгіні алу", en: "Remove the flag" })
+            : l({ ru: "Пометить", kk: "Белгілеу", en: "Flag" })
         }
       >
         <Star

@@ -29,7 +29,7 @@ const ShareProductButton = ({
   size = "sm",
   variant = "outline",
 }: ShareProductButtonProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const [open, setOpen] = useState(false);
   const shareUrl = buildProductShareUrl({ id, slug }, sellerHandle);
   const canNativeShare = typeof navigator !== "undefined" && Boolean(navigator.share);
@@ -39,7 +39,7 @@ const ShareProductButton = ({
       await navigator.share({ title, url: shareUrl });
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
-        toast.error(language === "ru" ? "Не удалось открыть шаринг" : "Бөлісу ашылмады");
+        toast.error(l({ ru: "Не удалось открыть шаринг", kk: "Бөлісу ашылмады", en: "Could not open sharing" }));
       }
     }
   };
@@ -47,10 +47,10 @@ const ShareProductButton = ({
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast.success(language === "ru" ? "Ссылка скопирована!" : "Сілтеме көшірілді!");
+      toast.success(l({ ru: "Ссылка скопирована!", kk: "Сілтеме көшірілді!", en: "Link copied!" }));
       setOpen(false);
     } catch {
-      toast.error(language === "ru" ? "Не удалось скопировать" : "Көшіру сәтсіз");
+      toast.error(l({ ru: "Не удалось скопировать", kk: "Көшіру сәтсіз", en: "Could not copy" }));
     }
   };
 
@@ -59,7 +59,7 @@ const ShareProductButton = ({
     <div className="flex flex-col gap-1">
       <Button variant="ghost" size="sm" className="justify-start" onClick={handleCopy}>
         <Copy className="mr-2 h-4 w-4" />
-        {language === "ru" ? "Скопировать" : "Көшіру"}
+        {l({ ru: "Скопировать", kk: "Көшіру", en: "Copy" })}
       </Button>
       <Button
         variant="ghost"

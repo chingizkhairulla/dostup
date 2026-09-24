@@ -78,7 +78,7 @@ interface FormData {
 // isOfficeDocument is now imported from fileRedirect
 
 const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: TeacherMaterialsManagerProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const { data: allMaterials = [], isLoading } = useTeacherOwnMaterials(teacherId, [productId]);
   const createMaterial = useCreateTeacherMaterial();
   const updateMaterial = useUpdateTeacherMaterial();
@@ -131,22 +131,22 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
     e.preventDefault();
     
     if (formData.itemType === "folder" && !formData.title) {
-      toast.error(language === "ru" ? "Введите название папки" : "Қалта атын енгізіңіз");
+      toast.error(l({ ru: "Введите название папки", kk: "Қалта атын енгізіңіз", en: "Enter the folder name" }));
       return;
     }
     
     if (formData.itemType === "file" && formData.fileEntries.length === 0) {
-      toast.error(language === "ru" ? "Выберите файл(ы)" : "Файл(дар)ды таңдаңыз");
+      toast.error(l({ ru: "Выберите файл(ы)", kk: "Файл(дар)ды таңдаңыз", en: "Choose the file or files" }));
       return;
     }
 
     if (formData.itemType === "link" && (!formData.title || !formData.linkUrl)) {
-      toast.error(language === "ru" ? "Введите название и URL ссылки" : "Атау мен URL енгізіңіз");
+      toast.error(l({ ru: "Введите название и URL ссылки", kk: "Атау мен URL енгізіңіз", en: "Enter the title and the link URL" }));
       return;
     }
 
     if (formData.itemType === "text" && (!formData.title || !formData.content)) {
-      toast.error(language === "ru" ? "Введите название и текст" : "Атау мен мәтін енгізіңіз");
+      toast.error(l({ ru: "Введите название и текст", kk: "Атау мен мәтін енгізіңіз", en: "Enter the title and the text" }));
       return;
     }
 
@@ -165,7 +165,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
           order_index: materials.length,
           parent_id: currentFolderId,
         });
-        toast.success(language === "ru" ? "Ссылка добавлена!" : "Сілтеме қосылды!");
+        toast.success(l({ ru: "Ссылка добавлена!", kk: "Сілтеме қосылды!", en: "Link added!" }));
       } else if (formData.itemType === "text") {
         await createMaterial.mutateAsync({
           product_id: productId,
@@ -177,7 +177,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
           order_index: materials.length,
           parent_id: currentFolderId,
         });
-        toast.success(language === "ru" ? "Текст добавлен!" : "Мәтін қосылды!");
+        toast.success(l({ ru: "Текст добавлен!", kk: "Мәтін қосылды!", en: "Text added!" }));
       } else if (formData.itemType === "folder") {
         const folder = await createMaterial.mutateAsync({
           product_id: productId,
@@ -209,7 +209,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
           }
         }
 
-        toast.success(language === "ru" ? `Папка "${formData.title}" создана!` : `"${formData.title}" қалтасы жасалды!`);
+        toast.success(l({ ru: `Папка "${formData.title}" создана!`, kk: `"${formData.title}" қалтасы жасалды!`, en: `The "${formData.title}" folder was created!` }));
       } else {
         for (let i = 0; i < formData.fileEntries.length; i++) {
           const entry = formData.fileEntries[i];
@@ -227,16 +227,21 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
             allow_download: entry.permissions.allow_download,
           });
         }
-        toast.success(language === "ru" 
-          ? (formData.fileEntries.length > 1 ? "Файлы добавлены!" : "Файл добавлен!")
-          : (formData.fileEntries.length > 1 ? "Файлдар қосылды!" : "Файл қосылды!"));
+        const several = formData.fileEntries.length > 1;
+        toast.success(
+          l({
+            ru: several ? "Файлы добавлены!" : "Файл добавлен!",
+            kk: several ? "Файлдар қосылды!" : "Файл қосылды!",
+            en: several ? "Files added!" : "File added!",
+          }),
+        );
       }
 
       setIsAdding(false);
       resetForm();
     } catch (err) {
       console.error(err);
-      toast.error(language === "ru" ? "Ошибка при добавлении" : "Қосу кезінде қате");
+      toast.error(l({ ru: "Ошибка при добавлении", kk: "Қосу кезінде қате", en: "Could not add" }));
     } finally {
       setIsUploading(false);
     }
@@ -278,12 +283,12 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
 
       await updateMaterial.mutateAsync(updateData);
 
-      toast.success(language === "ru" ? "Изменения сохранены!" : "Өзгерістер сақталды!");
+      toast.success(l({ ru: "Изменения сохранены!", kk: "Өзгерістер сақталды!", en: "Changes saved!" }));
       setEditingId(null);
       resetForm();
     } catch (err) {
       console.error(err);
-      toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате");
+      toast.error(l({ ru: "Ошибка при обновлении", kk: "Жаңарту кезінде қате", en: "Could not update" }));
     }
   };
 
@@ -296,11 +301,11 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
         teacherId: teacherId,
         file_url: deletingMaterial.file_url,
       });
-      toast.success(language === "ru" ? "Удалено!" : "Жойылды!");
+      toast.success(l({ ru: "Удалено!", kk: "Жойылды!", en: "Deleted!" }));
       setDeletingMaterial(null);
     } catch (err) {
       console.error(err);
-      toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате");
+      toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" }));
     }
   };
 
@@ -331,7 +336,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
 
   const handleOfficeView = useCallback(async (material: Material) => {
     if (!material.file_url) return;
-    const loadingToast = toast.loading(language === "ru" ? "Подготовка файла..." : "Файл дайындалуда...");
+    const loadingToast = toast.loading(l({ ru: "Подготовка файла...", kk: "Файл дайындалуда...", en: "Preparing the file..." }));
     try {
       const token = await requestMaterialToken(material.file_url, 'teacher');
       const proxyUrl = buildProxyUrl(token);
@@ -340,7 +345,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
     } catch (err) {
       console.error('Error opening office doc:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(language === "ru" ? `Ошибка: ${errMsg}` : `Қате: ${errMsg}`);
+      toast.error(l({ ru: `Ошибка: ${errMsg}`, kk: `Қате: ${errMsg}`, en: `Error: ${errMsg}` }));
     } finally {
       toast.dismiss(loadingToast);
     }
@@ -349,8 +354,8 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
   const getAccessLabel = (material: Material) => {
     const canDownload = material.allow_download !== false;
     return canDownload 
-      ? (language === "ru" ? "скачивание разрешено" : "жүктеуге рұқсат") 
-      : (language === "ru" ? "только просмотр" : "тек көру");
+      ? (l({ ru: "скачивание разрешено", kk: "жүктеуге рұқсат", en: "downloading allowed" })) 
+      : (l({ ru: "только просмотр", kk: "тек көру", en: "view only" }));
   };
 
   if (isLoading) {
@@ -389,7 +394,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
           disabled={isAdding || !!editingId}
         >
           <Plus className="w-4 h-4 mr-1" />
-          {language === "ru" ? "Добавить" : "Қосу"}
+          {l({ ru: "Добавить", kk: "Қосу", en: "Add" })}
         </Button>
       </div>
 
@@ -399,7 +404,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
           <CardContent className="p-4">
             <form onSubmit={handleAdd} className="space-y-4">
               <div className="space-y-3">
-                <Label>{language === "ru" ? "Что добавить?" : "Нені қосу керек?"}</Label>
+                <Label>{l({ ru: "Что добавить?", kk: "Нені қосу керек?", en: "What would you like to add?" })}</Label>
                 <RadioGroup
                   value={formData.itemType}
                   onValueChange={(value: ItemType) => setFormData(prev => ({ ...prev, itemType: value, files: [], fileEntries: [] }))}
@@ -409,28 +414,28 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                     <RadioGroupItem value="file" id="teacher-type-file" />
                     <Label htmlFor="teacher-type-file" className="cursor-pointer flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      {language === "ru" ? "Файл" : "Файл"}
+                      {l({ ru: "Файл", kk: "Файл", en: "File" })}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="folder" id="teacher-type-folder" />
                     <Label htmlFor="teacher-type-folder" className="cursor-pointer flex items-center gap-2">
                       <Folder className="w-4 h-4" />
-                      {language === "ru" ? "Папка" : "Қалта"}
+                      {l({ ru: "Папка", kk: "Қалта", en: "Folder" })}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="link" id="teacher-type-link" />
                     <Label htmlFor="teacher-type-link" className="cursor-pointer flex items-center gap-2">
                       <LinkIcon className="w-4 h-4" />
-                      {language === "ru" ? "Ссылка" : "Сілтеме"}
+                      {l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="text" id="teacher-type-text" />
                     <Label htmlFor="teacher-type-text" className="cursor-pointer flex items-center gap-2">
                       <Type className="w-4 h-4" />
-                      {language === "ru" ? "Текст" : "Мәтін"}
+                      {l({ ru: "Текст", kk: "Мәтін", en: "Text" })}
                     </Label>
                   </div>
                 </RadioGroup>
@@ -438,9 +443,9 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
 
               {formData.itemType === "folder" && (
                 <div className="space-y-2">
-                  <Label>{language === "ru" ? "Название папки *" : "Қалта атауы *"}</Label>
+                  <Label>{l({ ru: "Название папки *", kk: "Қалта атауы *", en: "Folder name *" })}</Label>
                   <Input
-                    placeholder={language === "ru" ? "Введите название" : "Атауын енгізіңіз"}
+                    placeholder={l({ ru: "Введите название", kk: "Атауын енгізіңіз", en: "Enter a title" })}
                     value={formData.title}
                     onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                     required
@@ -451,16 +456,16 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
               {formData.itemType === "link" && (
                 <>
                   <div className="space-y-2">
-                    <Label>{language === "ru" ? "Название *" : "Атауы *"}</Label>
+                    <Label>{l({ ru: "Название *", kk: "Атауы *", en: "Title *" })}</Label>
                     <Input
-                      placeholder={language === "ru" ? "Введите название ссылки" : "Сілтеме атауын енгізіңіз"}
+                      placeholder={l({ ru: "Введите название ссылки", kk: "Сілтеме атауын енгізіңіз", en: "Enter the link title" })}
                       value={formData.title}
                       onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>{language === "ru" ? "URL ссылки *" : "URL сілтемесі *"}</Label>
+                    <Label>{l({ ru: "URL ссылки *", kk: "URL сілтемесі *", en: "Link URL *" })}</Label>
                     <Input
                       placeholder="https://..."
                       value={formData.linkUrl}
@@ -474,18 +479,18 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
               {formData.itemType === "text" && (
                 <>
                   <div className="space-y-2">
-                    <Label>{language === "ru" ? "Название *" : "Атауы *"}</Label>
+                    <Label>{l({ ru: "Название *", kk: "Атауы *", en: "Title *" })}</Label>
                     <Input
-                      placeholder={language === "ru" ? "Введите название" : "Атауын енгізіңіз"}
+                      placeholder={l({ ru: "Введите название", kk: "Атауын енгізіңіз", en: "Enter a title" })}
                       value={formData.title}
                       onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>{language === "ru" ? "Текст *" : "Мәтін *"}</Label>
+                    <Label>{l({ ru: "Текст *", kk: "Мәтін *", en: "Text *" })}</Label>
                     <Textarea
-                      placeholder={language === "ru" ? "Введите текст..." : "Мәтін енгізіңіз..."}
+                      placeholder={l({ ru: "Введите текст...", kk: "Мәтін енгізіңіз...", en: "Enter the text..." })}
                       value={formData.content}
                       onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                       rows={4}
@@ -498,8 +503,8 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
               {(formData.itemType === "file" || formData.itemType === "folder") && <div className="space-y-2">
                 <Label>
                   {formData.itemType === "folder" 
-                    ? (language === "ru" ? "Файлы в папку (опционально)" : "Қалтаға файлдар (міндетті емес)")
-                    : (language === "ru" ? "Выберите файл(ы) *" : "Файл(дар)ды таңдаңыз *")}
+                    ? (l({ ru: "Файлы в папку (опционально)", kk: "Қалтаға файлдар (міндетті емес)", en: "Files for the folder (optional)" }))
+                    : (l({ ru: "Выберите файл(ы) *", kk: "Файл(дар)ды таңдаңыз *", en: "Choose the file or files *" }))}
                 </Label>
                 {formData.fileEntries.length > 0 && (
                   <div className="space-y-2 mb-3">
@@ -550,7 +555,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                               }}
                             />
                             <Download className="w-3 h-3" />
-                            {language === "ru" ? "Скачивание" : "Жүктеу"}
+                            {l({ ru: "Скачивание", kk: "Жүктеу", en: "Downloading" })}
                           </label>
                         </div>
                       </div>
@@ -623,8 +628,8 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                   <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2 pointer-events-none" />
                   <p className="text-sm text-muted-foreground pointer-events-none">
                     {formData.fileEntries.length > 0
-                      ? (language === "ru" ? "Добавить ещё — нажмите, перетащите или вставьте (Ctrl+V)" : "Тағы қосу — басыңыз, сүйреп әкеліңіз немесе қойыңыз (Ctrl+V)")
-                      : (language === "ru" ? "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)" : "Файлды басып таңдаңыз, сүйреңіз немесе қойыңыз (Ctrl+V)")}
+                      ? (l({ ru: "Добавить ещё — нажмите, перетащите или вставьте (Ctrl+V)", kk: "Тағы қосу — басыңыз, сүйреп әкеліңіз немесе қойыңыз (Ctrl+V)", en: "Add more — click, drag or paste (Ctrl+V)" }))
+                      : (l({ ru: "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)", kk: "Файлды басып таңдаңыз, сүйреңіз немесе қойыңыз (Ctrl+V)", en: "Click, drag or paste (Ctrl+V) your files" }))}
                   </p>
                 </div>
               </div>}
@@ -634,14 +639,14 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {uploadProgress > 0 ? `${uploadProgress}%` : (language === "ru" ? "Загрузка..." : "Жүктелуде...")}
+                      {uploadProgress > 0 ? `${uploadProgress}%` : (l({ ru: "Загрузка...", kk: "Жүктелуде...", en: "Loading..." }))}
                     </>
                   ) : (
-                    language === "ru" ? "Сохранить" : "Сақтау"
+                    l({ ru: "Сохранить", kk: "Сақтау", en: "Save" })
                   )}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => { setIsAdding(false); resetForm(); }}>
-                  {language === "ru" ? "Отмена" : "Болдырмау"}
+                  {l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}
                 </Button>
               </div>
               {isUploading && uploadProgress > 0 && (
@@ -658,17 +663,15 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
       {materials.length === 0 && !isAdding ? (
         <div className="text-center py-8 text-muted-foreground">
           {searchQuery.trim() ? (
-            <p className="text-sm">{language === "ru" ? "Ничего не найдено" : "Ештеңе табылмады"}</p>
+            <p className="text-sm">{l({ ru: "Ничего не найдено", kk: "Ештеңе табылмады", en: "Nothing found" })}</p>
           ) : (
             <>
               <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
-                {language === "ru" ? "Нет материалов" : "Материалдар жоқ"}
+                {l({ ru: "Нет материалов", kk: "Материалдар жоқ", en: "No materials" })}
               </p>
               <p className="text-xs mt-1">
-                {language === "ru" 
-                  ? "Добавьте файлы или папки для ваших учеников"
-                  : "Оқушыларыңыз үшін файлдар немесе қалталар қосыңыз"}
+                {l({ ru: "Добавьте файлы или папки для ваших учеников", kk: "Оқушыларыңыз үшін файлдар немесе қалталар қосыңыз", en: "Add files or folders for your students" })}
               </p>
             </>
           )}
@@ -693,13 +696,13 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                             onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allow_download: !!checked }))}
                           />
                           <Download className="w-3 h-3" />
-                          {language === "ru" ? "Скачивание" : "Жүктеу"}
+                          {l({ ru: "Скачивание", kk: "Жүктеу", en: "Downloading" })}
                         </label>
                       </div>
                     )}
                     {formData.itemType === "link" && (
                       <div className="space-y-2">
-                        <Label>{language === "ru" ? "URL ссылки *" : "URL сілтемесі *"}</Label>
+                        <Label>{l({ ru: "URL ссылки *", kk: "URL сілтемесі *", en: "Link URL *" })}</Label>
                         <Input
                           placeholder="https://..."
                           value={formData.linkUrl}
@@ -710,9 +713,9 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                     )}
                     {formData.itemType === "text" && (
                       <div className="space-y-2">
-                        <Label>{language === "ru" ? "Текст *" : "Мәтін *"}</Label>
+                        <Label>{l({ ru: "Текст *", kk: "Мәтін *", en: "Text *" })}</Label>
                         <Textarea
-                          placeholder={language === "ru" ? "Введите текст..." : "Мәтін енгізіңіз..."}
+                          placeholder={l({ ru: "Введите текст...", kk: "Мәтін енгізіңіз...", en: "Enter the text..." })}
                           value={formData.content}
                           onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                           rows={4}
@@ -721,9 +724,9 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button type="submit" size="sm">{language === "ru" ? "Сохранить" : "Сақтау"}</Button>
+                      <Button type="submit" size="sm">{l({ ru: "Сохранить", kk: "Сақтау", en: "Save" })}</Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => { setEditingId(null); resetForm(); }}>
-                        {language === "ru" ? "Отмена" : "Болдырмау"}
+                        {l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}
                       </Button>
                     </div>
                   </form>
@@ -742,10 +745,10 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                           <p className="text-xs text-muted-foreground">{getAccessLabel(material)}</p>
                         )}
                         {material.type === "link" && (
-                          <p className="text-xs text-muted-foreground">{language === "ru" ? "Ссылка" : "Сілтеме"}</p>
+                          <p className="text-xs text-muted-foreground">{l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })}</p>
                         )}
                         {material.type === "text" && (
-                          <p className="text-xs text-muted-foreground">{language === "ru" ? "Текст" : "Мәтін"}</p>
+                          <p className="text-xs text-muted-foreground">{l({ ru: "Текст", kk: "Мәтін", en: "Text" })}</p>
                         )}
                       </div>
                     </div>
@@ -755,7 +758,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          title={language === "ru" ? "Добавить в папку" : "Қалтаға қосу"}
+                          title={l({ ru: "Добавить в папку", kk: "Қалтаға қосу", en: "Add to a folder" })}
                           onClick={() => {
                             setCurrentFolderId(material.id);
                             setIsAdding(true);
@@ -772,7 +775,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-8 w-8"
-                          title={language === "ru" ? "Открыть ссылку" : "Сілтемені ашу"}
+                          title={l({ ru: "Открыть ссылку", kk: "Сілтемені ашу", en: "Open the link" })}
                         >
                           <ExternalLink className="w-4 h-4" />
                         </a>
@@ -789,7 +792,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                               <a
                                 href={dlUrl}
                                 className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-8 w-8"
-                                title={language === "ru" ? "Скачать" : "Жүктеу"}
+                                title={l({ ru: "Скачать", kk: "Жүктеу", en: "Download" })}
                               >
                                 <Download className="w-4 h-4" />
                               </a>
@@ -800,7 +803,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-8 w-8"
-                                title={language === "ru" ? "Открыть" : "Ашу"}
+                                title={l({ ru: "Открыть", kk: "Ашу", en: "Open" })}
                               >
                                 <ExternalLink className="w-4 h-4" />
                               </a>
@@ -810,7 +813,7 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => handleOfficeView(material)}
-                                title={language === "ru" ? "Открыть" : "Ашу"}
+                                title={l({ ru: "Открыть", kk: "Ашу", en: "Open" })}
                               >
                                 <ExternalLink className="w-4 h-4" />
                               </Button>
@@ -847,17 +850,15 @@ const TeacherMaterialsManager = ({ teacherId, productId, productTitle }: Teacher
       <AlertDialog open={!!deletingMaterial} onOpenChange={() => setDeletingMaterial(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{language === "ru" ? "Удалить материал?" : "Материалды жою керек пе?"}</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Удалить материал?", kk: "Материалды жою керек пе?", en: "Delete this material?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "ru" 
-                ? `Вы уверены, что хотите удалить "${deletingMaterial?.title}"? Это действие нельзя отменить.`
-                : `"${deletingMaterial?.title}" жойғыңыз келе ме? Бұл әрекетті болдырмау мүмкін емес.`}
+              {l({ ru: `Вы уверены, что хотите удалить "${deletingMaterial?.title}"? Это действие нельзя отменить.`, kk: `"${deletingMaterial?.title}" жойғыңыз келе ме? Бұл әрекетті болдырмау мүмкін емес.`, en: `Are you sure you want to delete "${deletingMaterial?.title}"? This cannot be undone.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{language === "ru" ? "Отмена" : "Болдырмау"}</AlertDialogCancel>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-              {language === "ru" ? "Удалить" : "Жою"}
+              {l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

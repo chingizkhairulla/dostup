@@ -167,7 +167,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
   const { productId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { user, profileType, profiles, switchProfile } = useSimpleAuth();
   const { data: fetchedProduct, isLoading: fetchedLoading } = useProduct(isPreview ? undefined : productId);
   const product = isPreview ? previewProduct : fetchedProduct;
@@ -445,7 +445,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
     : (activeOption?.access_duration_days || product.access_duration_days)
       ? t("accessDays", { days: activeOption?.access_duration_days || product.access_duration_days })
       : t("accessLifetime");
-  const firstChargeDate = new Intl.DateTimeFormat(language === "kk" ? "kk-KZ" : "ru-RU", {
+  const firstChargeDate = new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }), {
     day: "numeric",
     month: "long",
     year: "numeric",

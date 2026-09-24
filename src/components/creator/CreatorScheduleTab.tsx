@@ -32,7 +32,7 @@ import {
   parse, 
   parseISO 
 } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru, enGB } from "date-fns/locale";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -98,7 +98,7 @@ interface CreatorScheduleTabProps {
 }
 
 const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
@@ -285,7 +285,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-outgoing-reschedules"] });
-      toast.success(language === "ru" ? "Запрос на перенос отменён" : "Ауыстыру сұранысы жойылды");
+      toast.success(l({ ru: "Запрос на перенос отменён", kk: "Ауыстыру сұранысы жойылды", en: "Reschedule request cancelled" }));
     },
   });
 
@@ -293,7 +293,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const createSchedule = useMutation({
     mutationFn: async () => {
       const activeProductId = scheduleForm.productId || selectedProductId || "";
-      if (!activeProductId) throw new Error(language === "ru" ? "Выберите продукт" : "Өнімді таңдаңыз");
+      if (!activeProductId) throw new Error(l({ ru: "Выберите продукт", kk: "Өнімді таңдаңыз", en: "Choose a product" }));
       const data = await invokeApi<{ schedule: Schedule }>("manage-schedules", {
         action: "create_schedule",
         ...creatorCreds(),
@@ -306,13 +306,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? "Расписание создано!" : "Кесте жасалды!");
+      toast.success(l({ ru: "Расписание создано!", kk: "Кесте жасалды!", en: "Schedule created!" }));
       setIsAddingSchedule(false);
       setScheduleForm({ title: "", productId: "", maxParticipants: "10" });
     },
     onError: (error: any) => {
       console.error("Schedule creation error:", error);
-      toast.error(error?.message || (language === "ru" ? "Ошибка при создании" : "Жасау кезінде қате"));
+      toast.error(error?.message || (l({ ru: "Ошибка при создании", kk: "Жасау кезінде қате", en: "Could not create" })));
     },
   });
 
@@ -327,10 +327,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? "Расписание удалено!" : "Кесте жойылды!");
+      toast.success(l({ ru: "Расписание удалено!", kk: "Кесте жойылды!", en: "Schedule deleted!" }));
       setDeletingSchedule(null);
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" })),
   });
 
   // Update schedule title mutation
@@ -345,22 +345,22 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? "Название обновлено!" : "Атауы жаңартылды!");
+      toast.success(l({ ru: "Название обновлено!", kk: "Атауы жаңартылды!", en: "Title updated!" }));
       setEditingSchedule(null);
       setEditScheduleTitle("");
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при обновлении", kk: "Жаңарту кезінде қате", en: "Could not update" })),
   });
 
   const ensureScheduleId = async (): Promise<string> => {
     if (schedules.length > 0) return schedules[0].id;
     const activeProductId = selectedProductId || "";
-    if (!activeProductId) throw new Error(language === "ru" ? "Выберите продукт" : "Өнімді таңдаңыз");
+    if (!activeProductId) throw new Error(l({ ru: "Выберите продукт", kk: "Өнімді таңдаңыз", en: "Choose a product" }));
     const data = await invokeApi<{ schedule: Schedule }>("manage-schedules", {
       action: "create_schedule",
       ...creatorCreds(),
       productId: activeProductId,
-      title: language === "ru" ? "Расписание" : "Кесте",
+      title: l({ ru: "Расписание", kk: "Кесте", en: "Schedule" }),
       eventType: "individual",
       maxParticipants: null,
     });
@@ -416,7 +416,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       }
 
       if (slots.length === 0) {
-        throw new Error(language === "ru" ? "На выбранное время слоты уже существуют" : "Таңдалған уақытқа слоттар бар");
+        throw new Error(l({ ru: "На выбранное время слоты уже существуют", kk: "Таңдалған уақытқа слоттар бар", en: "Slots already exist at the chosen time" }));
       }
 
       await invokeApi("manage-schedules", {
@@ -430,13 +430,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${count} slots created!` }));
       setIsAddingSlots(false);
       setSelectedScheduleForSlots(null);
     },
     onError: (error: any) => {
       console.error("Slot creation error:", error);
-      toast.error(error?.message || (language === "ru" ? "Ошибка при создании слотов" : "Слоттарды жасау кезінде қате"));
+      toast.error(error?.message || (l({ ru: "Ошибка при создании слотов", kk: "Слоттарды жасау кезінде қате", en: "Could not create the slots" })));
     },
   });
 
@@ -456,7 +456,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         (s) => s.date === dateStr && parseInt(s.start_time.split(":")[0], 10) === hour
       );
       if (alreadyExists) {
-        throw new Error(language === "ru" ? "На это время уже есть слот!" : "Бұл уақытқа слот бар!");
+        throw new Error(l({ ru: "На это время уже есть слот!", kk: "Бұл уақытқа слот бар!", en: "There is already a slot at this time!" }));
       }
 
       await invokeApi("manage-schedules", {
@@ -486,13 +486,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: () => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? "Слот создан!" : "Слот жасалды!");
+      toast.success(l({ ru: "Слот создан!", kk: "Слот жасалды!", en: "Slot created!" }));
       setQuickAddSlotHour(null);
       setQuickAddParticipants("1");
       setQuickAddLessonLink("");
     },
     onError: (err: any) => {
-      toast.error(err?.message || (language === "ru" ? "Ошибка при создании слота" : "Слот жасау кезінде қате"));
+      toast.error(err?.message || (l({ ru: "Ошибка при создании слота", kk: "Слот жасау кезінде қате", en: "Could not create the slot" })));
     },
   });
 
@@ -590,10 +590,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         reasons,
         comment,
       });
-      toast.success(language === "ru" ? "Запись отменена!" : "Жазба бас тартылды!");
+      toast.success(l({ ru: "Запись отменена!", kk: "Жазба бас тартылды!", en: "Booking cancelled!" }));
       setCancelingBooking(null);
     } catch {
-      toast.error(language === "ru" ? "Ошибка при отмене" : "Бас тарту кезінде қате");
+      toast.error(l({ ru: "Ошибка при отмене", kk: "Бас тарту кезінде қате", en: "Could not cancel" }));
     }
   };
 
@@ -608,10 +608,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? "Слот удалён!" : "Слот жойылды!");
+      toast.success(l({ ru: "Слот удалён!", kk: "Слот жойылды!", en: "Slot deleted!" }));
       setDeletingSlot(null);
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" })),
   });
 
   // Delete time slot with bookings (force delete)
@@ -627,10 +627,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? "Слот и записи удалены!" : "Слот пен жазбалар жойылды!");
+      toast.success(l({ ru: "Слот и записи удалены!", kk: "Слот пен жазбалар жойылды!", en: "The slot and its bookings were deleted!" }));
       setDeletingSlotWithBookings(null);
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" })),
   });
 
   // Expand slot (increase max_participants for specific slot)
@@ -648,10 +648,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: (newMax) => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? `Слот расширен до ${newMax} мест!` : `Слот ${newMax} орынға дейін кеңейтілді!`);
+      toast.success(l({ ru: `Слот расширен до ${newMax} мест!`, kk: `Слот ${newMax} орынға дейін кеңейтілді!`, en: `The slot now holds ${newMax} seats!` }));
       setExpandingSlot(null);
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при расширении" : "Кеңейту кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при расширении", kk: "Кеңейту кезінде қате", en: "Could not add seats" })),
   });
 
   // Delete multiple time slots mutation
@@ -666,12 +666,12 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? "Слоты удалены!" : "Слоттар жойылды!");
+      toast.success(l({ ru: "Слоты удалены!", kk: "Слоттар жойылды!", en: "Slots deleted!" }));
       setIsDeletingSlots(false);
       setSelectedScheduleForDelete(null);
       setSlotsToDeleteDates([]);
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при удалении" : "Жою кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" })),
   });
 
   // Fetch available dates for delete dialog
@@ -707,24 +707,24 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? "Ссылка добавлена!" : "Сілтеме қосылды!");
+      toast.success(l({ ru: "Ссылка добавлена!", kk: "Сілтеме қосылды!", en: "Link added!" }));
       setIsAddingLink(false);
       setSelectedScheduleForLink(null);
       setSlotsForLinkDates([]);
       setLessonLinkUrl("");
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при добавлении ссылки" : "Сілтемені қосу кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при добавлении ссылки", kk: "Сілтемені қосу кезінде қате", en: "Could not add the link" })),
   });
 
   // Reschedule all slots of a date to another date
   const rescheduleDateSlots = useMutation({
     mutationFn: async () => {
       if (!manageRescheduleFromDate || !manageRescheduleToDate) {
-        throw new Error(language === "ru" ? "Выберите исходную и новую дату" : "Бастапқы және жаңа күнді таңдаңыз");
+        throw new Error(l({ ru: "Выберите исходную и новую дату", kk: "Бастапқы және жаңа күнді таңдаңыз", en: "Choose the original and the new date" }));
       }
       const slotsToMove = timeSlots.filter(s => s.date === manageRescheduleFromDate);
       if (slotsToMove.length === 0) {
-        throw new Error(language === "ru" ? "На выбранную дату нет слотов" : "Таңдалған күнге слоттар жоқ");
+        throw new Error(l({ ru: "На выбранную дату нет слотов", kk: "Таңдалған күнге слоттар жоқ", en: "There are no slots on the chosen date" }));
       }
       for (const slot of slotsToMove) {
         await invokeApi("manage-schedules", {
@@ -738,13 +738,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? `Перенесено ${count} слотов на ${manageRescheduleToDate}` : `${count} слот ауыстырылды`);
+      toast.success(l({ ru: `Перенесено ${count} слотов на ${manageRescheduleToDate}`, kk: `${count} слот ауыстырылды`, en: `${count} slots moved to ${manageRescheduleToDate}` }));
       setIsManagingSlots(false);
       setManageRescheduleFromDate("");
       setManageRescheduleToDate("");
     },
     onError: (err: any) => {
-      toast.error(err?.message || (language === "ru" ? "Ошибка при переносе" : "Ауыстыру кезінде қате"));
+      toast.error(err?.message || (l({ ru: "Ошибка при переносе", kk: "Ауыстыру кезінде қате", en: "Could not reschedule" })));
     },
   });
 
@@ -760,9 +760,9 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: () => {
       invalidateSlotsAndBookings();
-      toast.success(language === "ru" ? "Ссылка обновлена!" : "Сілтеме жаңартылды!");
+      toast.success(l({ ru: "Ссылка обновлена!", kk: "Сілтеме жаңартылды!", en: "Link updated!" }));
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при обновлении ссылки" : "Сілтемені жаңарту кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при обновлении ссылки", kk: "Сілтемені жаңарту кезінде қате", en: "Could not update the link" })),
   });
 
   // Update slot metadata (title, description, image_url)
@@ -778,7 +778,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: () => {
       invalidateSlotsAndBookings();
     },
-    onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
+    onError: () => toast.error(l({ ru: "Ошибка при обновлении", kk: "Жаңарту кезінде қате", en: "Could not update" })),
   });
 
   // Create slots from wizard
@@ -872,7 +872,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       }
 
       if (slots.length === 0) {
-        throw new Error(language === "ru" ? "Нет новых слотов для создания" : "Жаңа слоттар жоқ");
+        throw new Error(l({ ru: "Нет новых слотов для создания", kk: "Жаңа слоттар жоқ", en: "There are no new slots to create" }));
       }
 
       await invokeApi("manage-schedules", {
@@ -886,11 +886,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${count} slots created!` }));
       setIsWizardOpen(false);
     },
     onError: (error: any) => {
-      toast.error(error?.message || (language === "ru" ? "Ошибка при создании слотов" : "Слоттарды жасау кезінде қате"));
+      toast.error(error?.message || (l({ ru: "Ошибка при создании слотов", kk: "Слоттарды жасау кезінде қате", en: "Could not create the slots" })));
     },
   });
 
@@ -994,7 +994,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     if (daySlots.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground text-sm">
-          {language === "ru" ? "На этот день слотов нет" : "Бұл күні слоттар жоқ"}
+          {l({ ru: "На этот день слотов нет", kk: "Бұл күні слоттар жоқ", en: "There are no slots on this day" })}
         </div>
       );
     }
@@ -1035,13 +1035,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     )}
                     {isGroup ? (
                       <Badge variant="secondary" className="text-[11px]">
-                        {slotBookings.length}/{maxParticipants} {language === "ru" ? "группа" : "топ"}
+                        {slotBookings.length}/{maxParticipants} {l({ ru: "группа", kk: "топ", en: "group" })}
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-[11px]">
                         {hasBookings 
-                          ? (language === "ru" ? "Занято" : "Бос емес")
-                          : (language === "ru" ? "Свободно" : "Бос")
+                          ? (l({ ru: "Занято", kk: "Бос емес", en: "Taken" }))
+                          : (l({ ru: "Свободно", kk: "Бос", en: "Free" }))
                         }
                       </Badge>
                     )}
@@ -1055,7 +1055,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
                       onClick={(e) => { e.stopPropagation(); }}
-                      title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
+                      title={l({ ru: "Видеозвонок", kk: "Бейне қоңырау", en: "Video call" })}
                     >
                       <Video className="w-4 h-4" />
                     </Button>
@@ -1072,7 +1072,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                           setEditingSlotTime(slot);
                         }
                       }}
-                      title={language === "ru" ? "Перенести" : "Ауыстыру"}
+                      title={l({ ru: "Перенести", kk: "Ауыстыру", en: "Reschedule" })}
                     >
                       <Clock className="w-4 h-4" />
                     </Button>
@@ -1089,7 +1089,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                           setDeletingSlot(slot);
                         }
                       }}
-                      title={language === "ru" ? "Удалить" : "Жою"}
+                      title={l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -1113,10 +1113,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   {/* Editable fields for seller */}
                   <div className="space-y-2 pt-2 border-t border-border/30">
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Название" : "Атауы"}</Label>
+                      <Label className="text-xs text-muted-foreground">{l({ ru: "Название", kk: "Атауы", en: "Title" })}</Label>
                       <Input
                         value={slot.title || ""}
-                        placeholder={language === "ru" ? "Название урока" : "Сабақ атауы"}
+                        placeholder={l({ ru: "Название урока", kk: "Сабақ атауы", en: "Lesson title" })}
                         className="h-8 text-sm"
                         onChange={(e) => {
                           updateSlotMeta.mutate({ slotId: slot.id, updates: { title: e.target.value } });
@@ -1124,10 +1124,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Описание" : "Сипаттамасы"}</Label>
+                      <Label className="text-xs text-muted-foreground">{l({ ru: "Описание", kk: "Сипаттамасы", en: "Description" })}</Label>
                       <Input
                         value={slot.description || ""}
-                        placeholder={language === "ru" ? "Описание урока" : "Сабақ сипаттамасы"}
+                        placeholder={l({ ru: "Описание урока", kk: "Сабақ сипаттамасы", en: "Lesson description" })}
                         className="h-8 text-sm"
                         onChange={(e) => {
                           updateSlotMeta.mutate({ slotId: slot.id, updates: { description: e.target.value } });
@@ -1135,7 +1135,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Обложка (URL)" : "Мұқаба (URL)"}</Label>
+                      <Label className="text-xs text-muted-foreground">{l({ ru: "Обложка (URL)", kk: "Мұқаба (URL)", en: "Cover image (URL)" })}</Label>
                       <Input
                         value={slot.image_url || ""}
                         placeholder="https://..."
@@ -1151,7 +1151,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   {hasBookings && (
                     <div className="space-y-1 pt-2 border-t border-border/50">
                       <span className="text-xs font-medium text-muted-foreground">
-                        {language === "ru" ? "Записи:" : "Жазбалар:"}
+                        {l({ ru: "Записи:", kk: "Жазбалар:", en: "Bookings:" })}
                       </span>
                       {slotBookings.map((b) => (
                         <div key={b.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/40">
@@ -1214,7 +1214,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               setQuickAddParticipants("1");
               setQuickAddLessonLink("");
             }}
-            title={language === "ru" ? "Добавить слот" : "Слот қосу"}
+            title={l({ ru: "Добавить слот", kk: "Слот қосу", en: "Add a slot" })}
           >
             <Plus className="w-4 h-4" />
           </Button>
@@ -1261,13 +1261,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   </div>
                   {isGroup ? (
                     <Badge variant="outline" className="text-[11px] font-medium ml-1">
-                      {slotBookings.length}/{maxParticipants} {language === "ru" ? "мест" : "орын"}
+                      {slotBookings.length}/{maxParticipants} {l({ ru: "мест", kk: "орын", en: "seats" })}
                     </Badge>
                   ) : (
                     <span className={`text-xs font-medium ${styles.text}`}>
                       {slotBookings.length > 0
-                        ? (language === "ru" ? "Занято" : "Жазылған")
-                        : (language === "ru" ? "Свободно" : "Бос")}
+                        ? (l({ ru: "Занято", kk: "Жазылған", en: "Taken" }))
+                        : (l({ ru: "Свободно", kk: "Бос", en: "Free" }))}
                     </span>
                   )}
                 </div>
@@ -1282,13 +1282,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       if (slot.lesson_link) {
                         setViewingLinkSlot(slot);
                       } else {
-                        const newLink = prompt(language === "ru" ? "Введите ссылку на урок:" : "Сабаққа сілтемені енгізіңіз:");
+                        const newLink = prompt(l({ ru: "Введите ссылку на урок:", kk: "Сабаққа сілтемені енгізіңіз:", en: "Enter the lesson link:" }));
                         if (newLink) {
                           updateSlotLink.mutate({ slotId: slot.id, link: newLink });
                         }
                       }
                     }}
-                    title={slot.lesson_link ? (language === "ru" ? "Просмотреть ссылку" : "Сілтемені көру") : (language === "ru" ? "Добавить ссылку" : "Сілтеме қосу")}
+                    title={slot.lesson_link ? (l({ ru: "Просмотреть ссылку", kk: "Сілтемені көру", en: "View the link" })) : (l({ ru: "Добавить ссылку", kk: "Сілтеме қосу", en: "Add a link" }))}
                   >
                     <Link className="w-4 h-4" />
                   </Button>
@@ -1300,7 +1300,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       size="icon"
                       className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
                       onClick={() => setExpandingSlot({ slot, schedule: schedule || (schedules[0] as Schedule) })}
-                      title={language === "ru" ? "Добавить место" : "Орын қосу"}
+                      title={l({ ru: "Добавить место", kk: "Орын қосу", en: "Add a seat" })}
                     >
                       <UserPlus className="w-4 h-4" />
                     </Button>
@@ -1323,7 +1323,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                         size="icon"
                         className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeletingSlot(slot)}
-                        title={language === "ru" ? "Удалить слот" : "Слотты жою"}
+                        title={l({ ru: "Удалить слот", kk: "Слотты жою", en: "Delete the slot" })}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -1335,7 +1335,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         onClick={() => setReschedulingSlot({ slot, schedule })}
-                        title={language === "ru" ? "Перенести" : "Ауыстыру"}
+                        title={l({ ru: "Перенести", kk: "Ауыстыру", en: "Reschedule" })}
                       >
                         <Clock className="w-4 h-4" />
                       </Button>
@@ -1344,7 +1344,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                         size="icon"
                         className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeletingSlotWithBookings(slot)}
-                        title={language === "ru" ? "Удалить слот" : "Слотты жою"}
+                        title={l({ ru: "Удалить слот", kk: "Слотты жою", en: "Delete the slot" })}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -1369,9 +1369,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                         return (
                           <div className="mt-1 flex items-center gap-2 px-2">
                             <span className="text-orange-500 text-xs font-medium">
-                              {language === "ru" 
-                                ? `Ожидание переноса на ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`
-                                : `Ауыстыруды күту ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`}
+                              {l({ ru: `Ожидание переноса на ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`, kk: `Ауыстыруды күту ${format(parseISO(pendingReq.new_date), "d MMM", { locale: ru })} ${pendingReq.new_time?.slice(0, 5)}`, en: `Waiting to move to ${format(parseISO(pendingReq.new_date), "d MMM", { locale: enGB })} ${pendingReq.new_time?.slice(0, 5)}` })}
                             </span>
                             <button
                               className="text-orange-500 hover:text-destructive p-0.5 rounded"
@@ -1402,7 +1400,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <div className="space-y-2">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-border/50">
             <Sun className="w-3.5 h-3.5 text-amber-500" />
-            <span>{language === "ru" ? "06:00 – 18:00 (Утро и день)" : "06:00 – 18:00 (Күндіз)"}</span>
+            <span>{l({ ru: "06:00 – 18:00 (Утро и день)", kk: "06:00 – 18:00 (Күндіз)", en: "06:00 – 18:00 (morning and afternoon)" })}</span>
           </div>
           <div className="space-y-2">
             {leftColumnHours.map((h) => renderHourRow(h))}
@@ -1413,7 +1411,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <div className="space-y-2">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-border/50">
             <Moon className="w-3.5 h-3.5 text-indigo-400" />
-            <span>{language === "ru" ? "18:00 – 06:00 (Вечер и ночь)" : "18:00 – 06:00 (Түн)"}</span>
+            <span>{l({ ru: "18:00 – 06:00 (Вечер и ночь)", kk: "18:00 – 06:00 (Түн)", en: "18:00 – 06:00 (evening and night)" })}</span>
           </div>
           <div className="space-y-2">
             {rightColumnHours.map((h) => renderHourRow(h))}
@@ -1447,7 +1445,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-foreground">
-        {language === "kk" ? "Кесте" : "Расписание"}
+        {l({ ru: "Расписание", kk: "Кесте", en: "Schedule" })}
       </h2>
 
       {/* Top Bar: Product Switcher & Actions */}
@@ -1464,7 +1462,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-4 h-4" />
-            {language === "ru" ? "Добавить слоты" : "Слоттар қосу"}
+            {l({ ru: "Добавить слоты", kk: "Слоттар қосу", en: "Add slots" })}
           </Button>
           <Button
             variant="outline"
@@ -1482,7 +1480,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             className="gap-1.5 border border-input bg-background hover:bg-primary/15 hover:text-primary hover:border-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Settings2 className="w-4 h-4" />
-            {language === "ru" ? "Управлять" : "Басқару"}
+            {l({ ru: "Управлять", kk: "Басқару", en: "Manage" })}
           </Button>
         </div>
       </div>
@@ -1495,7 +1493,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               <div className="flex items-center gap-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-primary" />
-                  {language === "kk" ? "Күнтізбе:" : "Календарь на"}
+                  {l({ ru: "Календарь на", kk: "Күнтізбе:", en: "Calendar for" })}
                 </CardTitle>
                 <div className="inline-flex rounded-lg border border-border bg-muted/50 p-0.5 text-xs text-muted-foreground">
                   <button
@@ -1505,7 +1503,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }}
                     className="rounded-md px-2.5 py-1 text-xs font-medium transition-all bg-background text-foreground shadow-sm"
                   >
-                    {language === "kk" ? "аптаға" : "неделю"}
+                    {l({ ru: "неделю", kk: "аптаға", en: "the week" })}
                   </button>
                   <button
                     type="button"
@@ -1515,7 +1513,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }}
                     className="rounded-md px-2.5 py-1 text-xs font-medium transition-all hover:text-foreground"
                   >
-                    {language === "kk" ? "айға" : "месяц"}
+                    {l({ ru: "месяц", kk: "айға", en: "the month" })}
                   </button>
                 </div>
               </div>
@@ -1615,14 +1613,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2 capitalize">
                 <Users className="w-4 h-4 text-primary" />
-                {language === "ru" ? "Записи на " : ""}
+                {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
                 {(() => {
                   const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: ru });
                   return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
                 })()}
               </CardTitle>
               <Badge variant="secondary">
-                {allSlotsForDay.length} {language === "ru" ? "слотов" : "слот"}
+                {allSlotsForDay.length} {l({ ru: "слотов", kk: "слот", en: "slots" })}
               </Badge>
             </div>
           </CardHeader>
@@ -1639,7 +1637,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-base font-semibold text-foreground">
-                  {language === "kk" ? "Күнтізбе:" : "Календарь на"}
+                  {l({ ru: "Календарь на", kk: "Күнтізбе:", en: "Calendar for" })}
                 </span>
                 <div className="inline-flex items-center rounded-lg bg-muted p-0.5 text-muted-foreground">
                   <button
@@ -1650,7 +1648,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }}
                     className="rounded-md px-2.5 py-1 text-xs font-medium transition-all hover:text-foreground"
                   >
-                    {language === "kk" ? "аптаға" : "неделю"}
+                    {l({ ru: "неделю", kk: "аптаға", en: "the week" })}
                   </button>
                   <button
                     type="button"
@@ -1660,7 +1658,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }}
                     className="rounded-md px-2.5 py-1 text-xs font-medium transition-all bg-background text-foreground shadow-sm"
                   >
-                    {language === "kk" ? "айға" : "месяц"}
+                    {l({ ru: "месяц", kk: "айға", en: "the month" })}
                   </button>
                 </div>
               </div>
@@ -1769,7 +1767,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2 capitalize">
               <Users className="w-4 h-4 text-primary" />
-              {language === "ru" ? "Записи на " : ""}
+              {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
               {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: ru })}
             </DialogTitle>
           </DialogHeader>
@@ -1800,19 +1798,19 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{language === "ru" ? "Создать расписание" : "Кесте жасау"}</DialogTitle>
+            <DialogTitle>{l({ ru: "Создать расписание", kk: "Кесте жасау", en: "Create a schedule" })}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); createSchedule.mutate(); }} className="space-y-4 mt-4">
             <div className="text-sm text-muted-foreground">
-              {language === "ru" ? "Продукт" : "Өнім"}:{" "}
+              {l({ ru: "Продукт", kk: "Өнім", en: "Product" })}:{" "}
               <span className="font-medium text-foreground">
                 {products.find(p => p.id === selectedProductId)?.title}
               </span>
             </div>
             <div className="space-y-2">
-              <Label>{language === "ru" ? "Название" : "Атауы"} *</Label>
+              <Label>{l({ ru: "Название", kk: "Атауы", en: "Title" })} *</Label>
               <Input
-                placeholder={language === "ru" ? "Например: Индивидуальные консультации" : "Мысалы: Жеке кеңестер"}
+                placeholder={l({ ru: "Например: Индивидуальные консультации", kk: "Мысалы: Жеке кеңестер", en: "For example: one-to-one consultations" })}
                 value={scheduleForm.title}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
                 required
@@ -1838,12 +1836,12 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={isAddingSlots} onOpenChange={(open) => { if (!open) { setIsAddingSlots(false); setSelectedScheduleForSlots(null); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{language === "ru" ? "Добавить слоты" : "Слоттар қосу"}</DialogTitle>
+            <DialogTitle>{l({ ru: "Добавить слоты", kk: "Слоттар қосу", en: "Add slots" })}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); createTimeSlots.mutate(); }} className="space-y-4 mt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Дата начала" : "Басталу күні"}</Label>
+                <Label>{l({ ru: "Дата начала", kk: "Басталу күні", en: "Start date" })}</Label>
                 <Input
                   type="date"
                   value={slotsForm.startDate}
@@ -1851,7 +1849,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 />
               </div>
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Дата окончания" : "Аяқталу күні"}</Label>
+                <Label>{l({ ru: "Дата окончания", kk: "Аяқталу күні", en: "End date" })}</Label>
                 <Input
                   type="date"
                   value={slotsForm.endDate}
@@ -1861,7 +1859,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Время начала" : "Басталу уақыты"}</Label>
+                <Label>{l({ ru: "Время начала", kk: "Басталу уақыты", en: "Start time" })}</Label>
                 <Input
                   type="time"
                   value={slotsForm.startTime}
@@ -1877,7 +1875,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 />
               </div>
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Время окончания" : "Аяқталу уақыты"}</Label>
+                <Label>{l({ ru: "Время окончания", kk: "Аяқталу уақыты", en: "End time" })}</Label>
                 <Input
                   type="time"
                   value={slotsForm.endTime}
@@ -1886,7 +1884,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{language === "ru" ? "Длительность (мин)" : "Ұзақтығы (мин)"}</Label>
+              <Label>{l({ ru: "Длительность (мин)", kk: "Ұзақтығы (мин)", en: "Length (min)" })}</Label>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -1915,7 +1913,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{language === "ru" ? "Перерыв (мин)" : "Үзіліс (мин)"}</Label>
+              <Label>{l({ ru: "Перерыв (мин)", kk: "Үзіліс (мин)", en: "Break (min)" })}</Label>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -1944,7 +1942,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{language === "ru" ? "Количество участников" : "Қатысушылар саны"}</Label>
+              <Label>{l({ ru: "Количество участников", kk: "Қатысушылар саны", en: "Number of participants" })}</Label>
               <Input
                 type="number"
                 min="1"
@@ -1956,9 +1954,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 placeholder="1"
               />
               <p className="text-xs text-muted-foreground">
-                {language === "ru"
-                  ? "По умолчанию 1 (индивидуальное). Если больше 1 — групповое."
-                  : "Әдепкі бойынша 1 (жеке). 1-ден көп болса — топтық."}
+                {l({ ru: "По умолчанию 1 (индивидуальное). Если больше 1 — групповое.", kk: "Әдепкі бойынша 1 (жеке). 1-ден көп болса — топтық.", en: "The default is 1 (one-to-one). More than 1 makes it a group session." })}
               </p>
             </div>
             <div className="flex gap-2">
@@ -1966,7 +1962,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 {t("cancel")}
               </Button>
               <Button type="submit" className="flex-1" disabled={createTimeSlots.isPending}>
-                {createTimeSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : language === "ru" ? "Создать слоты" : "Слоттарды жасау"}
+                {createTimeSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : l({ ru: "Создать слоты", kk: "Слоттарды жасау", en: "Create slots" })}
               </Button>
             </div>
           </form>
@@ -1977,7 +1973,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={quickAddSlotHour !== null} onOpenChange={(open) => { if (!open) setQuickAddSlotHour(null); }}>
         <DialogContent className="sm:max-w-md z-[70]">
           <DialogHeader>
-            <DialogTitle>{language === "ru" ? "Добавить слот" : "Слот қосу"}</DialogTitle>
+            <DialogTitle>{l({ ru: "Добавить слот", kk: "Слот қосу", en: "Add a slot" })}</DialogTitle>
           </DialogHeader>
           {quickAddSlotHour !== null && selectedDate && (
             <div className="space-y-4 pt-2">
@@ -1991,7 +1987,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               </div>
 
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Количество участников" : "Қатысушылар саны"}</Label>
+                <Label>{l({ ru: "Количество участников", kk: "Қатысушылар саны", en: "Number of participants" })}</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -2000,7 +1996,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     className="flex-1 text-xs"
                     onClick={() => setQuickAddParticipants("1")}
                   >
-                    1 ({language === "ru" ? "Индивидуально" : "Жеке"})
+                    1 ({l({ ru: "Индивидуально", kk: "Жеке", en: "One-to-one" })})
                   </Button>
                   <Button
                     type="button"
@@ -2009,7 +2005,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     className="flex-1 text-xs"
                     onClick={() => setQuickAddParticipants("5")}
                   >
-                    5 ({language === "ru" ? "Группа" : "Топ"})
+                    5 ({l({ ru: "Группа", kk: "Топ", en: "Group" })})
                   </Button>
                   <Button
                     type="button"
@@ -2018,7 +2014,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     className="flex-1 text-xs"
                     onClick={() => setQuickAddParticipants("10")}
                   >
-                    10 ({language === "ru" ? "Группа" : "Топ"})
+                    10 ({l({ ru: "Группа", kk: "Топ", en: "Group" })})
                   </Button>
                 </div>
                 <Input
@@ -2030,14 +2026,12 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   className="mt-2"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {language === "ru"
-                    ? "По умолчанию 1 (индивидуальное занятие). Если больше 1 — групповое."
-                    : "Әдепкі бойынша 1 (жеке сабақ). 1-ден көп болса — топтық."}
+                  {l({ ru: "По умолчанию 1 (индивидуальное занятие). Если больше 1 — групповое.", kk: "Әдепкі бойынша 1 (жеке сабақ). 1-ден көп болса — топтық.", en: "The default is 1 (a one-to-one lesson). More than 1 makes it a group lesson." })}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label>{language === "ru" ? "Ссылка на урок (необязательно)" : "Сабаққа сілтеме (міндетті емес)"}</Label>
+                <Label>{l({ ru: "Ссылка на урок (необязательно)", kk: "Сабаққа сілтеме (міндетті емес)", en: "Lesson link (optional)" })}</Label>
                 <Input
                   placeholder="https://zoom.us/j/..."
                   value={quickAddLessonLink}
@@ -2061,7 +2055,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     });
                   }}
                 >
-                  {createSingleSlot.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (language === "ru" ? "Создать слот" : "Слот жасау")}
+                  {createSingleSlot.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (l({ ru: "Создать слот", kk: "Слот жасау", en: "Create a slot" }))}
                 </Button>
               </div>
             </div>
@@ -2075,7 +2069,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="w-5 h-5 text-primary" />
-              {language === "ru" ? "Управлять расписанием" : "Кестені басқару"}
+              {l({ ru: "Управлять расписанием", kk: "Кестені басқару", en: "Manage the schedule" })}
             </DialogTitle>
           </DialogHeader>
 
@@ -2083,15 +2077,15 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="edit" className="gap-1.5 text-xs sm:text-sm">
                 <Pencil className="w-3.5 h-3.5" />
-                {language === "ru" ? "Изменить" : "Өзгерту"}
+                {l({ ru: "Изменить", kk: "Өзгерту", en: "Change" })}
               </TabsTrigger>
               <TabsTrigger value="reschedule" className="gap-1.5 text-xs sm:text-sm">
                 <Clock className="w-3.5 h-3.5" />
-                {language === "ru" ? "Перенести" : "Ауыстыру"}
+                {l({ ru: "Перенести", kk: "Ауыстыру", en: "Reschedule" })}
               </TabsTrigger>
               <TabsTrigger value="delete" className="gap-1.5 text-xs sm:text-sm text-destructive data-[state=active]:text-destructive">
                 <Trash2 className="w-3.5 h-3.5" />
-                {language === "ru" ? "Удалить" : "Жою"}
+                {l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
               </TabsTrigger>
             </TabsList>
 
@@ -2101,7 +2095,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-primary" />
-                    {language === "ru" ? "Продлить расписание" : "Кестені ұзарту"}
+                    {l({ ru: "Продлить расписание", kk: "Кестені ұзарту", en: "Extend the schedule" })}
                   </span>
                   <Button
                     size="sm"
@@ -2111,18 +2105,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       setIsWizardOpen(true);
                     }}
                   >
-                    {language === "ru" ? "Добавить / Продлить" : "Қосу / Ұзарту"}
+                    {l({ ru: "Добавить / Продлить", kk: "Қосу / Ұзарту", en: "Add / extend" })}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {language === "ru"
-                    ? "Откройте мастер для добавления слотов на следующие недели или месяцы."
-                    : "Келесі апталарға немесе айларға слоттар қосу үшін шеберді ашыңыз."}
+                  {l({ ru: "Откройте мастер для добавления слотов на следующие недели или месяцы.", kk: "Келесі апталарға немесе айларға слоттар қосу үшін шеберді ашыңыз.", en: "Open the wizard to add slots for the coming weeks or months." })}
                 </p>
               </div>
 
               <div className="space-y-2 pt-2 border-t">
-                <Label className="text-xs font-semibold">{language === "ru" ? "Ссылка на урок (Zoom, Google Meet и др.)" : "Сабаққа сілтеме"}</Label>
+                <Label className="text-xs font-semibold">{l({ ru: "Ссылка на урок (Zoom, Google Meet и др.)", kk: "Сабаққа сілтеме", en: "Lesson link (Zoom, Google Meet and so on)" })}</Label>
                 <Input
                   placeholder="https://zoom.us/j/..."
                   value={lessonLinkUrl}
@@ -2133,7 +2125,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs">{language === "ru" ? "Даты для установки ссылки" : "Сілтеме орнататын күндер"}</Label>
+                  <Label className="text-xs">{l({ ru: "Даты для установки ссылки", kk: "Сілтеме орнататын күндер", en: "Dates to set the link on" })}</Label>
                   {availableDatesForLink.length > 0 && (
                     <Button
                       type="button"
@@ -2149,14 +2141,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       }}
                     >
                       {slotsForLinkDates.length === availableDatesForLink.length
-                        ? (language === "ru" ? "Снять всё" : "Барлығын алу")
-                        : (language === "ru" ? "Выбрать все даты" : "Барлық күндерді таңдау")}
+                        ? (l({ ru: "Снять всё", kk: "Барлығын алу", en: "Clear all" }))
+                        : (l({ ru: "Выбрать все даты", kk: "Барлық күндерді таңдау", en: "Select every date" }))}
                     </Button>
                   )}
                 </div>
                 {availableDatesForLink.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-2 text-center">
-                    {language === "ru" ? "Нет слотов для добавления ссылки" : "Сілтеме қосу үшін слоттар жоқ"}
+                    {l({ ru: "Нет слотов для добавления ссылки", kk: "Сілтеме қосу үшін слоттар жоқ", en: "There are no slots to add a link to" })}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 border rounded-md">
@@ -2206,7 +2198,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }
                   }}
                 >
-                  {addLessonLink.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (language === "ru" ? "Сохранить ссылку" : "Сілтемені сақтау")}
+                  {addLessonLink.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (l({ ru: "Сохранить ссылку", kk: "Сілтемені сақтау", en: "Save the link" }))}
                 </Button>
               </div>
             </TabsContent>
@@ -2215,10 +2207,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <TabsContent value="reschedule" className="space-y-4 pt-4">
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">{language === "ru" ? "1. Исходная дата (откуда перенести):" : "1. Бастапқы күн:"}</Label>
+                  <Label className="text-xs font-semibold">{l({ ru: "1. Исходная дата (откуда перенести):", kk: "1. Бастапқы күн:", en: "1. Original date (what to move):" })}</Label>
                   <Select value={manageRescheduleFromDate} onValueChange={setManageRescheduleFromDate}>
                     <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder={language === "ru" ? "Выберите дату со слотами" : "Күнді таңдаңыз"} />
+                      <SelectValue placeholder={l({ ru: "Выберите дату со слотами", kk: "Күнді таңдаңыз", en: "Choose a date that has slots" })} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableDatesForDelete.map((d) => (
@@ -2231,7 +2223,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold">{language === "ru" ? "2. Новая дата (куда перенести):" : "2. Жаңа күн:"}</Label>
+                  <Label className="text-xs font-semibold">{l({ ru: "2. Новая дата (куда перенести):", kk: "2. Жаңа күн:", en: "2. New date (where to move it):" })}</Label>
                   <Input
                     type="date"
                     value={manageRescheduleToDate}
@@ -2251,7 +2243,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   disabled={!manageRescheduleFromDate || !manageRescheduleToDate || rescheduleDateSlots.isPending}
                   onClick={() => rescheduleDateSlots.mutate()}
                 >
-                  {rescheduleDateSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (language === "ru" ? "Перенести слоты" : "Слоттарды ауыстыру")}
+                  {rescheduleDateSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (l({ ru: "Перенести слоты", kk: "Слоттарды ауыстыру", en: "Move the slots" }))}
                 </Button>
               </div>
             </TabsContent>
@@ -2259,7 +2251,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <TabsContent value="delete" className="space-y-4 pt-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>{language === "ru" ? "Выберите даты для удаления" : "Жою үшін күндерді таңдаңыз"}</Label>
+                  <Label>{l({ ru: "Выберите даты для удаления", kk: "Жою үшін күндерді таңдаңыз", en: "Choose the dates to delete" })}</Label>
                   {availableDatesForDelete.length > 0 && (
                     <Button
                       type="button"
@@ -2275,14 +2267,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       }}
                     >
                       {slotsToDeleteDates.length === availableDatesForDelete.length
-                        ? (language === "ru" ? "Снять всё" : "Барлығын алу")
-                        : (language === "ru" ? "Выбрать все даты" : "Барлық күндерді таңдау")}
+                        ? (l({ ru: "Снять всё", kk: "Барлығын алу", en: "Clear all" }))
+                        : (l({ ru: "Выбрать все даты", kk: "Барлық күндерді таңдау", en: "Select every date" }))}
                     </Button>
                   )}
                 </div>
                 {availableDatesForDelete.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">
-                    {language === "ru" ? "Нет слотов для удаления" : "Жоюға болатын слоттар жоқ"}
+                    {l({ ru: "Нет слотов для удаления", kk: "Жоюға болатын слоттар жоқ", en: "There are no slots to delete" })}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 border rounded-md">
@@ -2311,9 +2303,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 )}
                 {availableDatesForDelete.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {language === "ru"
-                      ? `Выбрано дат: ${slotsToDeleteDates.length} из ${availableDatesForDelete.length}`
-                      : `Таңдалған күндер: ${slotsToDeleteDates.length} / ${availableDatesForDelete.length}`}
+                    {l({ ru: `Выбрано дат: ${slotsToDeleteDates.length} из ${availableDatesForDelete.length}`, kk: `Таңдалған күндер: ${slotsToDeleteDates.length} / ${availableDatesForDelete.length}`, en: `Dates chosen: ${slotsToDeleteDates.length} of ${availableDatesForDelete.length}` })}
                   </p>
                 )}
               </div>
@@ -2338,7 +2328,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }
                   }}
                 >
-                  {deleteMultipleSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (language === "ru" ? "Удалить слоты" : "Слоттарды жою")}
+                  {deleteMultipleSlots.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (l({ ru: "Удалить слоты", kk: "Слоттарды жою", en: "Delete the slots" }))}
                 </Button>
               </div>
             </TabsContent>
@@ -2350,11 +2340,9 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <AlertDialog open={!!deletingSchedule} onOpenChange={(open) => { if (!open) setDeletingSchedule(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{language === "ru" ? "Удалить расписание?" : "Кестені жою керек пе?"}</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Удалить расписание?", kk: "Кестені жою керек пе?", en: "Delete this schedule?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "ru" 
-                ? `Вы уверены, что хотите удалить "${deletingSchedule?.title}"? Все связанные слоты будут также удалены.`
-                : `"${deletingSchedule?.title}" жойғыңыз келетініне сенімдісіз бе? Барлық байланысты слоттар да жойылады.`}
+              {l({ ru: `Вы уверены, что хотите удалить "${deletingSchedule?.title}"? Все связанные слоты будут также удалены.`, kk: `"${deletingSchedule?.title}" жойғыңыз келетініне сенімдісіз бе? Барлық байланысты слоттар да жойылады.`, en: `Are you sure you want to delete "${deletingSchedule?.title}"? Every slot belonging to it will be deleted too.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2375,21 +2363,17 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         onClose={() => setCancelingBooking(null)}
         onConfirm={handleCancelBookingWithReason}
         isPending={creatorCancelBooking.isPending}
-        title={language === "ru" ? "Отменить запись?" : "Жазбаны бас тарту керек пе?"}
-        description={language === "ru"
-          ? `Вы отменяете запись ученика "${cancelingBooking?.user?.name || "—"}". Укажите причину.`
-          : `"${cancelingBooking?.user?.name || "—"}" оқушысының жазбасын бас тартасыз. Себебін көрсетіңіз.`}
+        title={l({ ru: "Отменить запись?", kk: "Жазбаны бас тарту керек пе?", en: "Cancel this booking?" })}
+        description={l({ ru: `Вы отменяете запись ученика "${cancelingBooking?.user?.name || "—"}". Укажите причину.`, kk: `"${cancelingBooking?.user?.name || "—"}" оқушысының жазбасын бас тартасыз. Себебін көрсетіңіз.`, en: `You are cancelling the booking of "${cancelingBooking?.user?.name || "—"}". Please give a reason.` })}
       />
 
       {/* Delete Time Slot Confirmation */}
       <AlertDialog open={!!deletingSlot} onOpenChange={(open) => { if (!open) setDeletingSlot(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{language === "ru" ? "Удалить слот?" : "Слотты жою керек пе?"}</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Удалить слот?", kk: "Слотты жою керек пе?", en: "Delete this slot?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "ru"
-                ? `Вы уверены, что хотите удалить слот ${deletingSlot?.start_time.slice(0, 5)} - ${deletingSlot?.end_time.slice(0, 5)}?`
-                : `${deletingSlot?.start_time.slice(0, 5)} - ${deletingSlot?.end_time.slice(0, 5)} слотын жойғыңыз келетініне сенімдісіз бе?`}
+              {l({ ru: `Вы уверены, что хотите удалить слот ${deletingSlot?.start_time.slice(0, 5)} - ${deletingSlot?.end_time.slice(0, 5)}?`, kk: `${deletingSlot?.start_time.slice(0, 5)} - ${deletingSlot?.end_time.slice(0, 5)} слотын жойғыңыз келетініне сенімдісіз бе?`, en: `Are you sure you want to delete the ${deletingSlot?.start_time.slice(0, 5)} - ${deletingSlot?.end_time.slice(0, 5)} slot?` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2414,25 +2398,21 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           }
         }}
         isPending={deleteSlotWithBookings.isPending}
-        title={language === "ru" ? "Отменить записи и удалить слот?" : "Жазбаларды жойып, слотты өшіру керек пе?"}
-        description={language === "ru"
-          ? `Слот ${deletingSlotWithBookings?.start_time.slice(0, 5)} - ${deletingSlotWithBookings?.end_time.slice(0, 5)} будет удалён вместе со всеми записями. Укажите причину отмены.`
-          : `${deletingSlotWithBookings?.start_time.slice(0, 5)} - ${deletingSlotWithBookings?.end_time.slice(0, 5)} слоты барлық жазбалармен бірге жойылады. Бас тарту себебін көрсетіңіз.`}
+        title={l({ ru: "Отменить записи и удалить слот?", kk: "Жазбаларды жойып, слотты өшіру керек пе?", en: "Cancel the bookings and delete the slot?" })}
+        description={l({ ru: `Слот ${deletingSlotWithBookings?.start_time.slice(0, 5)} - ${deletingSlotWithBookings?.end_time.slice(0, 5)} будет удалён вместе со всеми записями. Укажите причину отмены.`, kk: `${deletingSlotWithBookings?.start_time.slice(0, 5)} - ${deletingSlotWithBookings?.end_time.slice(0, 5)} слоты барлық жазбалармен бірге жойылады. Бас тарту себебін көрсетіңіз.`, en: `The ${deletingSlotWithBookings?.start_time.slice(0, 5)} - ${deletingSlotWithBookings?.end_time.slice(0, 5)} slot will be deleted along with every booking in it. Please give a reason.` })}
       />
 
       {/* Expand Slot Confirmation */}
       <AlertDialog open={!!expandingSlot} onOpenChange={(open) => { if (!open) setExpandingSlot(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{language === "ru" ? "Добавить место в слот?" : "Слотқа орын қосу керек пе?"}</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Добавить место в слот?", kk: "Слотқа орын қосу керек пе?", en: "Add a seat to this slot?" })}</AlertDialogTitle>
             <AlertDialogDescription>
               {(() => {
                 if (!expandingSlot) return "";
                 const currentMax = expandingSlot.slot.max_participants ?? expandingSlot.schedule.max_participants ?? 1;
                 const newMax = currentMax + 1;
-                return language === "ru"
-                  ? `Максимальное количество участников для слота ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} будет увеличено с ${currentMax} до ${newMax}.`
-                  : `${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} слотындағы қатысушылардың максималды саны ${currentMax}-ден ${newMax}-ге дейін артады.`;
+                return l({ ru: `Максимальное количество участников для слота ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} будет увеличено с ${currentMax} до ${newMax}.`, kk: `${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} слотындағы қатысушылардың максималды саны ${currentMax}-ден ${newMax}-ге дейін артады.`, en: `The ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} slot will go from ${currentMax} to ${newMax} participants.` });
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2442,7 +2422,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               onClick={() => expandingSlot && expandSlot.mutate(expandingSlot)}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {expandSlot.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : language === "ru" ? "Добавить место" : "Орын қосу"}
+              {expandSlot.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : l({ ru: "Добавить место", kk: "Орын қосу", en: "Add a seat" })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2453,13 +2433,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={isDeletingSchedule} onOpenChange={(open) => { if (!open) { setIsDeletingSchedule(false); setSelectedScheduleForDelete(null); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{language === "ru" ? "Удалить расписание" : "Кестені жою"}</DialogTitle>
+            <DialogTitle>{l({ ru: "Удалить расписание", kk: "Кестені жою", en: "Delete a schedule" })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
-            <Label>{language === "ru" ? "Выберите расписание для удаления" : "Жою үшін кестені таңдаңыз"}</Label>
+            <Label>{l({ ru: "Выберите расписание для удаления", kk: "Жою үшін кестені таңдаңыз", en: "Choose the schedule to delete" })}</Label>
             {schedules.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">
-                {language === "ru" ? "Нет расписаний" : "Кестелер жоқ"}
+                {l({ ru: "Нет расписаний", kk: "Кестелер жоқ", en: "No schedules" })}
               </p>
             ) : (
               <div className="space-y-4 max-h-80 overflow-y-auto">
@@ -2468,7 +2448,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                       <User className="w-4 h-4" />
-                      {language === "ru" ? "Индивидуальные" : "Жеке сабақтар"}
+                      {l({ ru: "Индивидуальные", kk: "Жеке сабақтар", en: "One-to-one" })}
                     </div>
                     {schedules.filter(s => s.event_type === "individual").map((schedule) => (
                       <Button
@@ -2497,7 +2477,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                       <Users className="w-4 h-4" />
-                      {language === "ru" ? "Групповые" : "Топтық сабақтар"}
+                      {l({ ru: "Групповые", kk: "Топтық сабақтар", en: "Group" })}
                     </div>
                     {schedules.filter(s => s.event_type === "group").map((schedule) => (
                       <Button
@@ -2531,12 +2511,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "ru" ? "Удалить расписание?" : "Кестені жою керек пе?"}
+              {l({ ru: "Удалить расписание?", kk: "Кестені жою керек пе?", en: "Delete this schedule?" })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {language === "ru" 
-                ? `Вы уверены, что хотите удалить расписание "${selectedScheduleForDelete?.title}"? Все слоты и записи будут удалены. Это действие нельзя отменить.`
-                : `"${selectedScheduleForDelete?.title}" кестесін жойғыңыз келетініне сенімдісіз бе? Барлық слоттар мен жазбалар жойылады. Бұл әрекетті болдырмау мүмкін емес.`}
+              {l({ ru: `Вы уверены, что хотите удалить расписание "${selectedScheduleForDelete?.title}"? Все слоты и записи будут удалены. Это действие нельзя отменить.`, kk: `"${selectedScheduleForDelete?.title}" кестесін жойғыңыз келетініне сенімдісіз бе? Барлық слоттар мен жазбалар жойылады. Бұл әрекетті болдырмау мүмкін емес.`, en: `Are you sure you want to delete the "${selectedScheduleForDelete?.title}" schedule? Every slot and booking will be deleted. This cannot be undone.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2568,16 +2546,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {language === "ru" ? "Редактировать название" : "Атауын өңдеу"}
+              {l({ ru: "Редактировать название", kk: "Атауын өңдеу", en: "Edit the title" })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label>{language === "ru" ? "Название расписания" : "Кесте атауы"}</Label>
+              <Label>{l({ ru: "Название расписания", kk: "Кесте атауы", en: "Schedule title" })}</Label>
               <Input
                 value={editScheduleTitle}
                 onChange={(e) => setEditScheduleTitle(e.target.value)}
-                placeholder={language === "ru" ? "Введите название" : "Атауын енгізіңіз"}
+                placeholder={l({ ru: "Введите название", kk: "Атауын енгізіңіз", en: "Enter a title" })}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -2617,7 +2595,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={!!viewingLinkSlot} onOpenChange={(open) => { if (!open) setViewingLinkSlot(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{language === "ru" ? "Ссылка на урок" : "Сабаққа сілтеме"}</DialogTitle>
+            <DialogTitle>{l({ ru: "Ссылка на урок", kk: "Сабаққа сілтеме", en: "Lesson link" })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
@@ -2640,18 +2618,18 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 onClick={() => {
                   if (viewingLinkSlot?.lesson_link) {
                     navigator.clipboard.writeText(viewingLinkSlot.lesson_link);
-                    toast.success(language === "ru" ? "Ссылка скопирована!" : "Сілтеме көшірілді!");
+                    toast.success(l({ ru: "Ссылка скопирована!", kk: "Сілтеме көшірілді!", en: "Link copied!" }));
                   }
                 }}
               >
                 <Copy className="w-4 h-4 mr-2" />
-                {language === "ru" ? "Копировать" : "Көшіру"}
+                {l({ ru: "Копировать", kk: "Көшіру", en: "Copy" })}
               </Button>
               <Button
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
-                  const newLink = prompt(language === "ru" ? "Введите новую ссылку:" : "Жаңа сілтемені енгізіңіз:", viewingLinkSlot?.lesson_link || "");
+                  const newLink = prompt(l({ ru: "Введите новую ссылку:", kk: "Жаңа сілтемені енгізіңіз:", en: "Enter the new link:" }), viewingLinkSlot?.lesson_link || "");
                   if (newLink !== null && viewingLinkSlot) {
                     updateSlotLink.mutate({ slotId: viewingLinkSlot.id, link: newLink || null });
                     setViewingLinkSlot(null);
@@ -2659,7 +2637,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 }}
               >
                 <Pencil className="w-4 h-4 mr-2" />
-                {language === "ru" ? "Изменить" : "Өзгерту"}
+                {l({ ru: "Изменить", kk: "Өзгерту", en: "Change" })}
               </Button>
             </div>
             <Button
@@ -2673,7 +2651,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               }}
             >
               <Trash2 className="w-4 h-4 mr-2" />
-              {language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
+              {l({ ru: "Удалить ссылку", kk: "Сілтемені жою", en: "Delete the link" })}
             </Button>
           </div>
         </DialogContent>
@@ -2695,10 +2673,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               comment: data.comment,
               requestedBy: "creator",
             });
-            toast.success(language === "ru" ? "Запрос на перенос отправлен ученику" : "Ауыстыру сұранысы оқушыға жіберілді");
+            toast.success(l({ ru: "Запрос на перенос отправлен ученику", kk: "Ауыстыру сұранысы оқушыға жіберілді", en: "The reschedule request was sent to the student" }));
             setReschedulingSlot(null);
           } catch {
-            toast.error(language === "ru" ? "Ошибка при отправке запроса" : "Сұраныс жіберу кезінде қате");
+            toast.error(l({ ru: "Ошибка при отправке запроса", kk: "Сұраныс жіберу кезінде қате", en: "Could not send the request" }));
           }
         }}
         slot={reschedulingSlot?.slot || null}
@@ -2720,7 +2698,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             toast.success(t("timeUpdated"));
             setEditingSlotTime(null);
           } catch {
-            toast.error(language === "ru" ? "Ошибка" : "Қате");
+            toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
           }
         }}
         slot={editingSlotTime}

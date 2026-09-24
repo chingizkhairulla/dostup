@@ -40,7 +40,7 @@ interface TeacherNotificationsTabProps {
 }
 
 const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: TeacherNotificationsTabProps) => {
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const queryClient = useQueryClient();
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
 
@@ -169,10 +169,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teacher-reschedule-requests"] });
-      toast.success(language === "ru" ? "Перенос подтверждён" : "Ауыстыру расталды");
+      toast.success(l({ ru: "Перенос подтверждён", kk: "Ауыстыру расталды", en: "Reschedule confirmed" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка при подтверждении" : "Растау қатесі");
+      toast.error(l({ ru: "Ошибка при подтверждении", kk: "Растау қатесі", en: "Could not confirm" }));
     },
   });
 
@@ -189,10 +189,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teacher-reschedule-requests"] });
       setRejectingRequestId(null);
-      toast.success(language === "ru" ? "Запрос отклонён" : "Сұраныс қабылданбады");
+      toast.success(l({ ru: "Запрос отклонён", kk: "Сұраныс қабылданбады", en: "Request rejected" }));
     },
     onError: () => {
-      toast.error(language === "ru" ? "Ошибка" : "Қате");
+      toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
     },
   });
 
@@ -243,7 +243,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
     <div className="space-y-4">
       <h2 className="text-lg font-semibold flex items-center gap-2">
         <Bell className="w-5 h-5" />
-        {language === "ru" ? "Уведомления" : "Хабарландырулар"}
+        {l({ ru: "Уведомления", kk: "Хабарландырулар", en: "Notifications" })}
       </h2>
 
       {/* Reschedule Requests */}
@@ -252,7 +252,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
           <CardHeader className="pb-2 px-3 pt-3">
             <CardTitle className="text-base flex items-center gap-2 text-primary">
               <Timer className="w-4 h-4" />
-              {language === "ru" ? "Запросы на перенос" : "Ауыстыру сұраныстары"} ({rescheduleRequests.length})
+              {l({ ru: "Запросы на перенос", kk: "Ауыстыру сұраныстары", en: "Reschedule requests" })} ({rescheduleRequests.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -269,14 +269,14 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm font-medium text-foreground truncate">{request.user_name}</span>
-                            {isNew && <Badge variant="default" className="text-[10px] px-1.5 py-0">{language === "ru" ? "Новое" : "Жаңа"}</Badge>}
+                            {isNew && <Badge variant="default" className="text-[10px] px-1.5 py-0">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="pl-8 space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        {language === "ru" ? "просит перенести" : "ауыстыруды сұрайды"}: <span className="font-medium text-foreground">{request.product_title}</span>
+                        {l({ ru: "просит перенести", kk: "ауыстыруды сұрайды", en: "asks to reschedule" })}: <span className="font-medium text-foreground">{request.product_title}</span>
                       </p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-medium text-orange-500">{request.old_time?.slice(0, 5)}</span>
@@ -297,10 +297,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                       )}
                       <div className="flex items-center gap-2 mt-2">
                         <Button size="sm" onClick={() => approveReschedule.mutate(request)} disabled={approveReschedule.isPending || rejectReschedule.isPending} className="h-7 text-xs px-2">
-                          {approveReschedule.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" />{language === "ru" ? "Подтвердить" : "Растау"}</>}
+                          {approveReschedule.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" />{l({ ru: "Подтвердить", kk: "Растау", en: "Confirm" })}</>}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setRejectingRequestId(request.id)} disabled={approveReschedule.isPending || rejectReschedule.isPending} className="h-7 text-xs px-2 text-destructive border-destructive/30">
-                          {rejectReschedule.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><X className="w-3.5 h-3.5 mr-1" />{language === "ru" ? "Отклонить" : "Қабылдамау"}</>}
+                          {rejectReschedule.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><X className="w-3.5 h-3.5 mr-1" />{l({ ru: "Отклонить", kk: "Қабылдамау", en: "Reject" })}</>}
                         </Button>
                       </div>
                     </div>
@@ -315,8 +315,8 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
       {allNotifications.length === 0 && rescheduleRequests.length === 0 ? (
         <div className="text-center py-12">
           <Bell className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-muted-foreground">{language === "ru" ? "Уведомлений пока нет" : "Хабарландырулар әзірше жоқ"}</p>
-          <p className="text-sm text-muted-foreground mt-1">{language === "ru" ? "Здесь будут появляться записи и отмены" : "Мұнда жазбалар мен бас тартулар пайда болады"}</p>
+          <p className="text-muted-foreground">{l({ ru: "Уведомлений пока нет", kk: "Хабарландырулар әзірше жоқ", en: "No notifications yet" })}</p>
+          <p className="text-sm text-muted-foreground mt-1">{l({ ru: "Здесь будут появляться записи и отмены", kk: "Мұнда жазбалар мен бас тартулар пайда болады", en: "Bookings and cancellations will appear here" })}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -335,10 +335,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{booking.user?.name || "—"}</p>
-                        {isNew && <Badge variant="default" className="text-xs px-2 py-0.5">{language === "ru" ? "Новое" : "Жаңа"}</Badge>}
+                        {isNew && <Badge variant="default" className="text-xs px-2 py-0.5">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                        {language === "ru" ? "записался на" : "жазылды"} {booking.schedule?.product?.title || booking.schedule?.title}
+                        {l({ ru: "записался на", kk: "жазылды", en: "booked" })} {booking.schedule?.product?.title || booking.schedule?.title}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: ru })}</span>
@@ -361,10 +361,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{cancellation.user_name}</p>
-                        {isNew && <Badge variant="destructive" className="text-xs px-2 py-0.5">{language === "ru" ? "Новое" : "Жаңа"}</Badge>}
+                        {isNew && <Badge variant="destructive" className="text-xs px-2 py-0.5">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                        {language === "ru" ? "отменил запись на" : "жазбасын бас тартты"} {cancellation.product_title}
+                        {l({ ru: "отменил запись на", kk: "жазбасын бас тартты", en: "cancelled their booking of" })} {cancellation.product_title}
                       </p>
                       {((cancellation.cancellation_reasons?.length > 0) || cancellation.cancellation_comment) && (
                         <div className="mt-2 p-2 bg-destructive/5 rounded">
@@ -401,10 +401,10 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium">
                           {isApproved
-                            ? (language === "ru" ? "Перенос подтверждён" : "Ауыстыру расталды")
-                            : (language === "ru" ? "Перенос отклонён" : "Ауыстыру қабылданбады")}
+                            ? (l({ ru: "Перенос подтверждён", kk: "Ауыстыру расталды", en: "Reschedule confirmed" }))
+                            : (l({ ru: "Перенос отклонён", kk: "Ауыстыру қабылданбады", en: "Reschedule rejected" }))}
                         </p>
-                        {isNew && <Badge variant={isApproved ? "default" : "destructive"} className="text-xs px-2 py-0.5">{language === "ru" ? "Новое" : "Жаңа"}</Badge>}
+                        {isNew && <Badge variant={isApproved ? "default" : "destructive"} className="text-xs px-2 py-0.5">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">{response.product_title}</p>
                       <div className="flex items-center gap-2 text-xs mt-1">
@@ -418,7 +418,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        {response.user_name} {isApproved ? (language === "ru" ? "подтвердил" : "растады") : (language === "ru" ? "отклонил" : "қабылдамады")}
+                        {response.user_name} {isApproved ? (l({ ru: "подтвердил", kk: "растады", en: "confirmed" })) : (l({ ru: "отклонил", kk: "қабылдамады", en: "rejected" }))}
                       </p>
                     </div>
                   </div>

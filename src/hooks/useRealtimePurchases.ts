@@ -30,7 +30,7 @@ const cleanupProcessedIds = (id: string) => {
 
 export const useRealtimePurchaseNotifications = (productIds: string[], enabled: boolean = true) => {
   const queryClient = useQueryClient();
-  const { language } = useLanguage();
+  const { language, l } = useLanguage();
   const productIdsRef = useRef<string[]>(productIds);
 
   useEffect(() => {
@@ -109,9 +109,7 @@ export const useRealtimePurchaseNotifications = (productIds: string[], enabled: 
             // Play payment sound
             playPaymentSound();
             
-            const title = language === "ru" 
-              ? `Новая покупка от ${fullPurchase.user?.name || "Клиент"}`
-              : `${fullPurchase.user?.name || "Клиент"} жаңа сатып алу жасады`;
+            const title = l({ ru: `Новая покупка от ${fullPurchase.user?.name || "Клиент"}`, kk: `${fullPurchase.user?.name || "Клиент"} жаңа сатып алу жасады`, en: `New purchase from ${fullPurchase.user?.name || "a customer"}` });
             
             const description = fullPurchase.product?.title || "";
             

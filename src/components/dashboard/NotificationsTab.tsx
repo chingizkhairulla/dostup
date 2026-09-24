@@ -8,7 +8,7 @@ import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { format, formatDistanceToNow } from "date-fns";
-import { ru, kk } from "date-fns/locale";
+import { ru, kk, enGB } from "date-fns/locale";
 
 interface BookingCancellation {
   id: string;
@@ -68,7 +68,7 @@ interface NotificationsTabProps {
 }
 
 const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: NotificationsTabProps) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const { user } = useSimpleAuth();
   const queryClient = useQueryClient();
 
@@ -225,7 +225,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
     return new Date(dateStr) > lastViewedAt;
   };
 
-  const locale = language === "ru" ? ru : kk;
+  const locale = { ru, kk, en: enGB }[language];
 
   const isLoading = loadingCancellations || loadingPurchases || loadingUnlocks || loadingRejected || loadingIncoming;
 
@@ -290,7 +290,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-foreground">
-                          {language === "ru" ? "Материал доступен" : "Материал қолжетімді"}
+                          {l({ ru: "Материал доступен", kk: "Материал қолжетімді", en: "A material is available" })}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           {unlock.material_title} • {unlock.product_title}
@@ -328,7 +328,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-foreground">
-                          {language === "ru" ? "Оплата подтверждена" : "Төлем расталды"}
+                          {l({ ru: "Оплата подтверждена", kk: "Төлем расталды", en: "Payment confirmed" })}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           {purchase.product_title}
@@ -366,7 +366,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-foreground">
-                          {language === "ru" ? "Перенос отклонён" : "Ауыстыру қабылданбады"}
+                          {l({ ru: "Перенос отклонён", kk: "Ауыстыру қабылданбады", en: "Reschedule rejected" })}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           {rejection.product_title}
@@ -417,8 +417,8 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-foreground">
                           {reschedule.requested_by === "teacher"
-                            ? (language === "ru" ? "Запрос на перенос от учителя" : "Мұғалімнен ауыстыру сұрауы")
-                            : (language === "ru" ? "Запрос на перенос от автора" : "Автордан ауыстыру сұрауы")}
+                            ? (l({ ru: "Запрос на перенос от учителя", kk: "Мұғалімнен ауыстыру сұрауы", en: "Reschedule request from the teacher" }))
+                            : (l({ ru: "Запрос на перенос от автора", kk: "Автордан ауыстыру сұрауы", en: "Reschedule request from the author" }))}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
                           {reschedule.product_title}
@@ -476,8 +476,8 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
                     <div className="flex-1 min-w-0">
                       <p className="text-base font-medium text-foreground">
                         {cancellation.cancelled_by === "teacher"
-                          ? (language === "ru" ? "Запись отменена учителем" : "Мұғалім жазылуды болдырмады")
-                          : (language === "ru" ? "Запись отменена автором" : "Автор жазылуды болдырмады")}
+                          ? (l({ ru: "Запись отменена учителем", kk: "Мұғалім жазылуды болдырмады", en: "The teacher cancelled the booking" }))
+                          : (l({ ru: "Запись отменена автором", kk: "Автор жазылуды болдырмады", en: "The author cancelled the booking" }))}
                       </p>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         {cancellation.product_title}
