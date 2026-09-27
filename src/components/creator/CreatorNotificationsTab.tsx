@@ -54,9 +54,10 @@ interface RescheduleRequest {
 interface CreatorNotificationsTabProps {
   creatorName: string;
   lastViewedAt?: Date | null;
+  onOpenUsers?: () => void;
 }
 
-const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificationsTabProps) => {
+const CreatorNotificationsTab = ({ creatorName, lastViewedAt, onOpenUsers }: CreatorNotificationsTabProps) => {
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: products } = useCreatorProducts(creatorName);
@@ -393,7 +394,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-foreground">{t("notifications")}</h2>
-      <CreatorPendingPayments creatorName={creatorName} />
+      <CreatorPendingPayments creatorName={creatorName} mode="link" onOpenUsers={onOpenUsers} />
 
       {/* Reschedule Requests Section */}
       {rescheduleRequests.length > 0 && (

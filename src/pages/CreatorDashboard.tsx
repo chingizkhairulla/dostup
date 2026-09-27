@@ -280,7 +280,7 @@ const CreatorDashboard = () => {
       <main className={isMobile ? "px-4 py-6" : "mx-auto w-full max-w-5xl px-6 py-6"}>
           {activeTab === "products" && (
             <div className="animate-fade-in">
-              <CreatorProductsTab creatorName={creatorName} />
+              <CreatorProductsTab creatorName={creatorName} onOpenUsers={() => handleTabChange("users")} />
             </div>
           )}
           {activeTab === "announcements" && (
@@ -305,7 +305,11 @@ const CreatorDashboard = () => {
           )}
           {activeTab === "notifications" && (
             <div className="animate-fade-in">
-              <CreatorNotificationsTab creatorName={creatorName} lastViewedAt={lastViewedAt} />
+              <CreatorNotificationsTab
+                creatorName={creatorName}
+                lastViewedAt={lastViewedAt}
+                onOpenUsers={() => handleTabChange("users")}
+              />
             </div>
           )}
           {activeTab === "account" && (

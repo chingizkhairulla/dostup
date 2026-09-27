@@ -54,6 +54,18 @@ import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import {
+  KASPI_METHOD_ORDER,
+  KASPI_METHOD_LABELS,
+  BANK_OPTIONS,
+  DEFAULT_BANK,
+  formatCardNumber,
+  cardDigits,
+  isValidCardNumber,
+  isPaymentBank,
+  type KaspiMethod,
+  type PaymentBank,
+} from "@/lib/paymentMethods";
 import { useCoverCrop, type CoverCropResult } from "@/hooks/useCoverCrop";
 import CoverCropEditor from "./CoverCropEditor";
 import ProductVideoPlayer, { videoBlobCache } from "@/components/media/ProductVideoPlayer";
@@ -67,14 +79,26 @@ export interface PricingOptionFormItem {
   hasFreeTrial: boolean;
   trialPreset: "3" | "7" | "30" | "custom";
   trialCustomDays: number;
-  kaspiMethod: "link" | "phone";
+  kaspiMethods: KaspiMethod[];
   kaspiLink: string;
   kaspiPhone: string;
+  kaspiCard: string;
+  bank: PaymentBank;
+  bankName: string;
+}
+
+export interface DefaultKaspiSettings {
+  methods?: KaspiMethod[];
+  link?: string;
+  phone?: string;
+  card?: string;
+  bank?: PaymentBank;
+  bankName?: string;
 }
 
 export const createDefaultPricingOption = (
   id?: string,
-  defaultKaspi?: { method?: "link" | "phone"; link?: string; phone?: string }
+  defaultKaspi?: DefaultKaspiSettings
 ): PricingOptionFormItem => ({
   id: id || Math.random().toString(36).slice(2, 10),
   paymentType: "recurring",
@@ -84,10 +108,46 @@ export const createDefaultPricingOption = (
   hasFreeTrial: false,
   trialPreset: "7",
   trialCustomDays: 7,
-  kaspiMethod: defaultKaspi?.method || "link",
+  kaspiMethods: defaultKaspi?.methods?.length ? [...defaultKaspi.methods] : ["link"],
   kaspiLink: defaultKaspi?.link || "",
   kaspiPhone: defaultKaspi?.phone || "",
+  kaspiCard: defaultKaspi?.card || "",
+  bank: defaultKaspi?.bank || DEFAULT_BANK,
+  bankName: defaultKaspi?.bankName || "",
 });
+
+/** Преобразует сохранённый вариант тарифа (JSON из pricing_options / поля продукта) в настройки формы. */
+export const kaspiSettingsFromStored = (
+  po: { kaspi_link?: string | null; kaspi_phone?: string | null; kaspi_card?: string | null; bank?: string | null; bank_name?: string | null } | null | undefined,
+  fallback?: { kaspi_link?: string | null; kaspi_phone?: string | null; kaspi_card?: string | null; bank?: string | null; bank_name?: string | null } | null,
+): Required<DefaultKaspiSettings> => {
+  const src = po && (po.kaspi_link || po.kaspi_phone || po.kaspi_card) ? po : (fallback || po || {});
+  const methods: KaspiMethod[] = [];
+  if (src.kaspi_link) methods.push("link");
+  if (src.kaspi_phone) methods.push("phone");
+  if (src.kaspi_card) methods.push("card");
+  return {
+    methods: methods.length ? methods : ["link"],
+    link: src.kaspi_link || "",
+    phone: src.kaspi_phone || "",
+    card: cardDigits(src.kaspi_card),
+    bank: isPaymentBank(src.bank) ? src.bank : DEFAULT_BANK,
+    bankName: src.bank_name || "",
+  };
+};
+
+/** Поля способа оплаты для сохранения в pricing_options. */
+export const serializeKaspiFields = (opt: PricingOptionFormItem) => {
+  const m = new Set(opt.kaspiMethods);
+  const usesBank = m.has("phone") || m.has("card");
+  return {
+    kaspi_link: m.has("link") ? (opt.kaspiLink.trim() || null) : null,
+    kaspi_phone: m.has("phone") ? (opt.kaspiPhone.trim() || null) : null,
+    kaspi_card: m.has("card") ? (cardDigits(opt.kaspiCard) || null) : null,
+    bank: usesBank ? opt.bank : null,
+    bank_name: usesBank && opt.bank === "other" ? (opt.bankName.trim() || null) : null,
+  };
+};
 
 export function getPricingOptionSummary(opt: PricingOptionFormItem) {
   const priceNum = Number(opt.price) || 0;
@@ -166,8 +226,11 @@ interface FormData {
   media: ProductMediaItem[];
   faq: Array<{ question: string; answer: string }>;
   isPaid: boolean;
-  kaspiMethod: "link" | "phone";
+  kaspiMethods: KaspiMethod[];
   kaspiPhone: string;
+  kaspiCard: string;
+  bank: PaymentBank;
+  bankName: string;
   paymentType: "one_time" | "recurring";
   recurringInterval: string;
   recurringCustomDays: number;
@@ -945,9 +1008,12 @@ const ProductForm = ({
           hasFreeTrial: updated[0].hasFreeTrial,
           trialPreset: updated[0].trialPreset,
           trialCustomDays: updated[0].trialCustomDays,
-          kaspiMethod: updated[0].kaspiMethod,
+          kaspiMethods: updated[0].kaspiMethods,
           kaspiLink: updated[0].kaspiLink,
           kaspiPhone: updated[0].kaspiPhone,
+          kaspiCard: updated[0].kaspiCard,
+          bank: updated[0].bank,
+          bankName: updated[0].bankName,
         } : {}),
       };
     });
@@ -956,9 +1022,12 @@ const ProductForm = ({
   const addOption = () => {
     const last = formData.pricingOptions?.[formData.pricingOptions.length - 1];
     const newOpt = createDefaultPricingOption(undefined, {
-      method: last?.kaspiMethod || formData.kaspiMethod,
+      methods: last?.kaspiMethods?.length ? last.kaspiMethods : formData.kaspiMethods,
       link: last?.kaspiLink || formData.kaspiLink,
       phone: last?.kaspiPhone || formData.kaspiPhone,
+      card: last?.kaspiCard || formData.kaspiCard,
+      bank: last?.bank || formData.bank,
+      bankName: last?.bankName || formData.bankName,
     });
     setFormData((prev) => ({
       ...prev,
@@ -981,9 +1050,12 @@ const ProductForm = ({
         hasFreeTrial: fallback[0]?.hasFreeTrial || false,
         trialPreset: fallback[0]?.trialPreset || "7",
         trialCustomDays: fallback[0]?.trialCustomDays || 7,
-        kaspiMethod: fallback[0]?.kaspiMethod || "link",
+        kaspiMethods: fallback[0]?.kaspiMethods?.length ? fallback[0].kaspiMethods : ["link"],
         kaspiLink: fallback[0]?.kaspiLink || "",
         kaspiPhone: fallback[0]?.kaspiPhone || "",
+        kaspiCard: fallback[0]?.kaspiCard || "",
+        bank: fallback[0]?.bank || DEFAULT_BANK,
+        bankName: fallback[0]?.bankName || "",
       };
     });
     if (expandedOptionId === id) {
@@ -1111,22 +1183,36 @@ const ProductForm = ({
           });
           return;
         }
-        if (opt.kaspiMethod === "link" && !opt.kaspiLink?.trim()) {
-          notifyMissingField(`kaspi-link-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
+        const openOption = () => {
+          setPaymentOpen(true);
+          setExpandedOptionId(opt.id);
+        };
+        const methods = new Set(opt.kaspiMethods);
+        if (methods.size === 0) {
+          toast.error("Выберите хотя бы один способ оплаты");
+          openOption();
           return;
         }
-        if (opt.kaspiMethod === "phone") {
+        if (methods.has("link") && !opt.kaspiLink?.trim()) {
+          notifyMissingField(`kaspi-link-${opt.id}`, openOption);
+          return;
+        }
+        if (methods.has("phone")) {
           const digits = opt.kaspiPhone?.replace(/\D/g, "") || "";
           if (!opt.kaspiPhone?.trim() || digits.length < 5) {
-            notifyMissingField(`kaspi-phone-${opt.id}`, () => {
-              setPaymentOpen(true);
-              setExpandedOptionId(opt.id);
-            });
+            notifyMissingField(`kaspi-phone-${opt.id}`, openOption);
             return;
           }
+        }
+        if (methods.has("card") && !isValidCardNumber(opt.kaspiCard)) {
+          toast.error("Номер карты должен содержать 16 цифр");
+          scrollToField(`kaspi-card-${opt.id}`);
+          openOption();
+          return;
+        }
+        if ((methods.has("phone") || methods.has("card")) && opt.bank === "other" && !opt.bankName.trim()) {
+          notifyMissingField(`bank-name-${opt.id}`, openOption);
+          return;
         }
       }
     }
@@ -2280,52 +2366,119 @@ const ProductForm = ({
                             )}
                           </div>
 
-                          {/* Способ оплаты через Kaspi для этого варианта */}
-                          <div className="space-y-2 pt-2 border-t border-border/60">
-                            <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
-                              Способ оплаты Kaspi <ReqStar />
-                            </Label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={opt.kaspiMethod === "link" ? "default" : "toggle"}
-                                onClick={() => updateOption(opt.id, { kaspiMethod: "link" })}
-                                className="text-xs sm:text-sm h-9"
-                              >
-                                Ссылка
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={opt.kaspiMethod === "phone" ? "default" : "toggle"}
-                                onClick={() => updateOption(opt.id, { kaspiMethod: "phone" })}
-                                className="text-xs sm:text-sm h-9"
-                              >
-                                Номер телефона
-                              </Button>
+                          {/* Способы оплаты для этого варианта: можно включить несколько */}
+                          <div className="space-y-3 pt-2 border-t border-border/60">
+                            <div className="space-y-1">
+                              <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
+                                Способ оплаты <ReqStar />
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Можно выбрать несколько — покупатель увидит все.
+                              </p>
                             </div>
-                            {opt.kaspiMethod === "link" ? (
-                              <Input
-                                id={`kaspi-link-${opt.id}`}
-                                type="url"
-                                placeholder={t("kaspiLinkPlaceholder")}
-                                className="h-11 text-base"
-                                value={opt.kaspiLink}
-                                onChange={(e) => updateOption(opt.id, { kaspiLink: e.target.value })}
-                              />
-                            ) : (
-                              <Input
-                                id={`kaspi-phone-${opt.id}`}
-                                type="tel"
-                                placeholder="+7 776 475 00-99"
-                                className="h-11 text-base"
-                                value={opt.kaspiPhone}
-                                onChange={(e) => {
-                                  const formatted = formatPhone(e.target.value);
-                                  updateOption(opt.id, { kaspiPhone: formatted });
-                                }}
-                              />
+                            <div className="grid grid-cols-3 gap-2">
+                              {KASPI_METHOD_ORDER.map((method) => {
+                                const active = opt.kaspiMethods.includes(method);
+                                return (
+                                  <Button
+                                    key={method}
+                                    type="button"
+                                    size="sm"
+                                    variant={active ? "default" : "toggle"}
+                                    aria-pressed={active}
+                                    onClick={() => {
+                                      const next = active
+                                        ? opt.kaspiMethods.filter((m) => m !== method)
+                                        : [...opt.kaspiMethods, method];
+                                      updateOption(opt.id, { kaspiMethods: next });
+                                    }}
+                                    className="text-xs sm:text-sm h-9 px-1"
+                                  >
+                                    {KASPI_METHOD_LABELS[method]}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            {opt.kaspiMethods.includes("link") && (
+                              <div className="space-y-1">
+                                <Label htmlFor={`kaspi-link-${opt.id}`} className="text-xs text-muted-foreground">
+                                  Ссылка на оплату
+                                </Label>
+                                <Input
+                                  id={`kaspi-link-${opt.id}`}
+                                  type="url"
+                                  placeholder={t("kaspiLinkPlaceholder")}
+                                  className="h-11 text-base"
+                                  value={opt.kaspiLink}
+                                  onChange={(e) => updateOption(opt.id, { kaspiLink: e.target.value })}
+                                />
+                              </div>
+                            )}
+                            {opt.kaspiMethods.includes("phone") && (
+                              <div className="space-y-1">
+                                <Label htmlFor={`kaspi-phone-${opt.id}`} className="text-xs text-muted-foreground">
+                                  Номер телефона
+                                </Label>
+                                <Input
+                                  id={`kaspi-phone-${opt.id}`}
+                                  type="tel"
+                                  placeholder="+7 776 475 00-99"
+                                  className="h-11 text-base"
+                                  value={opt.kaspiPhone}
+                                  onChange={(e) => {
+                                    const formatted = formatPhone(e.target.value);
+                                    updateOption(opt.id, { kaspiPhone: formatted });
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {opt.kaspiMethods.includes("card") && (
+                              <div className="space-y-1">
+                                <Label htmlFor={`kaspi-card-${opt.id}`} className="text-xs text-muted-foreground">
+                                  Номер карты (16 цифр)
+                                </Label>
+                                <Input
+                                  id={`kaspi-card-${opt.id}`}
+                                  type="text"
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  placeholder="0000 0000 0000 0000"
+                                  maxLength={19}
+                                  className="h-11 text-base tracking-wider"
+                                  value={formatCardNumber(opt.kaspiCard)}
+                                  onChange={(e) => updateOption(opt.id, { kaspiCard: cardDigits(e.target.value) })}
+                                />
+                              </div>
+                            )}
+                            {(opt.kaspiMethods.includes("phone") || opt.kaspiMethods.includes("card")) && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground">Банк для перевода</Label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {BANK_OPTIONS.map((b) => (
+                                    <Button
+                                      key={b.value}
+                                      type="button"
+                                      size="sm"
+                                      variant={opt.bank === b.value ? "default" : "toggle"}
+                                      aria-pressed={opt.bank === b.value}
+                                      onClick={() => updateOption(opt.id, { bank: b.value })}
+                                      className="text-xs sm:text-sm h-9 px-1"
+                                    >
+                                      {b.label}
+                                    </Button>
+                                  ))}
+                                </div>
+                                {opt.bank === "other" && (
+                                  <Input
+                                    id={`bank-name-${opt.id}`}
+                                    type="text"
+                                    placeholder="Название банка"
+                                    className="h-11 text-base"
+                                    value={opt.bankName}
+                                    onChange={(e) => updateOption(opt.id, { bankName: e.target.value })}
+                                  />
+                                )}
+                              </div>
                             )}
                           </div>
 
@@ -2400,9 +2553,10 @@ const ProductForm = ({
 
 interface CreatorProductsTabProps {
   creatorName: string;
+  onOpenUsers?: () => void;
 }
 
-const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
+const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProps) => {
   const { t, language } = useLanguage();
   const isMobile = useIsMobile();
   const { data: products = [], isLoading } = useCreatorProducts(creatorName);
@@ -2486,8 +2640,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     media: [],
     faq: [{ question: "", answer: "" }],
     isPaid: true,
-    kaspiMethod: "link",
+    kaspiMethods: ["link"],
     kaspiPhone: "",
+    kaspiCard: "",
+    bank: DEFAULT_BANK,
+    bankName: "",
     paymentType: "recurring",
     recurringInterval: "1m",
     recurringCustomDays: 30,
@@ -2518,8 +2675,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       media: [],
       faq: [{ question: "", answer: "" }],
       isPaid: true,
-      kaspiMethod: "link",
+      kaspiMethods: ["link"],
       kaspiPhone: "",
+      kaspiCard: "",
+      bank: DEFAULT_BANK,
+      bankName: "",
       paymentType: defaultOpt.paymentType,
       recurringInterval: defaultOpt.recurringInterval,
       recurringCustomDays: defaultOpt.recurringCustomDays,
@@ -2617,8 +2777,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
             billing_period: bp,
             has_free_trial: opt.hasFreeTrial,
             trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
+            ...serializeKaspiFields(opt),
           };
         })
       : [];
@@ -2629,8 +2788,8 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         headline: formData.headline || null,
         description: formData.description || null,
         price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
+        kaspi_link: formData.isPaid ? serializeKaspiFields(primaryOpt).kaspi_link : null,
+        kaspi_phone: formData.isPaid ? serializeKaspiFields(primaryOpt).kaspi_phone : null,
         telegram_link: null,
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
@@ -2715,7 +2874,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         else if (po.trial_days === 30) tPreset = "30";
         else if (po.trial_days) tPreset = "custom";
 
-        const kMethod = po.kaspi_phone ? "phone" : (po.kaspi_link ? "link" : (product.kaspi_phone ? "phone" : "link"));
+        const kaspi = kaspiSettingsFromStored(po, product);
 
         return {
           id: po.id || Math.random().toString(36).slice(2, 10),
@@ -2726,9 +2885,12 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
           hasFreeTrial: Boolean(po.has_free_trial),
           trialPreset: tPreset,
           trialCustomDays: po.trial_days || 7,
-          kaspiMethod: kMethod,
-          kaspiLink: po.kaspi_link || product.kaspi_link || "",
-          kaspiPhone: po.kaspi_phone || product.kaspi_phone || "",
+          kaspiMethods: kaspi.methods,
+          kaspiLink: kaspi.link,
+          kaspiPhone: kaspi.phone,
+          kaspiCard: kaspi.card,
+          bank: kaspi.bank,
+          bankName: kaspi.bankName,
         };
       });
     } else {
@@ -2754,9 +2916,17 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         hasFreeTrial: Boolean(product.has_free_trial),
         trialPreset: trialPreset as any,
         trialCustomDays: trialDays || 7,
-        kaspiMethod: product.kaspi_phone ? "phone" : "link",
-        kaspiLink: product.kaspi_link || "",
-        kaspiPhone: product.kaspi_phone || "",
+        ...(() => {
+          const kaspi = kaspiSettingsFromStored(product);
+          return {
+            kaspiMethods: kaspi.methods,
+            kaspiLink: kaspi.link,
+            kaspiPhone: kaspi.phone,
+            kaspiCard: kaspi.card,
+            bank: kaspi.bank,
+            bankName: kaspi.bankName,
+          };
+        })(),
       }];
     }
 
@@ -2798,8 +2968,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       media: loadedMedia,
       faq: Array.isArray(product.faq) && product.faq.length > 0 ? product.faq : [{ question: "", answer: "" }],
       isPaid: Number(product.price) > 0,
-      kaspiMethod: firstOpt.kaspiMethod,
+      kaspiMethods: firstOpt.kaspiMethods,
       kaspiPhone: firstOpt.kaspiPhone,
+      kaspiCard: firstOpt.kaspiCard,
+      bank: firstOpt.bank,
+      bankName: firstOpt.bankName,
       paymentType: firstOpt.paymentType,
       recurringInterval: firstOpt.recurringInterval,
       recurringCustomDays: firstOpt.recurringCustomDays,
@@ -2893,8 +3066,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
             billing_period: bp,
             has_free_trial: opt.hasFreeTrial,
             trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
+            ...serializeKaspiFields(opt),
           };
         })
       : [];
@@ -2906,8 +3078,8 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         headline: formData.headline || null,
         description: formData.description || null,
         price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
+        kaspi_link: formData.isPaid ? serializeKaspiFields(primaryOpt).kaspi_link : null,
+        kaspi_phone: formData.isPaid ? serializeKaspiFields(primaryOpt).kaspi_phone : null,
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
@@ -2956,7 +3128,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
   return (
     <div className="space-y-6">
-      <CreatorPendingPayments creatorName={creatorName} />
+      <CreatorPendingPayments creatorName={creatorName} mode="link" onOpenUsers={onOpenUsers} />
 
       {subscriptionRows.length > 0 && (
         <Card>
@@ -3001,7 +3173,12 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
               {t("create")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
+          <DialogContent
+          className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
             <DialogHeader>
               <DialogTitle>{isCroppingMedia ? "Настройка обложки" : "Создать продукт"}</DialogTitle>
             </DialogHeader>
@@ -3024,7 +3201,12 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) { setEditingProduct(null); resetForm(); setIsCroppingMedia(false); } }}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
+        <DialogContent
+          className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>{isCroppingMedia ? "Настройка обложки" : `${t("edit")} продукт`}</DialogTitle>
           </DialogHeader>

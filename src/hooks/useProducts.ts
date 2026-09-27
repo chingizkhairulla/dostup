@@ -55,6 +55,9 @@ export interface ProductPricingOption {
   trial_days?: number | null;
   kaspi_link?: string | null;
   kaspi_phone?: string | null;
+  kaspi_card?: string | null;
+  bank?: string | null;
+  bank_name?: string | null;
 }
 
 export interface ProductProgramItem {

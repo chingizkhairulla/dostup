@@ -19,6 +19,7 @@ verify_enabled = true
 enable_confirmations = true
 max_frequency = "1m0s"
 otp_expiry = 600
+otp_length = 6
 [functions.create-signup-token]
 verify_jwt = false
 
