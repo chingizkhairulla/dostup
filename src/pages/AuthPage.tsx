@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { AuthMark } from "@/components/auth/AuthMark";
@@ -55,13 +56,9 @@ const AuthPage = () => {
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
       
       <div className="max-w-md w-full">
-        <button
-          onClick={() => navigate("/")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 touch-manipulation"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>{t("back")}</span>
-        </button>
+        <div className="mb-4">
+          <BackArrowButton to="/" label={t("back")} />
+        </div>
 
         <Card className="animate-fade-in">
           <CardHeader className="text-center">

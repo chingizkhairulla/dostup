@@ -23,6 +23,7 @@ import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { useRealtimeTeacherNotifications } from "@/hooks/useRealtimeTeacherNotifications";
 import { setAppBadge, clearAppBadge } from "@/lib/appBadge";
 import { unregisterPushToken } from "@/lib/firebase";
+import { useAppResume } from "@/hooks/useAppResume";
 
 const TeacherDashboard = () => {
   const [activeTab, setActiveTab] = useState("schedule");

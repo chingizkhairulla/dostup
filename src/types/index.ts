@@ -11,7 +11,23 @@ export interface Product {
   has_schedule: boolean;
   creator_id: string;
   created_at: string;
-  kaspi_link?: string | null;
+  payment_methods?: PaymentMethod[];
+  payment_method_ids?: string[];
+}
+
+export type PaymentMethodType = 'link' | 'phone' | 'card';
+export type PaymentMethodBank = 'kaspi' | 'halyk' | 'freedom' | 'other';
+
+export interface PaymentMethod {
+  id: string;
+  profile_id: string;
+  type: PaymentMethodType;
+  bank?: PaymentMethodBank | null;
+  bank_name?: string | null;
+  value: string;
+  recipient_name?: string | null;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface User {

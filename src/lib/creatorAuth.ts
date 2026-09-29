@@ -16,6 +16,7 @@ export type AppProfile = {
   displayName: string | null;
   createdAt?: string | null;
   avatarUrl?: string | null;
+  isCurrent?: boolean;
 };
 
 export type SessionPayload = {
@@ -404,7 +405,7 @@ export async function exchangeCreatorAccessToken(
   if (isModerator) {
     clearAppSession();
     try {
-      const { data: modToken } = await supabase.rpc("claim_moderator_session");
+      const { data: modToken } = await (supabase.rpc as any)("claim_moderator_session");
       if (modToken && typeof modToken === "string") {
         localStorage.setItem("moderator_token", modToken);
       }

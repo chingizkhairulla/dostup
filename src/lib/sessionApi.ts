@@ -191,10 +191,11 @@ export async function invokeForm<T = Record<string, unknown>>(
   return data as T;
 }
 
-export async function fetchCreatorReceiptBlob(submissionId: string): Promise<Blob> {
+export async function getReceiptSignedUrl(submissionId: string, isCreator = false): Promise<string> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey =
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const authPayload = isCreator ? creatorCreds() : studentCreds();
   const res = await fetch(`${supabaseUrl}/functions/v1/payment-receipt`, {
     method: "POST",
     headers: {
@@ -202,8 +203,35 @@ export async function fetchCreatorReceiptBlob(submissionId: string): Promise<Blo
       apikey: anonKey,
       Authorization: `Bearer ${anonKey}`,
     },
-    body: JSON.stringify({ ...creatorCreds(), submissionId }),
+    body: JSON.stringify({ ...authPayload, submissionId }),
   });
-  if (!res.ok) throw new Error("Failed to load receipt");
-  return res.blob();
+  if (!res.ok) throw new Error("Failed to get receipt URL");
+  const data = await res.json();
+  return data.url;
 }
+
+export async function fetchCreatorReceiptBlob(submissionId: string): Promise<Blob> {
+  try {
+    const url = await getReceiptSignedUrl(submissionId, true);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to load receipt file from signed URL");
+    return await res.blob();
+  } catch (err) {
+    // Fallback: direct blob download via wantsBlob
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey =
+      import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const res = await fetch(`${supabaseUrl}/functions/v1/payment-receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ ...creatorCreds(), submissionId, wantsBlob: true }),
+    });
+    if (!res.ok) throw new Error("Failed to load receipt");
+    return res.blob();
+  }
+}
+

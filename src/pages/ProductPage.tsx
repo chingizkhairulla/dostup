@@ -35,6 +35,7 @@ import { loginPath, loginState } from "@/lib/loginModal";
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import DOMPurify from "dompurify";
 import { parseMarkdownToHtml } from "@/components/ui/RichTextEditor";
 
@@ -202,6 +203,9 @@ const ProductPage = () => {
       setSwitchBuyerOpen(true);
       return;
     }
+    if (product?.id) {
+      localStorage.setItem(`dostup_checkout_started_${product.id}`, "true");
+    }
     navigate(checkoutUrl);
   };
 
@@ -242,6 +246,31 @@ const ProductPage = () => {
     },
     enabled: Boolean(user && product?.id && (effectiveHasTrial || product?.has_free_trial)),
   });
+
+  const { data: myPurchase } = useQuery({
+    queryKey: ["my-product-purchase", product?.id, user?.id],
+    queryFn: async () => {
+      if (!user || !product?.id) return null;
+      const token = localStorage.getItem("simple_session_token") || localStorage.getItem("creator_token") || "";
+      const res = await invokeApi<{ purchase: { id: string; status: string } | null }>("checkout", {
+        action: "get_my_purchase",
+        productId: product.id,
+        sessionToken: token,
+      });
+      return res.purchase;
+    },
+    enabled: Boolean(user && product?.id),
+  });
+
+  const hasStartedCheckout = useMemo(() => {
+    if (!product?.id) return false;
+    const started = localStorage.getItem(`dostup_checkout_started_${product.id}`) === "true";
+    if (myPurchase?.status === "completed") {
+      localStorage.removeItem(`dostup_checkout_started_${product.id}`);
+      return false;
+    }
+    return started && myPurchase?.status !== "completed";
+  }, [product?.id, myPurchase]);
 
   const handleActivateTrial = async () => {
     if (!user) {
@@ -379,13 +408,9 @@ const ProductPage = () => {
       <div className="flex min-h-screen flex-col bg-background">
         <MarketplaceHeader />
         <PublicContainer className="flex-1 py-6">
-          <Link
-            to="/"
-            className="mb-8 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>{t("back")}</span>
-          </Link>
+          <div className="mb-6">
+            <BackArrowButton to="/" label={t("back")} />
+          </div>
           <p className="public-body text-[#6B7280]">{t("productNotFound")}</p>
         </PublicContainer>
         <PublicFooter />
@@ -543,13 +568,37 @@ const ProductPage = () => {
     <div className="flex min-h-screen flex-col bg-background">
       <MarketplaceHeader />
       <PublicContainer className="flex-1 pb-28 pt-4 lg:pb-16 lg:pt-6">
-        <Link
-          to="/"
-          className="mb-4 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>{t("back")}</span>
-        </Link>
+        <div className="mb-3">
+          <BackArrowButton to="/" label={t("back")} />
+        </div>
+
+        {hasStartedCheckout && (
+          <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0 text-amber-700 dark:text-amber-300">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  {t("checkoutStartedBanner")}
+                </p>
+                <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                  {language === "kk"
+                    ? "Қолжетімділік ашылуы үшін төлем чегін тіркеңіз"
+                    : "Чтобы продавец проверил оплату и открыл доступ к материалам"}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => navigate(checkoutUrl)}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-xl shrink-0"
+              size="sm"
+            >
+              {t("attachReceiptAction")}
+            </Button>
+          </div>
+        )}
 
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
           <div>

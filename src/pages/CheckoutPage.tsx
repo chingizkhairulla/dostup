@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCheckoutProduct } from "@/hooks/useProducts";
+import { useCheckoutProduct, useProductPaymentMethods } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ProductPaymentMethodsList } from "@/components/checkout/ProductPaymentMethodsList";
 
 import { ArrowLeft, Lock, Loader2, ExternalLink } from "lucide-react";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPriceTenge } from "@/lib/catalog";
 import { toast } from "sonner";
@@ -18,16 +20,10 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
   const { data: product, isLoading } = useCheckoutProduct(productId);
+  const { data: paymentMethods = [], isLoading: paymentMethodsLoading } = useProductPaymentMethods(productId || product?.id, true);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleKaspiPayment = () => {
-    if (!product?.kaspi_link) return;
-    
-    // Open Kaspi link in new tab
-    window.open(product.kaspi_link, "_blank");
-  };
 
   const handleContinueAfterPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,10 +81,7 @@ const CheckoutPage = () => {
     headline: "Получите доступ к премиум-контенту",
     price: 49000,
     image_url: heroBackground,
-    kaspi_link: null,
   };
-
-  const hasKaspiLink = !!displayProduct.kaspi_link;
 
   const isPaused = Boolean((product as any)?.is_paused);
   const pausedMessage: string =
@@ -101,14 +94,8 @@ const CheckoutPage = () => {
     return (
       <div className="min-h-screen bg-muted/30 py-6 px-4">
         <div className="max-w-lg mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground touch-manipulation"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>{t("back")}</span>
-            </button>
+          <div className="flex items-center justify-between mb-4">
+            <BackArrowButton onClick={() => navigate(-1)} label={t("back")} />
           </div>
           <Card className="animate-fade-in">
             <CardHeader className="pb-4">
@@ -129,15 +116,8 @@ const CheckoutPage = () => {
     <div className="min-h-screen bg-muted/30 py-6 px-4">
       <div className="max-w-lg mx-auto">
         {/* Header with back and language */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground touch-manipulation"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>{t("back")}</span>
-          </button>
-          
+        <div className="flex items-center justify-between mb-4">
+          <BackArrowButton onClick={() => navigate(-1)} label={t("back")} />
         </div>
 
         {/* Order Summary */}
@@ -200,49 +180,36 @@ const CheckoutPage = () => {
                 />
               </div>
 
-              {/* Kaspi Payment */}
-              {hasKaspiLink ? (
-                <div className="space-y-4">
-                  <Button 
-                    type="button"
-                    onClick={handleKaspiPayment}
-                    className="w-full h-14 bg-[#F14635] hover:bg-[#d63d2e] text-white font-semibold text-lg"
+              {/* Payment Methods */}
+              <div className="space-y-4">
+                {paymentMethodsLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <ProductPaymentMethodsList
+                    methods={paymentMethods}
                     disabled={!email || !name}
-                  >
-                    <span className="flex items-center gap-2">
-                      {t("payWithKaspi")}
-                      <ExternalLink className="w-5 h-5" />
-                    </span>
-                  </Button>
-                  
-                  <p className="text-sm text-center text-muted-foreground">
-                    {t("kaspiPaymentInfo")}
-                  </p>
+                  />
+                )}
 
-                  <Button 
-                    type="submit" 
-                    variant="outline" 
-                    size="lg" 
-                    className="w-full"
-                    disabled={isProcessing || !email || !name}
-                  >
-                    {isProcessing ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {t("processing")}
-                      </span>
-                    ) : (
-                      t("paidContinue")
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <div className="border border-input rounded-lg p-4 bg-muted/50">
-                  <p className="text-sm text-muted-foreground text-center">
-                    {t("noPaymentMethod")}
-                  </p>
-                </div>
-              )}
+                <Button 
+                  type="submit" 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full mt-2"
+                  disabled={isProcessing || !email || !name || paymentMethods.length === 0}
+                >
+                  {isProcessing ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t("processing")}
+                    </span>
+                  ) : (
+                    t("paidContinue")
+                  )}
+                </Button>
+              </div>
 
               <p className="text-xs text-center text-muted-foreground mt-4">
                 {t("termsAgreement")}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -32,6 +33,7 @@ import { invokeApi } from "@/lib/sessionApi";
 import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { PhoneInput, isValidKazakhPhone } from "@/components/ui/phone-input";
 import { toast } from "sonner";
 
 export type SettingsSectionKey = "profile" | "language" | "notifications" | "app";
@@ -79,6 +81,16 @@ export const AccountSettingsView = ({
   const [nameInput, setNameInput] = useState(displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Recovery phone state
+  const [recoveryPhoneInput, setRecoveryPhoneInput] = useState(() => {
+    return localStorage.getItem("creator_recovery_phone") || "";
+  });
+  const [initialRecoveryPhone, setInitialRecoveryPhone] = useState(() => {
+    return localStorage.getItem("creator_recovery_phone") || "";
+  });
+  const [savingRecoveryPhone, setSavingRecoveryPhone] = useState(false);
+  const [recoveryPhoneError, setRecoveryPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
     setNameInput(displayName || "");
@@ -162,6 +174,34 @@ export const AccountSettingsView = ({
       }
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const handleSaveRecoveryPhone = async () => {
+    const trimmed = recoveryPhoneInput.trim();
+    if (trimmed && !isValidKazakhPhone(trimmed)) {
+      setRecoveryPhoneError(t("invalidRecoveryPhone"));
+      return;
+    }
+    setSavingRecoveryPhone(true);
+    setRecoveryPhoneError(null);
+    try {
+      localStorage.setItem("creator_recovery_phone", trimmed);
+      const token = localStorage.getItem("creator_token") || "";
+      if (token && activeProfileId) {
+        await invokeApi("manage-profile", {
+          action: "set_recovery_phone",
+          token,
+          recoveryPhone: trimmed,
+          profileId: activeProfileId,
+        }).catch(() => {});
+      }
+      setInitialRecoveryPhone(trimmed);
+      toast.success(language === "ru" ? "Телефон для восстановления сохранён" : "Қалпына келтіру телефоны сақталды");
+    } catch {
+      toast.error(language === "ru" ? "Не удалось сохранить телефон" : "Телефонды сақтау мүмкін болмады");
+    } finally {
+      setSavingRecoveryPhone(false);
     }
   };
 
@@ -292,6 +332,50 @@ export const AccountSettingsView = ({
                       <p className="text-xs text-destructive font-medium animate-in fade-in">{nameError}</p>
                     )}
                   </div>
+
+                  {/* Recovery Phone Field for Seller */}
+                  {isSeller && (
+                    <div className="space-y-2 pt-1">
+                      <Label htmlFor="settings-recovery-phone" className="text-sm font-medium">
+                        {t("recoveryPhone")}
+                      </Label>
+                      <div className="flex gap-2 max-w-sm">
+                        <PhoneInput
+                          id="settings-recovery-phone"
+                          value={recoveryPhoneInput}
+                          onChange={(formatted) => {
+                            setRecoveryPhoneInput(formatted);
+                            if (recoveryPhoneError) setRecoveryPhoneError(null);
+                          }}
+                          placeholder={t("recoveryPhonePlaceholder") || "700 000 00 00"}
+                          hasError={!!recoveryPhoneError}
+                        />
+                        {recoveryPhoneInput.trim() !== initialRecoveryPhone && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveRecoveryPhone}
+                            disabled={savingRecoveryPhone}
+                            className="rounded-xl px-4 shrink-0"
+                          >
+                            {savingRecoveryPhone ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="h-4 w-4 mr-1.5" />
+                                {t("save")}
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {recoveryPhoneError && (
+                        <p className="text-xs text-destructive font-medium animate-in fade-in">
+                          {recoveryPhoneError}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {formattedDate && (
                     <p className="text-xs text-muted-foreground pt-1">
@@ -446,27 +530,15 @@ export const AccountSettingsView = ({
         {/* Mobile Header */}
         <div className="flex items-center gap-2 md:hidden">
           {mobileSectionOpen ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
+            <BackArrowButton
               onClick={() => setMobileSectionOpen(false)}
-              className="h-8 w-8 rounded-full text-foreground hover:bg-muted"
               aria-label={t("backToSettings")}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            />
           ) : onClose ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
+            <BackArrowButton
               onClick={onClose}
-              className="h-8 w-8 rounded-full text-foreground hover:bg-muted"
               aria-label={t("close")}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            />
           ) : null}
 
           <h2 className="text-base font-semibold text-foreground truncate">

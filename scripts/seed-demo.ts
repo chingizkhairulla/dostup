@@ -407,6 +407,58 @@ async function fetchTaxonomyIds(
   return { categoryBySlug, subcategoryByKey, categories: categories ?? [] };
 }
 
+const DEMO_PAYMENT_METHODS: Array<{
+  id: string;
+  seller: SellerKey;
+  type: "link" | "phone" | "card";
+  bank: "kaspi" | "halyk" | "freedom" | "other" | null;
+  bankName: string | null;
+  value: string;
+  recipientName: string | null;
+  sortOrder: number;
+}> = [
+  {
+    id: "44444444-4444-4444-8444-444444444401",
+    seller: "tutor",
+    type: "phone",
+    bank: "kaspi",
+    bankName: null,
+    value: "+7 777 123 45 67",
+    recipientName: "Айгерім Н.",
+    sortOrder: 0,
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444402",
+    seller: "school",
+    type: "link",
+    bank: null,
+    bankName: null,
+    value: "https://pay.kaspi.kz/pay/demo-til-akademiya",
+    recipientName: null,
+    sortOrder: 0,
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444403",
+    seller: "ent",
+    type: "card",
+    bank: "kaspi",
+    bankName: null,
+    value: "4400430123456789",
+    recipientName: "ЕНТ Орталығы",
+    sortOrder: 0,
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444404",
+    seller: "coach",
+    type: "phone",
+    bank: "kaspi",
+    bankName: null,
+    value: "+7 701 987 65 43",
+    recipientName: "Арман Б.",
+    sortOrder: 0,
+  },
+];
+
 async function cleanDemo(supabase: ReturnType<typeof createClient>) {
   const { error: productError } = await supabase
     .from("products")
@@ -415,6 +467,12 @@ async function cleanDemo(supabase: ReturnType<typeof createClient>) {
   if (productError) throw productError;
 
   const demoProfileIds = Object.values(PROFILE_IDS);
+  const { error: pmError } = await supabase
+    .from("payment_methods")
+    .delete()
+    .in("profile_id", demoProfileIds);
+  if (pmError) throw pmError;
+
   const { error: accountError } = await supabase
     .from("creator_accounts")
     .delete()
@@ -427,7 +485,7 @@ async function cleanDemo(supabase: ReturnType<typeof createClient>) {
     .eq("is_demo", true);
   if (profileError) throw profileError;
 
-  console.log("Removed all is_demo profiles, accounts, and products.");
+  console.log("Removed all is_demo profiles, accounts, products, and payment methods.");
 }
 
 async function seedDemo(supabase: ReturnType<typeof createClient>) {
@@ -471,6 +529,25 @@ async function seedDemo(supabase: ReturnType<typeof createClient>) {
       { onConflict: "id" },
     );
     if (accountError) throw accountError;
+  }
+
+  console.log("Upserting demo payment methods …");
+  for (const pm of DEMO_PAYMENT_METHODS) {
+    const profileId = PROFILE_IDS[pm.seller];
+    const { error: pmError } = await supabase.from("payment_methods").upsert(
+      {
+        id: pm.id,
+        profile_id: profileId,
+        type: pm.type,
+        bank: pm.bank,
+        bank_name: pm.bankName,
+        value: pm.value,
+        recipient_name: pm.recipientName,
+        sort_order: pm.sortOrder,
+      },
+      { onConflict: "id" }
+    );
+    if (pmError) throw pmError;
   }
 
   console.log("Upserting demo products …");
@@ -521,9 +598,21 @@ async function seedDemo(supabase: ReturnType<typeof createClient>) {
 
     const { error } = await supabase.from("products").upsert(row, { onConflict: "id" });
     if (error) throw error;
+
+    const sellerPms = DEMO_PAYMENT_METHODS.filter((m) => m.seller === seed.seller);
+    for (const pm of sellerPms) {
+      const { error: ppmError } = await supabase.from("product_payment_methods").upsert(
+        {
+          product_id: seed.id,
+          payment_method_id: pm.id,
+        },
+        { onConflict: "product_id,payment_method_id" }
+      );
+      if (ppmError) throw ppmError;
+    }
   }
 
-  console.log(`Seeded ${SELLERS.length} sellers and ${PRODUCT_SEEDS.length} products.`);
+  console.log(`Seeded ${SELLERS.length} sellers, payment methods, and ${PRODUCT_SEEDS.length} products.`);
 }
 
 async function main() {

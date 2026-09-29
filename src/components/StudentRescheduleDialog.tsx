@@ -95,7 +95,7 @@ const StudentRescheduleDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpen}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" mobileFullScreen>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto dialog-mobile-fullscreen">
         <DialogHeader>
           <DialogTitle>
             {language === "ru" ? "Запрос на перенос" : "Ауыстыру сұранысы"}

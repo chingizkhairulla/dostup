@@ -78,12 +78,13 @@ function localToday(): string {
   return `${year}-${month}-${day}`;
 }
 
-// Получить подтверждённые покупки пользователя (без подписок — они в useSimpleSubscriptions)
-export const useSimplePurchases = () => {
+// Получить покупки пользователя (с возможностью фильтрации по статусу)
+export const useSimplePurchases = (options?: { status?: "completed" | "pending" | "all" }) => {
   const { user } = useSimpleAuth();
   const queryClient = useQueryClient();
+  const status = options?.status || "all";
 
-  // Realtime подписка для автоматического обновления при подтверждении покупки
+  // Realtime подписка для автоматического обновления при подтверждении, отклонении или отмене покупки
   useEffect(() => {
     if (!user) return;
 
@@ -92,17 +93,20 @@ export const useSimplePurchases = () => {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "simple_purchases",
-          filter: `buyer_profile_id=eq.${user.id}`
         },
-        (payload: { new?: { status?: string } }) => {
-          // При обновлении статуса покупки, обновить все связанные данные
-          if (payload.new?.status === "completed") {
+        (payload: any) => {
+          const rec = payload.new || payload.old;
+          if (
+            rec &&
+            (rec.buyer_profile_id === user.id || rec.simple_user_id === user.id)
+          ) {
             queryClient.invalidateQueries({ queryKey: ["simple-purchases"] });
             queryClient.invalidateQueries({ queryKey: ["simple-materials"] });
             queryClient.invalidateQueries({ queryKey: ["simple-schedules"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-subscriptions"] });
           }
         }
       )
@@ -114,18 +118,23 @@ export const useSimplePurchases = () => {
   }, [user, queryClient]);
 
   return useQuery({
-    queryKey: ["simple-purchases", user?.id],
+    queryKey: ["simple-purchases", user?.id, status],
     queryFn: async () => {
       if (!user) return [] as SimplePurchase[];
 
       const data = await invokeApi<{ purchases: SimplePurchase[] }>("checkout", {
         action: "list_my_purchases",
         ...studentCreds(),
-        status: "completed",
+        status,
       });
       return data.purchases ?? [];
     },
     enabled: !!user,
+    refetchInterval: (query) => {
+      const hasPending = query.state.data?.some((p) => p.status === "pending");
+      return hasPending ? 4000 : false;
+    },
+    refetchOnWindowFocus: true,
   });
 };
 

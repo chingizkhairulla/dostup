@@ -26,7 +26,7 @@ interface Teacher {
 }
 
 const ScheduleTab = () => {
-  const { data: purchases, isLoading: purchasesLoading } = useSimplePurchases();
+  const { data: purchases, isLoading: purchasesLoading } = useSimplePurchases({ status: "completed" });
   const { data: schedules, isLoading: schedulesLoading } = useSimpleSchedules();
   const { data: bookings, isLoading: bookingsLoading } = useSimpleBookings();
   const { t, language } = useLanguage();
@@ -279,7 +279,7 @@ const ScheduleTab = () => {
     if (bookingsCount === 0) return false;
     
     const slot = timeSlots?.find(s => s.id === slotId);
-    const maxParticipants = slot?.max_participants ?? (selectedSchedule?.event_type === "group" ? (selectedSchedule.max_participants || 1) : 1);
+    const maxParticipants = Number(slot?.max_participants ?? (selectedSchedule?.event_type === "group" ? (selectedSchedule.max_participants || 1) : 1)) || 1;
     return bookingsCount >= maxParticipants;
   };
 
@@ -689,7 +689,7 @@ const ScheduleTab = () => {
                     {filteredSlots.map((slot) => {
                       const bookedByMe = isSlotBookedByMe(slot.id);
                       const takenByOther = isSlotTakenByOther(slot.id);
-                      const maxParticipants = slot.max_participants ?? (selectedSchedule?.event_type === "group" ? (selectedSchedule.max_participants || 1) : 1);
+                      const maxParticipants = Number(slot.max_participants ?? (selectedSchedule?.event_type === "group" ? (selectedSchedule.max_participants || 1) : 1)) || 1;
                       const isGroup = maxParticipants > 1;
                       const isIndividual = !isGroup;
                       const slotStatus = getSlotStatus(slot.id);

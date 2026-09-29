@@ -97,7 +97,7 @@ export async function buyerHasProductAccess(
 
   const { data } = await supabase
     .from('simple_purchases')
-    .select('id, is_trial, trial_ends_at')
+    .select('id, is_trial, trial_ends_at, access_ends_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('product_id', productId)
     .eq('status', 'completed')
@@ -106,6 +106,9 @@ export async function buyerHasProductAccess(
   if (!data) return false
   if (data.is_trial) {
     return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
+  }
+  if (data.access_ends_at) {
+    return new Date(data.access_ends_at) > new Date()
   }
   return true
 }
@@ -119,7 +122,7 @@ export async function buyerAccessibleProductIds(
 
   const { data: purchases } = await supabase
     .from('simple_purchases')
-    .select('product_id, is_trial, trial_ends_at')
+    .select('product_id, is_trial, trial_ends_at, access_ends_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('status', 'completed')
 
@@ -129,6 +132,9 @@ export async function buyerAccessibleProductIds(
       if (row.trial_ends_at && new Date(row.trial_ends_at) > now) {
         ids.add(productId)
       }
+      continue
+    }
+    if (row.access_ends_at && new Date(row.access_ends_at) <= now) {
       continue
     }
     if (!(await isSubscriptionProduct(supabase, productId))) {

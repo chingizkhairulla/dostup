@@ -200,4 +200,4 @@ export async function creatorProductIds(
 export const CATALOG_COLUMNS =
   'id, created_at, updated_at, creator_id, creator_account_id, title, headline, description, price, image_url, video_url, media, has_schedule, is_active, is_paused, paused_message, slug, telegram_link, group_link_label, faq, access_duration_days, category_id, subcategory_id, lesson_format, event_starts_at, capacity, billing_period, payment_type, recurring_interval, has_free_trial, trial_days, pricing_options, topic'
 
-export const CHECKOUT_COLUMNS = `${CATALOG_COLUMNS}, kaspi_link, kaspi_phone`
+export const CHECKOUT_COLUMNS = CATALOG_COLUMNS

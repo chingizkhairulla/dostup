@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
+import type { PaymentMethod } from "@/types";
+
+export type { PaymentMethod };
 
 export interface Product {
   id: string;
@@ -18,10 +21,8 @@ export interface Product {
   slug: string | null;
   created_at: string;
   updated_at: string;
-  kaspi_link: string | null;
   telegram_link: string | null;
   faq: Array<{ question: string; answer: string }> | null;
-  kaspi_phone: string | null;
   access_duration_days: number | null;
   is_paused?: boolean;
   paused_message?: string | null;
@@ -41,6 +42,8 @@ export interface Product {
   has_free_trial?: boolean;
   trial_days?: number | null;
   pricing_options?: ProductPricingOption[] | null;
+  payment_methods?: PaymentMethod[];
+  payment_method_ids?: string[];
 }
 
 export interface ProductPricingOption {
@@ -53,6 +56,7 @@ export interface ProductPricingOption {
   has_free_trial: boolean;
   trial_preset?: "3" | "7" | "30" | "custom";
   trial_days?: number | null;
+  access_duration_days?: number | null;
   kaspi_link?: string | null;
   kaspi_phone?: string | null;
 }
@@ -158,7 +162,6 @@ interface CreateProductInput {
   headline?: string | null;
   description?: string | null;
   price: number;
-  kaspi_link?: string | null;
   telegram_link?: string | null;
   has_schedule?: boolean;
   is_active?: boolean;
@@ -166,7 +169,6 @@ interface CreateProductInput {
   video_url?: string | null;
   slug?: string | null;
   faq?: Array<{ question: string; answer: string }> | null;
-  kaspi_phone?: string | null;
   access_duration_days?: number | null;
   category_id: string;
   subcategory_id: string;
@@ -180,7 +182,84 @@ interface CreateProductInput {
   trial_days?: number | null;
   pricing_options?: ProductPricingOption[] | null;
   topic?: string | null;
+  payment_method_ids?: string[];
 }
+
+export const useCreatorPaymentMethods = () => {
+  const creatorId = useCreatorId();
+
+  return useQuery({
+    queryKey: ["creator-payment-methods", creatorId],
+    queryFn: async () => {
+      if (!creatorId) return [];
+      const data = await invokeApi<{ payment_methods: PaymentMethod[] }>("manage-products", {
+        action: "list_payment_methods",
+        ...creatorCreds(),
+      });
+      return data.payment_methods ?? [];
+    },
+    enabled: !!creatorId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+};
+
+export const useCreatePaymentMethod = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (method: {
+      type: "link" | "phone" | "card";
+      bank?: "kaspi" | "halyk" | "freedom" | "other" | null;
+      bank_name?: string | null;
+      value: string;
+      recipient_name?: string | null;
+    }) => {
+      const data = await invokeApi<{ payment_method: PaymentMethod }>("manage-products", {
+        action: "create_payment_method",
+        ...creatorCreds(),
+        ...method,
+      });
+      return data.payment_method;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creator-payment-methods"] });
+    },
+  });
+};
+
+export const useDeletePaymentMethod = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await invokeApi("manage-products", {
+        action: "delete_payment_method",
+        ...creatorCreds(),
+        id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creator-payment-methods"] });
+      queryClient.invalidateQueries({ queryKey: ["creator-products"] });
+    },
+  });
+};
+
+export const useProductPaymentMethods = (productId: string | undefined, isBuyerLoggedIn?: boolean) => {
+  return useQuery({
+    queryKey: ["product-payment-methods", productId, isBuyerLoggedIn],
+    queryFn: async () => {
+      if (!productId) return [];
+      const data = await invokeApi<{ payment_methods: PaymentMethod[] }>("checkout", {
+        action: "get_payment_methods",
+        productId,
+      });
+      return data.payment_methods ?? [];
+    },
+    enabled: !!productId && (isBuyerLoggedIn !== undefined ? isBuyerLoggedIn : true),
+  });
+};
 
 export const useCreateProduct = () => {
   const queryClient = useQueryClient();

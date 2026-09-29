@@ -471,7 +471,7 @@ const ModeratorDashboard = () => {
           data: { user },
         } = await supabase.auth.getUser();
         if (user?.email?.trim().toLowerCase() === "dostup.support@gmail.com") {
-          const { data: claimedToken, error } = await supabase.rpc("claim_moderator_session");
+          const { data: claimedToken, error } = await (supabase.rpc as any)("claim_moderator_session");
           if (!error && claimedToken && typeof claimedToken === "string") {
             localStorage.setItem("moderator_token", claimedToken);
             if (!active) return;

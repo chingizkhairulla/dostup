@@ -329,3 +329,34 @@ video::-webkit-media-controls-overlay-play-button {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* Pinned modal content scrollbar: 6px thumb on transparent track, inset from corners, stable gutter */
+.modal-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+  background-clip: padding-box;
+}
+

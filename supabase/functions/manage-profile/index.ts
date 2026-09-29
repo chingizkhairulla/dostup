@@ -237,6 +237,18 @@ Deno.serve(async (req) => {
       return json({ ok: true, avatarUrl: null })
     }
 
+    if (action === 'set_recovery_phone') {
+      const rawPhone = typeof body.recoveryPhone === 'string' ? body.recoveryPhone : typeof body.phone === 'string' ? body.phone : ''
+      const cleanPhoneVal = rawPhone.trim()
+      if (row.type === 'creator' || row.type === 'school') {
+        await supabase
+          .from('creator_accounts')
+          .update({ recovery_phone: cleanPhoneVal || null })
+          .eq('profile_id', row.id)
+      }
+      return json({ ok: true, recoveryPhone: cleanPhoneVal })
+    }
+
     if (action === 'delete_profile') {
       if (row.type !== 'creator' && row.type !== 'school') {
         return json({ error: 'Cannot delete buyer profile' }, 400)
@@ -307,7 +319,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Failed to delete profile: ' + delErr.message }, 500)
       }
 
-      let remainingProfiles: ProfileRow[] = await listProfiles(supabase, authUserId)
+      const remainingProfiles: ProfileRow[] = await listProfiles(supabase, authUserId)
 
       if (nextSession) {
         const mappedProfiles = remainingProfiles.map((p) => ({

@@ -38,10 +38,15 @@ import { setAppBadge, clearAppBadge } from "@/lib/appBadge";
 import { useAppResume } from "@/hooks/useAppResume";
 import { readAuthEmail } from "@/lib/creatorAuth";
 import { needsDisplayNamePrompt } from "@/lib/displayName";
+import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { cn } from "@/lib/utils";
 
 const CreatorDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { switchProfile } = useSimpleAuth();
+  const targetProfileId = searchParams.get("profileId");
+  const targetPurchaseId = searchParams.get("purchaseId");
+
   const [overlayTab, setOverlayTab] = useState<string | null>(null);
   const urlTab = creatorTabFromPath("/creator", `?${searchParams.toString()}`);
   const activeTab = overlayTab ?? urlTab;
@@ -58,6 +63,21 @@ const CreatorDashboard = () => {
   const { activeItems: creatorNavActiveItems } = useCreatorMobileNavItems();
   useAppResume();
   const supportUnread = useSupportUnread("creator", creatorName ?? "");
+
+  // Auto-switch profile if notification tapped for another seller profile
+  useEffect(() => {
+    if (!targetProfileId) return;
+    const currentProfId = localStorage.getItem("profile_id");
+    if (currentProfId && currentProfId !== targetProfileId) {
+      void switchProfile({ profileId: targetProfileId }).then(() => {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("tab", "users");
+          return next;
+        });
+      });
+    }
+  }, [targetProfileId, switchProfile, setSearchParams]);
   
   // Per-user localStorage key for last viewed notifications
   const lastViewedKey = creatorName ? `creator_notifications_last_viewed_${creatorName}` : null;
@@ -300,7 +320,7 @@ const CreatorDashboard = () => {
           )}
           {activeTab === "users" && (
             <div className="animate-fade-in">
-              <CreatorUsersTab creatorName={creatorName} />
+              <CreatorUsersTab creatorName={creatorName} highlightPurchaseId={targetPurchaseId || undefined} />
             </div>
           )}
           {activeTab === "notifications" && (
@@ -330,6 +350,8 @@ const CreatorDashboard = () => {
             >
               {creatorNavActiveItems.map((item) => {
                 const Icon = item.icon;
+                const isUsers = item.key === "users";
+                const pendingCount = isUsers ? pendingPurchases.length : 0;
                 return (
                   <button 
                     key={item.key}
@@ -347,6 +369,11 @@ const CreatorDashboard = () => {
                       )}
                     >
                       <Icon className="h-6 w-6" strokeWidth={1.75} />
+                      {pendingCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm">
+                          {pendingCount}
+                        </span>
+                      )}
                     </span>
                   </button>
                 );

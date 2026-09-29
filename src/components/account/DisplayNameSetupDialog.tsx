@@ -25,6 +25,7 @@ interface DisplayNameSetupDialogProps {
 const DisplayNameSetupDialog = ({ open, onSaved }: DisplayNameSetupDialogProps) => {
   const { t } = useLanguage();
   const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const valid = isDisplayNameValid(value);
 

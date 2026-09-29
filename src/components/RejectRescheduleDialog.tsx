@@ -39,7 +39,7 @@ const RejectRescheduleDialog = ({ isOpen, onClose, onConfirm, isPending }: Rejec
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md" mobileFullScreen>
+      <DialogContent className="max-w-md dialog-mobile-fullscreen">
         <DialogHeader>
           <DialogTitle>
             {language === "ru" ? "Причина отклонения" : "Бас тарту себебі"}

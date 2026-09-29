@@ -34,7 +34,13 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   let targetUrl = '/';
 
-  if (data.type === 'booking' || data.type === 'cancellation' || data.type === 'payment') {
+  if (data.type === 'new_purchase' || (data.purchaseId && (data.sellerProfileId || data.profileId))) {
+    const profId = data.sellerProfileId || data.profileId || '';
+    const pid = data.purchaseId || '';
+    targetUrl = `/creator?tab=users${pid ? `&purchaseId=${encodeURIComponent(pid)}` : ''}${profId ? `&profileId=${encodeURIComponent(profId)}` : ''}`;
+  } else if (data.type === 'payment_rejected') {
+    targetUrl = data.productId ? `/checkout/${data.productId}` : '/dashboard';
+  } else if (data.type === 'booking' || data.type === 'cancellation' || data.type === 'payment') {
     targetUrl = '/creator';
   } else if (data.type === 'creator_cancellation' || data.type === 'reminder' || data.type === 'material_unlocked') {
     targetUrl = '/dashboard';

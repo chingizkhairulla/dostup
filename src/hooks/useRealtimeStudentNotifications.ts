@@ -183,9 +183,10 @@ export const useRealtimeStudentNotifications = (
           const purchase = payload.new as any;
           const oldPurchase = payload.old as any;
           
-          if (oldPurchase.status === "pending" && (purchase.status === "confirmed" || purchase.status === "completed")) {
-            if (purchase.simple_user_id !== userId) return;
+          const isForUser = purchase.buyer_profile_id === userId || purchase.simple_user_id === userId;
+          if (!isForUser) return;
 
+          if (oldPurchase?.status === "pending" && (purchase.status === "confirmed" || purchase.status === "completed")) {
             playPaymentSound();
 
             const { data: product } = await supabase
@@ -206,6 +207,13 @@ export const useRealtimeStudentNotifications = (
 
             queryClient.invalidateQueries({ queryKey: ["student-purchases"] });
             queryClient.invalidateQueries({ queryKey: ["simple-purchases"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-materials"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-schedules"] });
+          } else if (purchase.status === "rejected" || purchase.status === "revoked") {
+            queryClient.invalidateQueries({ queryKey: ["student-purchases"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-purchases"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-materials"] });
+            queryClient.invalidateQueries({ queryKey: ["simple-schedules"] });
           }
         }
       )

@@ -222,7 +222,7 @@ serve(async (req) => {
 
       // Lookup profiles to resolve handle/username to display_name
       const createdByHandles = (data ?? []).map((r: any) => r.created_by).filter(Boolean)
-      let profileMap: Record<string, string> = {}
+      const profileMap: Record<string, string> = {}
       if (createdByHandles.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')

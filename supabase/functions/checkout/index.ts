@@ -41,12 +41,61 @@ Deno.serve(async (req) => {
         data = result.data
       }
 
-      if (data?.is_paused) {
-        const { kaspi_link: _l, kaspi_phone: _p, ...rest } = data as Record<string, unknown>
-        return json({ product: { ...rest, kaspi_link: null, kaspi_phone: null } })
+      if (!data) return json({ product: null })
+
+      if (data.is_paused) {
+        return json({ product: { ...data, payment_methods: [] } })
       }
 
-      return json({ product: data })
+      let paymentMethods: any[] = []
+      const token = String(body.sessionToken || body.token || '')
+      if (token) {
+        const user = await resolveUser(supabase, token)
+        if (user && data.is_active && !data.is_paused) {
+          const { data: ppmData } = await supabase
+            .from('product_payment_methods')
+            .select('payment_methods(*)')
+            .eq('product_id', data.id)
+
+          paymentMethods = (ppmData ?? [])
+            .map((r: any) => r.payment_methods)
+            .filter(Boolean)
+            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        }
+      }
+
+      return json({ product: { ...data, payment_methods: paymentMethods } })
+    }
+
+    if (action === 'get_payment_methods') {
+      const token = String(body.sessionToken || body.token || '')
+      const user = await resolveUser(supabase, token)
+      if (!user) return unauthorized()
+
+      const productId = String(body.productId || body.id || '').trim()
+      if (!productId) return json({ error: 'Missing productId' }, 400)
+
+      const { data: product } = await supabase
+        .from('products')
+        .select('id, is_active, is_paused')
+        .eq('id', productId)
+        .maybeSingle()
+
+      if (!product || !product.is_active || product.is_paused) {
+        return json({ error: 'Product unavailable' }, 400)
+      }
+
+      const { data: ppmData } = await supabase
+        .from('product_payment_methods')
+        .select('payment_methods(*)')
+        .eq('product_id', product.id)
+
+      const methods = (ppmData ?? [])
+        .map((r: any) => r.payment_methods)
+        .filter(Boolean)
+        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+      return json({ payment_methods: methods })
     }
 
     if (action === 'lookup_teacher') {
@@ -82,11 +131,19 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_my_purchases') {
-      const { data, error } = await supabase
+      const statusParam = body.status
+      let query = supabase
         .from('simple_purchases')
         .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id')
-        .eq('buyer_profile_id', user.userId)
-        .eq('status', body.status || 'completed')
+        .or(`buyer_profile_id.eq.${user.userId},simple_user_id.eq.${user.userId}`)
+
+      if (statusParam && statusParam !== 'all') {
+        query = query.eq('status', statusParam)
+      } else {
+        query = query.in('status', ['completed', 'pending'])
+      }
+
+      const { data, error } = await query
       if (error) return json({ error: error.message }, 500)
       if (!data?.length) return json({ purchases: [] })
       const productIds = data.map((p: { product_id: string }) => p.product_id)
@@ -95,7 +152,7 @@ Deno.serve(async (req) => {
         .select('id, title, headline, telegram_link, group_link_label')
         .in('id', productIds)
       return json({
-        purchases: data.map((purchase: { product_id: string }) => ({
+        purchases: data.map((purchase: { product_id: string; status: string }) => ({
           ...purchase,
           product: products?.find((p: { id: string }) => p.id === purchase.product_id) || null,
         })),
@@ -178,32 +235,16 @@ Deno.serve(async (req) => {
         return json({ error: 'Product unavailable' }, 400)
       }
 
-      const isSub = await isSubscriptionProduct(supabase, productId)
-
-      if (isSub) {
-        const { data: pending } = await supabase
-          .from('simple_purchases')
-          .select('id, status')
-          .eq('buyer_profile_id', user.userId)
-          .eq('product_id', productId)
-          .eq('status', 'pending')
-          .maybeSingle()
-        if (pending) return json({ purchase: pending })
-      } else {
-        const { data: existing } = await supabase
-          .from('simple_purchases')
-          .select('id, status')
-          .eq('buyer_profile_id', user.userId)
-          .eq('product_id', productId)
-          .maybeSingle()
-        if (existing) return json({ purchase: existing })
+      const isFree = !product.price || Number(product.price) <= 0
+      if (!isFree) {
+        return json({ error: 'Paid products require receipt submission' }, 400)
       }
 
       const insertData: Record<string, unknown> = {
         buyer_profile_id: user.userId,
         product_id: productId,
-        amount: product.price || 0,
-        status: 'pending',
+        amount: 0,
+        status: 'completed',
       }
       if (typeof body.assignedTeacherId === 'string' && body.assignedTeacherId) {
         insertData.assigned_teacher_id = body.assignedTeacherId

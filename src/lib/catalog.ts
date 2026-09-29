@@ -36,6 +36,7 @@ export type CatalogProduct = {
   seller_type: string | null;
   avg_rating?: number;
   review_count?: number;
+  purchaseStatus?: "pending" | "completed" | string;
 };
 
 export type CatalogSubcategory = {

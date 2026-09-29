@@ -1,0 +1,1 @@
+{"root":["./middleware.ts","./api/og-product.ts","./api/predict-category.ts","./api/_lib/og.ts","./api/og-cover.tsx","./api/og-default.tsx"],"errors":true,"version":"5.8.3"}

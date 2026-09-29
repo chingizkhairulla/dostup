@@ -10,12 +10,14 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo?: ErrorInfo | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    errorInfo: null,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -23,7 +25,9 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("Uncaught error:", error);
+    console.error("Component stack:", errorInfo?.componentStack);
+    this.setState({ errorInfo });
   }
 
   private handleReload = () => {
@@ -38,6 +42,42 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (import.meta.env.DEV) {
+        return (
+          <div className="min-h-screen bg-background text-foreground p-6 overflow-auto font-mono text-sm space-y-4">
+            <h1 className="text-xl font-bold text-destructive">Ошибка приложения (Development Mode)</h1>
+            <div className="bg-destructive/10 text-destructive border border-destructive/30 p-4 rounded-lg">
+              <p className="font-semibold">{this.state.error?.toString() || "Unknown error"}</p>
+            </div>
+            {this.state.error?.stack && (
+              <div>
+                <h2 className="text-sm font-semibold text-muted-foreground mb-1">Error Stack:</h2>
+                <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">
+                  {this.state.error.stack}
+                </pre>
+              </div>
+            )}
+            {this.state.errorInfo?.componentStack && (
+              <div>
+                <h2 className="text-sm font-semibold text-muted-foreground mb-1">Component Stack:</h2>
+                <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">
+                  {this.state.errorInfo.componentStack}
+                </pre>
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <Button onClick={this.handleReload} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Перезагрузить страницу
+              </Button>
+              <Button variant="outline" onClick={this.handleGoHome} className="gap-2">
+                <Home className="w-4 h-4" />
+                На главную
+              </Button>
+            </div>
+          </div>
+        );
+      }
       // Get language from localStorage or default to "ru"
       const language = (localStorage.getItem("language") as "ru" | "kk") || "ru";
       

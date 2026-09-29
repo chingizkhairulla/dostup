@@ -2,44 +2,68 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { onPurchaseCompleted } from './subscription.ts'
 
 export type CompletePurchaseResult =
-  | { ok: true; already: boolean }
+  | { ok: true; already: boolean; purchase: any }
   | { ok: false; error: string }
 
 export async function completePurchase(
   supabase: SupabaseClient,
   purchaseId: string,
 ): Promise<CompletePurchaseResult> {
-  const now = new Date().toISOString()
+  const now = new Date()
+  const nowIso = now.toISOString()
+
+  const { data: purchaseRow } = await supabase
+    .from('simple_purchases')
+    .select('id, product_id, status, buyer_profile_id, simple_user_id, amount')
+    .eq('id', purchaseId)
+    .maybeSingle()
+
+  if (!purchaseRow) return { ok: false, error: 'Purchase not found' }
+  if (purchaseRow.status === 'completed') {
+    await onPurchaseCompleted(supabase, purchaseRow)
+    return { ok: true, already: true, purchase: purchaseRow }
+  }
+  if (purchaseRow.status !== 'pending') {
+    return { ok: false, error: 'Purchase is not pending' }
+  }
+
+  // Time-limited access counts from confirmation, not from payment
+  let accessEndsAt: string | null = null
+  if (purchaseRow.product_id) {
+    const { data: prod } = await supabase
+      .from('products')
+      .select('access_duration_days')
+      .eq('id', purchaseRow.product_id)
+      .maybeSingle()
+    if (prod?.access_duration_days && prod.access_duration_days > 0) {
+      const end = new Date(now.getTime() + prod.access_duration_days * 24 * 60 * 60 * 1000)
+      accessEndsAt = end.toISOString()
+    }
+  }
+
+  const updatePayload: Record<string, any> = {
+    status: 'completed',
+    confirmed_at: nowIso,
+  }
+  if (accessEndsAt) {
+    updatePayload.access_ends_at = accessEndsAt
+  }
+
   const { data, error } = await supabase
     .from('simple_purchases')
-    .update({ status: 'completed', confirmed_at: now })
+    .update(updatePayload)
     .eq('id', purchaseId)
     .eq('status', 'pending')
-    .select('id')
+    .select('*')
     .maybeSingle()
 
   if (error) return { ok: false, error: error.message }
   if (data) {
-    const { data: purchase } = await supabase
-      .from('simple_purchases')
-      .select('product_id, buyer_profile_id, simple_user_id, amount')
-      .eq('id', purchaseId)
-      .maybeSingle()
-    if (purchase) await onPurchaseCompleted(supabase, purchase)
-    return { ok: true, already: false }
+    await onPurchaseCompleted(supabase, data)
+    return { ok: true, already: false, purchase: data }
   }
 
-  const { data: existing } = await supabase
-    .from('simple_purchases')
-    .select('status, product_id, buyer_profile_id, simple_user_id, amount')
-    .eq('id', purchaseId)
-    .maybeSingle()
-
-  if (existing?.status === 'completed') {
-    await onPurchaseCompleted(supabase, existing)
-    return { ok: true, already: true }
-  }
-  return { ok: false, error: 'Purchase is not pending' }
+  return { ok: false, error: 'Purchase update failed' }
 }
 
 export async function recordVerificationEvent(

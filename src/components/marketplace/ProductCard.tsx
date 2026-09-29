@@ -11,7 +11,7 @@ import {
   type CatalogProduct,
 } from "@/lib/catalog";
 import { sellerInitial } from "@/lib/productCover";
-import { ChevronLeft, ChevronRight, Play, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ProductCard = ({ product }: { product: CatalogProduct }) => {
@@ -52,16 +52,24 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
 
   const currentMedia = mediaList[activeIdx];
 
+  const isPending = product.purchaseStatus === "pending";
+  const targetHref = isPending ? `/checkout/${product.id}` : productHref(product);
+
   return (
     <Link
-      to={productHref(product)}
+      to={targetHref}
       className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card focus-ring motion-safe:transition-shadow motion-safe:hover:shadow-md"
     >
-      {isNew && (
+      {isPending ? (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          <span>{t("awaitingConfirmation")}</span>
+        </span>
+      ) : isNew ? (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-[#FF6B00] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
           {t("newProductBadge")}
         </span>
-      )}
+      ) : null}
       {mediaList.length > 0 ? (
         <div
           className="relative aspect-[16/10] w-full overflow-hidden bg-muted"

@@ -1,5 +1,5 @@
 import { ReactNode, useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type LoginModalProps = {
@@ -41,14 +41,11 @@ const LoginModal = ({ children, onClose }: LoginModalProps) => {
         aria-label={t("signIn")}
         className="relative z-10 flex h-full w-full flex-col motion-safe:animate-fade-in sm:h-auto sm:max-w-md"
       >
-        <button
-          type="button"
+        <BackArrowButton
           onClick={onClose}
-          className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex h-9 w-9 items-center justify-center rounded-xl text-[#1F2328] transition-colors hover:bg-[#F6F7F8] focus-ring"
           aria-label={t("back")}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+          className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20"
+        />
         {children}
       </div>
     </div>

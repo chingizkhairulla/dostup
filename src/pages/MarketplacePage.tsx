@@ -22,14 +22,8 @@ import { categoryLabel, visibleTaxonomy, type LessonFormat } from "@/lib/catalog
 import { profileHomePath } from "@/lib/creatorAuth";
 import { cn } from "@/lib/utils";
 
-const MarketplacePage = () => {
+const MarketplaceContent = () => {
   const { t, language } = useLanguage();
-  const { status, profileType, sessionToken } = useSimpleAuth();
-  const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
-
-  if (signedIn && profileType !== "buyer") {
-    return <Navigate to={profileHomePath(profileType)} replace />;
-  }
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [categorySlug, setCategorySlug] = useState("");
@@ -77,7 +71,7 @@ const MarketplacePage = () => {
     setLessonFormat("");
   };
 
-  const page = (
+  return (
     <div className="flex min-h-screen flex-col bg-background">
       <MarketplaceHeader />
       <main className="flex flex-1 flex-col pb-0 pt-0 md:pb-16">
@@ -210,6 +204,17 @@ const MarketplacePage = () => {
       <PublicFooter />
     </div>
   );
+};
+
+const MarketplacePage = () => {
+  const { status, profileType, sessionToken } = useSimpleAuth();
+  const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
+
+  if (signedIn && profileType !== "buyer") {
+    return <Navigate to={profileHomePath(profileType)} replace />;
+  }
+
+  const content = <MarketplaceContent />;
 
   if (signedIn) {
     return (
@@ -221,11 +226,11 @@ const MarketplacePage = () => {
           ) : undefined
         }
       >
-        <div className="pb-20 md:pb-0">{page}</div>
+        <div className="pb-20 md:pb-0">{content}</div>
       </BuyerAppShell>
     );
   }
 
-  return page;
+  return content;
 };
 export default MarketplacePage;

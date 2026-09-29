@@ -168,3 +168,6 @@ verify_jwt = false
 
 [functions.process-subscriptions]
 verify_jwt = false
+
+[functions.remind-pending-purchases]
+verify_jwt = false

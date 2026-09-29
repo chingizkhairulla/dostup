@@ -56,9 +56,10 @@ interface Teacher {
 
 interface CreatorUsersTabProps {
   creatorName: string;
+  highlightPurchaseId?: string;
 }
 
-const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
+const CreatorUsersTab = ({ creatorName, highlightPurchaseId }: CreatorUsersTabProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [revokeDialog, setRevokeDialog] = useState<{ id: string; name: string } | null>(null);
   const { t, language } = useLanguage();
@@ -234,7 +235,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-foreground">{t("users")}</h2>
-      <CreatorPendingPayments creatorName={creatorName} />
+      <CreatorPendingPayments creatorName={creatorName} highlightPurchaseId={highlightPurchaseId} />
 
       {/* Search */}
       <div className="relative">

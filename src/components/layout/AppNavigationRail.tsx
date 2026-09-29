@@ -18,6 +18,7 @@ import {
   ProfileAccountRows,
   useProfileAccountActions,
 } from "@/components/layout/ProfileAccountRows";
+import { useCreatorPendingPurchases } from "@/components/creator/CreatorPendingPayments";
 
 const RAIL_COLLAPSED = 64;
 const RAIL_EXPANDED = 240;
@@ -72,12 +73,17 @@ const AppNavigationRail = ({ activeSection, sellerTab }: AppNavigationRailProps)
     });
   };
 
+  const creatorName = localStorage.getItem("creator_name");
+  const { data: pendingPurchases = [] } = useCreatorPendingPurchases(isSellerProfile ? creatorName : null);
+  const pendingCount = pendingPurchases.length;
+
   const sectionLink = (
     key: RailSectionKey,
     to: string,
     Icon: typeof Search,
     label: string,
     active: boolean,
+    badgeCount?: number,
   ) => (
     <Link
       key={key}
@@ -94,15 +100,30 @@ const AppNavigationRail = ({ activeSection, sellerTab }: AppNavigationRailProps)
       )}
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
         <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />
+        {!expanded && Boolean(badgeCount && badgeCount > 0) && (
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white shadow-sm">
+            {badgeCount}
+          </span>
+        )}
       </div>
-      {expanded && <span className="truncate text-[15px] leading-tight">{label}</span>}
+      {expanded && (
+        <div className="flex flex-1 items-center justify-between min-w-0 pr-1">
+          <span className="truncate text-[15px] leading-tight">{label}</span>
+          {Boolean(badgeCount && badgeCount > 0) && (
+            <span className="ml-2 flex h-5 min-w-5 px-1.5 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+              {badgeCount}
+            </span>
+          )}
+        </div>
+      )}
     </Link>
   );
 
   const sellerTabLink = (key: SellerSectionKey, label: string, Icon: typeof Search) => {
     const active = resolvedSellerTab === key;
     const to = key === "account" ? "/creator?tab=account" : `/creator?tab=${key}`;
-    return sectionLink(key, to, Icon, label, active);
+    const badge = key === "users" ? pendingCount : undefined;
+    return sectionLink(key, to, Icon, label, active, badge);
   };
 
   return (

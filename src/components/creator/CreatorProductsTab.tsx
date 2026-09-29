@@ -12,7 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Eye, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
+import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Eye, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight, AlertCircle, X } from "lucide-react";
 import { predictProductCategory, isTopicMatch, isExactTopicMatch, type CategoryPrediction, suggestCustomTopicWithEmoji } from "@/lib/aiCategory";
 import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } from "@/lib/taxonomyData";
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
@@ -57,6 +57,12 @@ import { cn } from "@/lib/utils";
 import { useCoverCrop, type CoverCropResult } from "@/hooks/useCoverCrop";
 import CoverCropEditor from "./CoverCropEditor";
 import ProductVideoPlayer, { videoBlobCache } from "@/components/media/ProductVideoPlayer";
+import ProductPaymentMethodsSection, {
+  type ProductPaymentMethodsSectionRef,
+} from "./ProductPaymentMethodsSection";
+import type { PaymentMethod } from "@/types";
+
+const EMPTY_PAYMENT_METHOD_IDS: string[] = [];
 
 export interface PricingOptionFormItem {
   id: string;
@@ -111,7 +117,6 @@ interface Product {
   headline: string | null;
   description: string | null;
   price: number;
-  kaspi_link: string | null;
   telegram_link: string | null;
   has_schedule: boolean;
   is_active: boolean;
@@ -119,7 +124,8 @@ interface Product {
   video_url?: string | null;
   media?: Array<{ type: "image" | "video"; url: string; objectPosition?: string }> | null;
   faq?: Array<{ question: string; answer: string }> | null;
-  kaspi_phone?: string | null;
+  payment_methods?: PaymentMethod[];
+  payment_method_ids?: string[];
   access_duration_days?: number | null;
   is_paused?: boolean;
   paused_message?: string | null;
@@ -175,10 +181,12 @@ interface FormData {
   trialPreset: "3" | "7" | "30" | "custom";
   trialCustomDays: number;
   pricingOptions: PricingOptionFormItem[];
+  paymentMethodIds: string[];
 }
 
 interface ProductFormProps {
-  onSubmit: (e: React.FormEvent) => void;
+  id?: string;
+  onSubmit: (e: React.FormEvent, customData?: FormData) => void;
   isEdit?: boolean;
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
@@ -191,6 +199,9 @@ interface ProductFormProps {
   setPendingVideoFile?: (f: File | null) => void;
   taxonomyCategories?: CatalogCategory[];
   onCroppingChange?: (isCropping: boolean) => void;
+  availableDraft?: Partial<FormData> | null;
+  onRestoreDraft?: () => void;
+  onDiscardDraft?: () => void;
 }
 
 function categorySlugById(categories: CatalogCategory[], categoryId: string) {
@@ -204,21 +215,31 @@ function buildTaxonomyPayload(
   const currentCategory = categories.find((c) => c.id === formData.categoryId);
   const currentSubcategory = currentCategory?.subcategories.find((s) => s.id === formData.subcategoryId);
   const isLessons = currentCategory?.slug === "online-lessons";
+  const isEvents = currentCategory?.slug === "events";
+  const isSubscriptions = currentCategory?.slug === "subscriptions";
 
   return {
     category_id: formData.categoryId,
     subcategory_id: formData.subcategoryId,
     lesson_format: isLessons ? (currentSubcategory?.slug === "group" ? "group" : "individual") : null,
-    event_starts_at: null,
-    capacity: null,
-    billing_period: null,
+    event_starts_at: isEvents && formData.eventStartsAt ? new Date(formData.eventStartsAt).toISOString() : null,
+    capacity: isEvents && formData.capacity ? Number(formData.capacity) : null,
+    billing_period: isSubscriptions ? (formData.billingPeriod || null) : null,
     topic: formData.topic || null,
   };
 }
 
-function validateTaxonomyFields(formData: FormData, _categories: CatalogCategory[]) {
+function validateTaxonomyFields(formData: FormData, categories: CatalogCategory[]) {
   if (!formData.categoryId || !formData.subcategoryId) {
     return "Выберите категорию и подкатегорию";
+  }
+  const currentCategory = categories.find((c) => c.id === formData.categoryId);
+  if (currentCategory?.slug === "events") {
+    if (!formData.eventStartsAt) return "Укажите дату и время мероприятия";
+    if (!formData.capacity || Number(formData.capacity) <= 0) return "Укажите количество мест";
+  }
+  if (currentCategory?.slug === "subscriptions") {
+    if (!formData.billingPeriod) return "Выберите период оплаты";
   }
   return null;
 }
@@ -235,6 +256,7 @@ const ReqStar = () => (
 );
 
 const ProductForm = ({
+  id,
   onSubmit,
   isEdit = false,
   formData,
@@ -248,6 +270,9 @@ const ProductForm = ({
   setPendingVideoFile,
   taxonomyCategories = [],
   onCroppingChange,
+  availableDraft,
+  onRestoreDraft,
+  onDiscardDraft,
 }: ProductFormProps) => {
   const { language } = useLanguage();
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -1034,8 +1059,8 @@ const ProductForm = ({
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         const target =
           el instanceof HTMLInputElement ||
-          el instanceof HTMLTextAreaElement ||
-          el instanceof HTMLButtonElement
+            el instanceof HTMLTextAreaElement ||
+            el instanceof HTMLButtonElement
             ? el
             : el.querySelector<HTMLElement>("input, textarea, button, [tabindex='0']") || el;
 
@@ -1065,73 +1090,147 @@ const ProductForm = ({
     scrollToField(id);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [hasSubmitAttempt, setHasSubmitAttempt] = useState(false);
+  const paymentEditorRef = useRef<ProductPaymentMethodsSectionRef>(null);
+
+  const handlePaymentMethodsChange = useCallback((ids: string[]) => {
+    setFormData((prev) => {
+      const prevIds = prev.paymentMethodIds || EMPTY_PAYMENT_METHOD_IDS;
+      if (
+        prevIds.length === ids.length &&
+        prevIds.every((id, idx) => id === ids[idx])
+      ) {
+        return prev;
+      }
+      return { ...prev, paymentMethodIds: ids };
+    });
+    setErrors((prev) => {
+      if (!prev.paymentMethodIds) return prev;
+      return { ...prev, paymentMethodIds: undefined };
+    });
+  }, [setFormData]);
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasSubmitAttempt(true);
 
-    // 1. Details -> Title
-    if (!formData.title?.trim()) {
-      notifyMissingField("title", () => setDetailsOpen(true));
-      return;
-    }
+    let currentMethodIds = formData.paymentMethodIds || [];
 
-    // 2. Category
-    if (!formData.categoryId) {
-      notifyMissingField("field-category", () => {
-        setCategoryOpen(true);
-      });
-      return;
-    }
-
-    // 3. Subcategory
-    if (!formData.subcategoryId) {
-      notifyMissingField("field-subcategory", () => {
-        setCategoryOpen(true);
-      });
-      return;
-    }
-
-    // 4. Payment options (if paid)
-    if (formData.isPaid) {
-      if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
-        notifyMissingField("field-pricing-options", () => setPaymentOpen(true));
+    // If payment method editor is open: validate and save it first
+    if (formData.isPaid && paymentEditorRef.current?.isEditorOpen()) {
+      setPaymentOpen(true);
+      const saveRes = await paymentEditorRef.current.saveIfOpen();
+      if (saveRes.hasErrors) {
+        // Validation errors are displayed inside the editor, scroll already handled
         return;
       }
-      for (const opt of formData.pricingOptions) {
-        if (!opt.price || Number(opt.price) <= 0) {
-          notifyMissingField(`price-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
-          return;
-        }
-        if (opt.paymentType === "recurring" && !opt.recurringInterval) {
-          notifyMissingField(`recurring-interval-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
-          return;
-        }
-        if (opt.kaspiMethod === "link" && !opt.kaspiLink?.trim()) {
-          notifyMissingField(`kaspi-link-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
-          return;
-        }
-        if (opt.kaspiMethod === "phone") {
-          const digits = opt.kaspiPhone?.replace(/\D/g, "") || "";
-          if (!opt.kaspiPhone?.trim() || digits.length < 5) {
-            notifyMissingField(`kaspi-phone-${opt.id}`, () => {
-              setPaymentOpen(true);
-              setExpandedOptionId(opt.id);
-            });
-            return;
-          }
+      if (saveRes.saved && saveRes.methodId) {
+        if (!currentMethodIds.includes(saveRes.methodId)) {
+          currentMethodIds = [...currentMethodIds, saveRes.methodId];
         }
       }
     }
 
-    onSubmit(e);
+    const currentFormData: FormData = {
+      ...formData,
+      paymentMethodIds: currentMethodIds,
+    };
+    setFormData(currentFormData);
+
+    const newErrors: Record<string, string> = {};
+
+    // 1. Details -> Title
+    if (!currentFormData.title?.trim()) {
+      newErrors.title = "Введите название продукта";
+    }
+
+    // 2. Category & Subcategory
+    const currentCategory = taxonomyCategories.find((c) => c.id === currentFormData.categoryId);
+    if (!currentFormData.categoryId) {
+      newErrors.categoryId = "Выберите категорию";
+    }
+    if (!currentFormData.subcategoryId) {
+      newErrors.subcategoryId = "Выберите подкатегорию";
+    }
+
+    // 3. Events: date & capacity
+    const isEvents = currentCategory?.slug === "events";
+    if (isEvents) {
+      if (!currentFormData.eventStartsAt) {
+        newErrors.eventStartsAt = "Укажите дату и время мероприятия";
+      }
+      if (!currentFormData.capacity || Number(currentFormData.capacity) <= 0) {
+        newErrors.capacity = "Укажите количество мест (больше 0)";
+      }
+    }
+
+    // 4. Subscriptions: billing period
+    const isSubscriptions = currentCategory?.slug === "subscriptions";
+    if (isSubscriptions) {
+      if (!currentFormData.billingPeriod) {
+        newErrors.billingPeriod = "Выберите период оплаты";
+      }
+    }
+
+    // 5. Payment options (if paid)
+    if (currentFormData.isPaid) {
+      const options =
+        currentFormData.pricingOptions && currentFormData.pricingOptions.length > 0
+          ? currentFormData.pricingOptions
+          : [createDefaultPricingOption()];
+
+      if (options.some((o) => !o.price || Number(o.price) <= 0)) {
+        newErrors.price = "Укажите цену для всех вариантов оплаты";
+      }
+
+      if (currentMethodIds.length === 0) {
+        newErrors.paymentMethodIds = "Для платного продукта выберите хотя бы один способ оплаты";
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+
+      // Auto expand the section containing the first error and scroll to it
+      if (newErrors.title) {
+        setDetailsOpen(true);
+        scrollToField("title");
+        toast.error(newErrors.title);
+      } else if (newErrors.categoryId) {
+        setCategoryOpen(true);
+        scrollToField("field-category");
+        toast.error(newErrors.categoryId);
+      } else if (newErrors.subcategoryId) {
+        setCategoryOpen(true);
+        scrollToField("field-subcategory");
+        toast.error(newErrors.subcategoryId);
+      } else if (newErrors.eventStartsAt) {
+        setCategoryOpen(true);
+        scrollToField("field-event-starts-at");
+        toast.error(newErrors.eventStartsAt);
+      } else if (newErrors.capacity) {
+        setCategoryOpen(true);
+        scrollToField("field-capacity");
+        toast.error(newErrors.capacity);
+      } else if (newErrors.billingPeriod) {
+        setCategoryOpen(true);
+        scrollToField("field-billing-period");
+        toast.error(newErrors.billingPeriod);
+      } else if (newErrors.price) {
+        setPaymentOpen(true);
+        scrollToField("field-pricing-options");
+        toast.error(newErrors.price);
+      } else if (newErrors.paymentMethodIds) {
+        setPaymentOpen(true);
+        scrollToField("field-payment-methods");
+        toast.error(newErrors.paymentMethodIds);
+      }
+      return;
+    }
+
+    setErrors({});
+    onSubmit(e, currentFormData);
   };
 
   const SectionHeader = ({
@@ -1156,7 +1255,51 @@ const ProductForm = ({
   ];
 
   return (
-    <form onSubmit={handleFormSubmit} noValidate className="space-y-4 mt-4 w-full min-w-0 max-w-full overflow-x-hidden">
+    <form
+      id={id || (isEdit ? "product-edit-form" : "product-create-form")}
+      onSubmit={handleFormSubmit}
+      noValidate
+      className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden"
+    >
+      {availableDraft && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700/60 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-950 dark:text-amber-200">
+                Есть сохранённый черновик
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                Вы можете восстановить несохранённые изменения
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {onRestoreDraft && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 min-h-[36px] text-xs font-semibold border-amber-400 text-amber-950 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                onClick={onRestoreDraft}
+              >
+                Восстановить черновик
+              </Button>
+            )}
+            {onDiscardDraft && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-9 min-h-[36px] text-xs text-muted-foreground hover:text-foreground"
+                onClick={onDiscardDraft}
+              >
+                Удалить
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {Boolean(coverCrop.source) ? (
         <div className="space-y-4 py-1 animate-in fade-in-50 duration-200">
           <CoverCropEditor
@@ -1179,34 +1322,34 @@ const ProductForm = ({
       ) : (
         <div className="space-y-4 w-full min-w-0 max-w-full">
           {/* ============ ДЕТАЛИ ============ */}
-    <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <SectionHeader label="Детали" open={detailsOpen} />
-      <CollapsibleContent className="space-y-4 pt-4 w-full min-w-0 max-w-full">
-        {/* Unified Cover (Image & Video) upload */}
-        <div className="space-y-2 w-full min-w-0 max-w-full">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm sm:text-base font-semibold text-foreground">Обложка</Label>
-            {formData.media && formData.media.length > 0 && (
-              <label className="cursor-pointer inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-                {uploadingMedia ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                <span>Добавить</span>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  className="hidden"
-                  disabled={uploadingMedia}
-                  onChange={handleMediaChange}
-                />
-              </label>
-            )}
-          </div>
-          
-          <style>{`
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <SectionHeader label="Детали" open={detailsOpen} />
+            <CollapsibleContent className="space-y-4 pt-4 w-full min-w-0 max-w-full">
+              {/* Unified Cover (Image & Video) upload */}
+              <div className="space-y-2 w-full min-w-0 max-w-full">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm sm:text-base font-semibold text-foreground">Обложка</Label>
+                  {formData.media && formData.media.length > 0 && (
+                    <label className="cursor-pointer inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                      {uploadingMedia ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span>Добавить</span>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        className="hidden"
+                        disabled={uploadingMedia}
+                        onChange={handleMediaChange}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <style>{`
             .media-cards-scroll::-webkit-scrollbar {
               display: none !important;
               width: 0 !important;
@@ -1214,215 +1357,226 @@ const ProductForm = ({
             }
           `}</style>
 
-          {(!formData.media || formData.media.length === 0) ? (
-            <label
-              className={`flex flex-col items-center justify-center gap-3 h-44 sm:h-52 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
-                isMediaDragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
-              }`}
-              onDragOver={(e) => { e.preventDefault(); setIsMediaDragging(true); }}
-              onDragLeave={() => setIsMediaDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsMediaDragging(false);
-                const files = Array.from(e.dataTransfer.files).filter(
-                  (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
-                );
-                if (files.length > 0) void startCoverCropProcess(files);
-                else toast.error("Перетащите фото или видео");
-              }}
-            >
-              {uploadingMedia ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Загрузка...</span>
-                </div>
-              ) : (
-                <>
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center shadow-xs">
-                    <Plus className="w-7 h-7 sm:w-8 sm:h-8" />
-                  </div>
-                  <span className="text-sm sm:text-base font-medium text-foreground">
-                    Добавьте фото или видео
-                  </span>
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                className="hidden"
-                disabled={uploadingMedia}
-                onChange={handleMediaChange}
-              />
-            </label>
-          ) : (
-            <div className="space-y-2 w-full min-w-0 max-w-full">
-              <div className="media-scroll-wrapper w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-black/5 relative">
-                <div
-                  ref={mediaScrollRef}
-                  onScroll={handleMediaScroll}
-                  className="media-cards-scroll w-full max-w-full min-w-0 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar"
-                  style={{
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
-                    WebkitOverflowScrolling: "touch",
-                  }}
-                >
-                  {formData.media.map((item, idx) => (
-                    <div
-                      key={item.id || idx}
-                      className="w-full min-w-full max-w-full shrink-0 snap-center relative aspect-[16/10] sm:h-72 flex items-center justify-center bg-black/10 overflow-hidden"
-                    >
-                      {item.type === "video" ? (
-                        <ProductVideoPlayer
-                          key={item.id || item.previewUrl || item.url || idx}
-                          src={item.previewUrl || item.url || ""}
-                          controls
-                          playsInline
-                          objectFit="cover"
-                          objectPosition={item.objectPosition || "center"}
-                          className="w-full h-full max-w-full"
-                        />
-                      ) : (
-                        <img
-                          src={item.url || item.previewUrl}
-                          alt={`cover-${idx + 1}`}
-                          className="w-full h-full object-cover max-w-full"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Строка управления: стрелки слева, точки по центру, корзина справа */}
-              <div className="relative flex items-center justify-between pt-0.5 px-0.5 w-full min-w-0">
-                {/* Стрелки влево/вправо слева (только когда файлов > 1) */}
-                <div className="flex items-center gap-1 z-10 min-w-[60px]">
-                  {formData.media.length > 1 && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={activeMediaIndex === 0}
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
-                        onClick={() => scrollToMediaIndex(Math.max(0, activeMediaIndex - 1))}
-                        title="Предыдущее"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={activeMediaIndex === formData.media.length - 1}
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
-                        onClick={() => scrollToMediaIndex(Math.min(formData.media.length - 1, activeMediaIndex + 1))}
-                        title="Следующее"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-
-                {/* Точки-индикаторы СТРОГО по центру с плавным перетеканием (только когда файлов > 1) */}
-                {formData.media.length > 1 && (
-                  <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 py-0.5 pointer-events-auto">
-                    {formData.media.map((_, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => scrollToMediaIndex(i)}
-                        className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
-                        title={`Медиа ${i + 1}`}
-                      />
-                    ))}
-                    <div
-                      ref={mediaDotRef}
-                      className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-xs pointer-events-none"
-                      style={{
-                        left: "0px",
-                        transition: "left 60ms ease-out",
-                      }}
+                {(!formData.media || formData.media.length === 0) ? (
+                  <label
+                    className={`flex flex-col items-center justify-center gap-3 h-44 sm:h-52 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${isMediaDragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                      }`}
+                    onDragOver={(e) => { e.preventDefault(); setIsMediaDragging(true); }}
+                    onDragLeave={() => setIsMediaDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsMediaDragging(false);
+                      const files = Array.from(e.dataTransfer.files).filter(
+                        (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
+                      );
+                      if (files.length > 0) void startCoverCropProcess(files);
+                      else toast.error("Перетащите фото или видео");
+                    }}
+                  >
+                    {uploadingMedia ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Загрузка...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+                          <Plus className="w-7 h-7 sm:w-8 sm:h-8" />
+                        </div>
+                        <span className="text-sm sm:text-base font-medium text-foreground">
+                          Добавьте фото или видео
+                        </span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      className="hidden"
+                      disabled={uploadingMedia}
+                      onChange={handleMediaChange}
                     />
+                  </label>
+                ) : (
+                  <div className="space-y-2 w-full min-w-0 max-w-full">
+                    <div className="media-scroll-wrapper w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-black/5 relative">
+                      <div
+                        ref={mediaScrollRef}
+                        onScroll={handleMediaScroll}
+                        className="media-cards-scroll w-full max-w-full min-w-0 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar"
+                        style={{
+                          scrollbarWidth: "none",
+                          msOverflowStyle: "none",
+                          WebkitOverflowScrolling: "touch",
+                        }}
+                      >
+                        {formData.media.map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className="w-full min-w-full max-w-full shrink-0 snap-center relative aspect-[16/10] sm:h-72 flex items-center justify-center bg-black/10 overflow-hidden"
+                          >
+                            {item.type === "video" ? (
+                              <ProductVideoPlayer
+                                key={item.id || item.previewUrl || item.url || idx}
+                                src={item.previewUrl || item.url || ""}
+                                controls
+                                playsInline
+                                objectFit="cover"
+                                objectPosition={item.objectPosition || "center"}
+                                className="w-full h-full max-w-full"
+                              />
+                            ) : (
+                              <img
+                                src={item.url || item.previewUrl}
+                                alt={`cover-${idx + 1}`}
+                                className="w-full h-full object-cover max-w-full"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Строка управления: стрелки слева, точки по центру, корзина справа */}
+                    <div className="relative flex items-center justify-between pt-0.5 px-0.5 w-full min-w-0">
+                      {/* Стрелки влево/вправо слева (только когда файлов > 1) */}
+                      <div className="flex items-center gap-1 z-10 min-w-[60px]">
+                        {formData.media.length > 1 && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={activeMediaIndex === 0}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
+                              onClick={() => scrollToMediaIndex(Math.max(0, activeMediaIndex - 1))}
+                              title="Предыдущее"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={activeMediaIndex === formData.media.length - 1}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
+                              onClick={() => scrollToMediaIndex(Math.min(formData.media.length - 1, activeMediaIndex + 1))}
+                              title="Следующее"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Точки-индикаторы СТРОГО по центру с плавным перетеканием (только когда файлов > 1) */}
+                      {formData.media.length > 1 && (
+                        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 py-0.5 pointer-events-auto">
+                          {formData.media.map((_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => scrollToMediaIndex(i)}
+                              className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
+                              title={`Медиа ${i + 1}`}
+                            />
+                          ))}
+                          <div
+                            ref={mediaDotRef}
+                            className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-xs pointer-events-none"
+                            style={{
+                              left: "0px",
+                              transition: "left 60ms ease-out",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Корзина в правом углу */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10 ml-auto"
+                        onClick={() => handleDeleteMedia(activeMediaIndex)}
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 )}
-
-                {/* Корзина в правом углу */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10 ml-auto"
-                  onClick={() => handleDeleteMedia(activeMediaIndex)}
-                  title="Удалить"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <Label htmlFor="title" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-            Название <ReqStar />
-          </Label>
-          <AutoResizeTextarea
-            id="title"
-            placeholder="Название"
-            rows={1}
-            value={formData.title}
-            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-            className="text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-xl"
-          />
-        </div>
+              {/* Title */}
+              <div id="field-title" className="space-y-2">
+                <Label htmlFor="title" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
+                  Название <ReqStar />
+                </Label>
+                <AutoResizeTextarea
+                  id="title"
+                  placeholder="Название"
+                  rows={1}
+                  value={formData.title}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, title: e.target.value }));
+                    if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
+                  }}
+                  className={cn(
+                    "text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-xl",
+                    errors.title && "border-destructive ring-1 ring-destructive"
+                  )}
+                />
+                {errors.title && (
+                  <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{errors.title}</span>
+                  </p>
+                )}
+              </div>
 
-        {/* Description */}
-        <div className="space-y-2">
-          <Label htmlFor="description" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-            Описание
-          </Label>
-          <RichTextEditor
-            value={formData.description}
-            onChange={(val) => setFormData(prev => ({ ...prev, description: val }))}
-            placeholder="Описание"
-            minHeight="70px"
-            maxHeight="220px"
-          />
-        </div>
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
+                  Описание
+                </Label>
+                <RichTextEditor
+                  value={formData.description}
+                  onChange={(val) => setFormData(prev => ({ ...prev, description: val }))}
+                  placeholder="Описание"
+                  minHeight="70px"
+                  maxHeight="220px"
+                />
+              </div>
 
-        {/* FAQ editor (внутри Деталей) */}
-        <div className="space-y-2.5 pt-1">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="flex items-center gap-2 text-sm sm:text-base font-semibold text-foreground">
-                <HelpCircle className="w-4 h-4 text-primary" />
-                Часто задаваемые вопросы
-              </Label>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Добавьте ответы на популярные вопросы ваших покупателей.
-              </p>
-            </div>
+              {/* FAQ editor (внутри Деталей) */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center gap-2 text-sm sm:text-base font-semibold text-foreground">
+                      <HelpCircle className="w-4 h-4 text-primary" />
+                      Часто задаваемые вопросы
+                    </Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Добавьте ответы на популярные вопросы ваших покупателей.
+                    </p>
+                  </div>
 
-            {/* Кнопка + справа от надписи Часто задаваемые вопросы */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 w-8 p-0 rounded-full border border-dashed border-primary/50 bg-primary/5 text-primary hover:bg-primary hover:text-white hover:border-primary transition-all shrink-0 ml-2 shadow-2xs"
-              onClick={handleAddFaq}
-              title="Добавить вопрос"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
+                  {/* Кнопка + справа от надписи Часто задаваемые вопросы */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-full border border-dashed border-primary/50 bg-primary/5 text-primary hover:bg-primary hover:text-white hover:border-primary transition-all shrink-0 ml-2 shadow-2xs"
+                    onClick={handleAddFaq}
+                    title="Добавить вопрос"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
 
-          <div className="space-y-1">
-            <style>{`
+                <div className="space-y-1">
+                  <style>{`
               .faq-scroll-wrapper {
                 overflow: hidden !important;
               }
@@ -1445,956 +1599,1027 @@ const ProductForm = ({
                 opacity: 0 !important;
               }
             `}</style>
-            {/* Обертка с overflow:hidden, скрывающая скроллбар */}
-            <div className="faq-scroll-wrapper w-full overflow-hidden rounded-xl">
-              {/* Контейнер прокрутки: padding-bottom выталкивает системный скроллбар за пределы обертки */}
-              <div
-                ref={faqScrollRef}
-                onScroll={handleFaqScroll}
-                className="faq-cards-scroll w-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory gap-3 py-1 pb-10 -mb-10 no-scrollbar"
-                style={{
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                  WebkitOverflowScrolling: "touch",
-                }}
-              >
-                {(formData.faq && formData.faq.length > 0
-                  ? formData.faq
-                  : [{ question: "", answer: "" }]
-                ).map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="w-full min-w-full shrink-0 snap-center rounded-xl border border-border/80 bg-card p-3 space-y-2 shadow-xs"
-                  >
-                    <AutoResizeTextarea
-                      placeholder="Вопрос"
-                      rows={1}
-                      style={{ minHeight: "42px" }}
-                      value={item.question}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setFormData((prev) => ({
-                          ...prev,
-                          faq: (prev.faq || []).map((it, i) =>
-                            i === idx ? { ...it, question: v } : it
-                          ),
-                        }));
-                      }}
-                      className="text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-lg"
-                    />
-
-                    <AutoResizeTextarea
-                      placeholder="Ответ на вопрос..."
-                      rows={2}
-                      style={{ minHeight: "58px" }}
-                      value={item.answer}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setFormData((prev) => ({
-                          ...prev,
-                          faq: (prev.faq || []).map((it, i) =>
-                            i === idx ? { ...it, answer: v } : it
-                          ),
-                        }));
-                      }}
-                      className="text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-lg"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Нижняя строка управления (только когда карточек больше 1) */}
-            {formData.faq && formData.faq.length > 1 && (
-              <div className="relative flex items-center justify-between pt-0.5 px-0.5">
-                {/* Стрелки влево и вправо рядом друг с другом слева */}
-                <div className="flex items-center gap-1 z-10">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={activeFaqIndex === 0}
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
-                    onClick={() => scrollToFaqIndex(Math.max(0, activeFaqIndex - 1))}
-                    title="Предыдущий вопрос"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={activeFaqIndex === formData.faq.length - 1}
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
-                    onClick={() => scrollToFaqIndex(Math.min(formData.faq.length - 1, activeFaqIndex + 1))}
-                    title="Следующий вопрос"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Точки-индикаторы СТРОГО по центру карточки с плавным перетеканием */}
-                <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 py-0.5 pointer-events-auto">
-                  {formData.faq.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => scrollToFaqIndex(i)}
-                      className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
-                      title={`Вопрос ${i + 1}`}
-                    />
-                  ))}
-                  {/* Плавно переливающийся оранжевый индикатор */}
-                  <div
-                    ref={dotRef}
-                    className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-xs pointer-events-none"
-                    style={{
-                      left: `${dotOffset}px`,
-                      transition: "left 60ms ease-out",
-                    }}
-                  />
-                </div>
-
-                {/* Мусорка в правом углу */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10"
-                  onClick={() => handleDeleteFaq(activeFaqIndex)}
-                  title="Удалить этот вопрос"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-
-    {/* ============ КЛАССИФИКАЦИЯ ============ */}
-    <Collapsible open={categoryOpen} onOpenChange={handleCategoryOpenChange}>
-      <SectionHeader label="Классификация" open={categoryOpen} />
-      <CollapsibleContent className="space-y-4 pt-4">
-        {/* Состояние загрузки AI */}
-        {aiLoading && (
-          <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 px-3 py-2 rounded-xl border border-primary/20">
-            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
-            <span>Подбираем категорию и тему с помощью AI...</span>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-                {t("productFormCategory")} <ReqStar />
-              </Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => triggerAiCategory(true)}
-                disabled={aiLoading}
-                className="h-7 px-2.5 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1.5 transition-all"
-                title="Определить категорию, подкатегорию и тему по названию и описанию"
-              >
-                {aiLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
-                )}
-                <span>Обновить через ИИ</span>
-              </Button>
-            </div>
-            <Select
-              value={formData.categoryId || undefined}
-              onValueChange={(value) => {
-                isUserSelectedCategory.current = true;
-                setFormData((prev) => ({
-                  ...prev,
-                  categoryId: value,
-                  subcategoryId: "",
-                  topic: "",
-                }));
-                setTimeout(() => {
-                  const el = document.getElementById("field-category");
-                  if (el) {
-                    el.classList.remove("ring-2", "ring-[#FF6B00]");
-                    el.blur();
-                  }
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                }, 50);
-              }}
-            >
-              <SelectTrigger
-                id="field-category"
-                className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
-              >
-                <SelectValue placeholder={t("selectCategory")} />
-              </SelectTrigger>
-              <SelectContent>
-                {taxonomyCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id} className="text-base py-2.5">
-                    {categoryLabel(category, language)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {formData.categoryId && (
-            <div className="space-y-2">
-              <Label className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-                {t("productFormSubcategory")} <ReqStar />
-              </Label>
-              <Select
-                value={formData.subcategoryId || undefined}
-                onValueChange={(value) => {
-                  isUserSelectedCategory.current = true;
-                  const cat = taxonomyCategories.find((c) => c.id === formData.categoryId);
-                  const sub = cat?.subcategories?.find((s) => s.id === value);
-                  const topics = cat ? getPresetTopics(cat.slug, sub?.slug) : [];
-                  setFormData((prev) => {
-                    const prevTopics = parseTopicsList(prev.topic);
-                    const remaining = prevTopics.filter((item) =>
-                      topics.some((t) => isExactTopicMatch(item, t))
-                    );
-                    return {
-                      ...prev,
-                      subcategoryId: value,
-                      topic: serializeTopicsList(remaining),
-                    };
-                  });
-                  setTimeout(() => {
-                    const el = document.getElementById("field-subcategory");
-                    if (el) {
-                      el.classList.remove("ring-2", "ring-[#FF6B00]");
-                      el.blur();
-                    }
-                    if (document.activeElement instanceof HTMLElement) {
-                      document.activeElement.blur();
-                    }
-                  }, 50);
-                }}
-              >
-                <SelectTrigger
-                  id="field-subcategory"
-                  className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
-                >
-                  <SelectValue placeholder={t("selectSubcategory")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(
-                    taxonomyCategories.find((category) => category.id === formData.categoryId)
-                      ?.subcategories ?? []
-                  ).map((subcategory) => (
-                    <SelectItem key={subcategory.id} value={subcategory.id} className="text-base py-2.5">
-                      {subcategoryLabel(subcategory, language)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Выбор и добавление Темы */}
-          {formData.categoryId && formData.subcategoryId && (() => {
-            const selectedTopics = parseTopicsList(formData.topic);
-
-            return (
-              <div className="space-y-3 pt-2 border-t border-border/60">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm sm:text-base font-semibold text-foreground">Тема продукта</Label>
-                </div>
-
-                {/* Выбранные темы в виде плашек с крестиком (над поиском) */}
-                {selectedTopics.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {selectedTopics.map((topicItem) => (
-                      <span
-                        key={topicItem}
-                        className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl text-sm sm:text-base font-normal bg-primary/10 text-primary border border-primary/20 shadow-2xs transition-all"
-                      >
-                        <span>{topicItem}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            isUserSelectedCategory.current = true;
-                            const updated = selectedTopics.filter((t) => !isExactTopicMatch(t, topicItem));
-                            setFormData((prev) => ({
-                              ...prev,
-                              topic: serializeTopicsList(updated),
-                            }));
-                          }}
-                          className="w-4 h-4 rounded-full inline-flex items-center justify-center hover:bg-primary/20 text-primary/80 hover:text-primary transition-colors cursor-pointer"
-                          title={`Убрать тему ${topicItem}`}
-                          aria-label={`Убрать тему ${topicItem}`}
-                        >
-                          <XIcon className="w-3.5 h-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Поиск темы */}
-                <Input
-                  placeholder="Например (Английский, ЕНТ, Бизнес)..."
-                  value={searchTopic}
-                  onChange={(e) => setSearchTopic(e.target.value)}
-                  className="h-11 bg-background text-base rounded-xl"
-                />
-
-                {/* Список тем в виде бейджей */}
-                <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto p-1 border rounded-xl bg-background/50">
-                  {(() => {
-                    const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
-                    const currentSub = currentCat?.subcategories?.find((s) => s.id === formData.subcategoryId);
-                    const presetList = getPresetTopics(currentCat?.slug || "", currentSub?.slug);
-                    const allTopics = Array.from(new Set([...presetList, ...customTopics]));
-
-                    // Убираем уже выбранные темы из списка предложений
-                    const unselectedTopics = allTopics.filter(
-                      (topicItem) => !selectedTopics.some((sel) => isExactTopicMatch(sel, topicItem))
-                    );
-
-                    const filtered = searchTopic.trim()
-                      ? unselectedTopics.filter((t) =>
-                          t.toLowerCase().includes(searchTopic.trim().toLowerCase())
-                        )
-                      : unselectedTopics;
-
-                    if (filtered.length === 0) {
-                      return (
-                        <p className="text-xs sm:text-sm text-muted-foreground p-2">
-                          {searchTopic.trim()
-                            ? "Подходящая тема не найдена. Вы можете добавить её ниже."
-                            : unselectedTopics.length === 0 && allTopics.length > 0
-                            ? "Все темы из списка уже выбраны."
-                            : "Темы не найдены. Вы можете добавить свою тему ниже."}
-                        </p>
-                      );
-                    }
-
-                    return filtered.map((topicItem) => (
-                      <button
-                        key={topicItem}
-                        type="button"
-                        onClick={() => {
-                          isUserSelectedCategory.current = true;
-                          const updated = [...selectedTopics, topicItem];
-                          setFormData((prev) => ({
-                            ...prev,
-                            topic: serializeTopicsList(updated),
-                          }));
-                        }}
-                        className="text-sm sm:text-base px-3.5 py-1.5 rounded-xl border transition-all text-left bg-background hover:bg-muted text-foreground border-border hover:border-primary/40 cursor-pointer font-normal"
-                      >
-                        {topicItem}
-                      </button>
-                    ));
-                  })()}
-                </div>
-
-                {/* Предложить новую тему */}
-                {!isAddingTopic ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-11 border-dashed border-border hover:border-primary/60 hover:bg-primary/5 text-foreground hover:text-foreground flex items-center justify-center gap-2 text-sm sm:text-base font-medium rounded-xl transition-all"
-                    onClick={() => setIsAddingTopic(true)}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Предложить новую
-                  </Button>
-                ) : (
-                  <div className="relative p-3.5 border border-dashed border-primary/40 rounded-2xl bg-card space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Label className="text-sm sm:text-base font-semibold text-foreground">
-                          Предложить новую тему
-                        </Label>
-                        <button
-                          type="button"
-                          disabled={isAutoGeneratingTopic}
-                          onClick={handleAutoSuggestTopic}
-                          className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors flex items-center justify-center disabled:opacity-50"
-                          title="Подобрать тему автоматически"
-                          aria-label="Подобрать тему автоматически"
-                        >
-                          {isAutoGeneratingTopic ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                          ) : (
-                            <Wand2 className="w-4 h-4 text-primary" />
-                          )}
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAddingTopic(false);
-                          setNewTopicName("");
-                        }}
-                        className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title="Закрыть"
-                        aria-label="Закрыть"
-                      >
-                        <XIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {(() => {
-                      const handleTopicSubmit = async () => {
-                        if (!formData.categoryId) {
-                          toast.error("Сначала выберите категорию");
-                          return;
-                        }
-                        const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
-                        const currentSub = currentCat?.subcategories?.find((s) => s.id === formData.subcategoryId);
-                        const presetList = getPresetTopics(currentCat?.slug || "", currentSub?.slug);
-                        const allTopics = Array.from(new Set([...presetList, ...customTopics]));
-                        const check = validateNewTopic(newTopicName, allTopics);
-                        if (!check.isValid) {
-                          toast.error(check.error || "Недопустимое название");
-                          return;
-                        }
-                        try {
-                          const { error } = await supabase
-                            .from("topics" as any)
-                            .upsert(
-                              {
-                                category_id: formData.categoryId,
-                                subcategory_id: formData.subcategoryId || null,
-                                name: check.formatted,
-                                normalized_name: check.normalized,
-                                status: "pending",
-                                created_by:
-                                  (typeof window !== "undefined" && localStorage.getItem("profile_display_name")) ||
-                                  creatorCreds().creatorName ||
-                                  null,
-                              },
-                              { onConflict: "category_id,normalized_name" }
-                            );
-                          if (error) {
-                            if (error.message?.includes("duplicate") || error.code === "23505") {
-                              toast.info("Эта тема уже была предложена и находится на проверке");
-                            } else {
-                              console.warn("Failed to suggest topic:", error);
-                              toast.error("Не удалось отправить тему");
-                            }
-                            return;
-                          }
-                          setNewTopicName("");
-                          setIsAddingTopic(false);
-                          toast.success("Тема отправлена на модерацию");
-
-                          // Отправка push-уведомления модераторам
-                          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-api`, {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                            },
-                            body: JSON.stringify({
-                              action: "notify_new_topic",
-                              topic_name: check.formatted,
-                              creator_name:
-                                (typeof window !== "undefined" && localStorage.getItem("profile_display_name")) ||
-                                creatorCreds().creatorName ||
-                                null,
-                            }),
-                          }).catch((e) => console.warn("Failed to notify moderator:", e));
-                        } catch (err) {
-                          console.warn("Failed to suggest topic:", err);
-                          toast.error("Ошибка при отправке темы");
-                        }
-                      };
-
-                      return (
-                        <div className="flex gap-2 items-center">
-                          <Input
-                            placeholder="Например (🇩🇪 Немецкий язык, 🍳 Кулинария)..."
-                            value={newTopicName}
-                            onChange={(e) => setNewTopicName(e.target.value)}
-                            className="h-11 text-base bg-background flex-1 rounded-xl"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                void handleTopicSubmit();
-                              }
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-11 w-11 shrink-0 rounded-xl bg-background hover:bg-muted text-foreground border-border hover:text-foreground flex items-center justify-center transition-all cursor-pointer"
-                            onClick={handleTopicSubmit}
-                            title="Отправить тему"
-                            aria-label="Отправить тему"
-                          >
-                            <ArrowRight className="w-5 h-5" />
-                          </Button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Footer с кнопкой "Свернуть" справа снизу */}
-          <div className="flex items-center justify-end pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
-              onClick={(e) => {
-                e.stopPropagation();
-                setCategoryOpen(false);
-              }}
-            >
-              <span>Свернуть</span>
-              <ChevronUp className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-
-    {/* ============ ОПЛАТА ============ */}
-    <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
-      <SectionHeader label="Оплата" open={paymentOpen} />
-      <CollapsibleContent className="space-y-4 pt-4">
-        {/* Choice between Free access and Paid access (Whop style) */}
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base font-semibold text-foreground">Как люди получат доступ?</Label>
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
-            {/* Карточка 1: Бесплатно */}
-            <div
-              onClick={() => setFormData(prev => ({ ...prev, isPaid: false }))}
-              className={cn(
-                "relative flex items-center justify-between p-3 sm:p-4 rounded-2xl border cursor-pointer transition-all",
-                !formData.isPaid
-                  ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
-                  : "border-border/80 bg-card hover:border-border hover:bg-muted/30"
-              )}
-            >
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div className={cn(
-                  "w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                  !formData.isPaid ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                )}>
-                  <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-                <p className="font-semibold text-sm sm:text-base text-foreground truncate">Бесплатно</p>
-              </div>
-              <div className={cn(
-                "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
-                !formData.isPaid ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
-              )}>
-                {!formData.isPaid && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />}
-              </div>
-            </div>
-
-            {/* Карточка 2: Платно */}
-            <div
-              onClick={() => {
-                setFormData(prev => {
-                  const opts = prev.pricingOptions && prev.pricingOptions.length > 0
-                    ? prev.pricingOptions
-                    : [createDefaultPricingOption()];
-                  return {
-                    ...prev,
-                    isPaid: true,
-                    pricingOptions: opts,
-                    price: opts[0]?.price || "49000",
-                  };
-                });
-                if (!expandedOptionId && formData.pricingOptions?.[0]) {
-                  setExpandedOptionId(formData.pricingOptions[0].id);
-                }
-              }}
-              className={cn(
-                "relative flex items-center justify-between p-3 sm:p-4 rounded-2xl border cursor-pointer transition-all",
-                formData.isPaid
-                  ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
-                  : "border-border/80 bg-card hover:border-border hover:bg-muted/30"
-              )}
-            >
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div className={cn(
-                  "w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                  formData.isPaid ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                )}>
-                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-                <p className="font-semibold text-sm sm:text-base text-foreground truncate">Платно</p>
-              </div>
-              <div className={cn(
-                "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
-                formData.isPaid ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
-              )}>
-                {formData.isPaid && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Информационный блок если доступ бесплатный */}
-        {!formData.isPaid && (
-          <div className="rounded-2xl border border-border/80 bg-muted/30 p-4">
-            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Покупатели получат моментальный доступ к продукту сразу, без необходимости оплачивать или вводить платёжные данные.
-            </p>
-          </div>
-        )}
-
-        {/* Если доступ платный */}
-        {formData.isPaid && (
-          <div id="field-pricing-options" className="space-y-4 pt-1">
-            <div className="space-y-3">
-              <div className="space-y-2.5">
-                {(formData.pricingOptions || []).map((opt) => {
-                  const isExpanded = expandedOptionId === opt.id;
-                  const summaryText = getPricingOptionSummary(opt);
-
-                  return (
+                  {/* Обертка с overflow:hidden, скрывающая скроллбар */}
+                  <div className="faq-scroll-wrapper w-full overflow-hidden rounded-xl">
+                    {/* Контейнер прокрутки: padding-bottom выталкивает системный скроллбар за пределы обертки */}
                     <div
-                      key={opt.id}
+                      ref={faqScrollRef}
+                      onScroll={handleFaqScroll}
+                      className="faq-cards-scroll w-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory gap-3 py-1 pb-10 -mb-10 no-scrollbar"
+                      style={{
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        WebkitOverflowScrolling: "touch",
+                      }}
+                    >
+                      {(formData.faq && formData.faq.length > 0
+                        ? formData.faq
+                        : [{ question: "", answer: "" }]
+                      ).map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="w-full min-w-full shrink-0 snap-center rounded-xl border border-border/80 bg-card p-3 space-y-2 shadow-xs"
+                        >
+                          <AutoResizeTextarea
+                            placeholder="Вопрос"
+                            rows={1}
+                            style={{ minHeight: "42px" }}
+                            value={item.question}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFormData((prev) => ({
+                                ...prev,
+                                faq: (prev.faq || []).map((it, i) =>
+                                  i === idx ? { ...it, question: v } : it
+                                ),
+                              }));
+                            }}
+                            className="text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-lg"
+                          />
+
+                          <AutoResizeTextarea
+                            placeholder="Ответ на вопрос..."
+                            rows={2}
+                            style={{ minHeight: "58px" }}
+                            value={item.answer}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFormData((prev) => ({
+                                ...prev,
+                                faq: (prev.faq || []).map((it, i) =>
+                                  i === idx ? { ...it, answer: v } : it
+                                ),
+                              }));
+                            }}
+                            className="text-base font-normal text-foreground placeholder:text-muted-foreground bg-background rounded-lg"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Нижняя строка управления (только когда карточек больше 1) */}
+                  {formData.faq && formData.faq.length > 1 && (
+                    <div className="relative flex items-center justify-between pt-0.5 px-0.5">
+                      {/* Стрелки влево и вправо рядом друг с другом слева */}
+                      <div className="flex items-center gap-1 z-10">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={activeFaqIndex === 0}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
+                          onClick={() => scrollToFaqIndex(Math.max(0, activeFaqIndex - 1))}
+                          title="Предыдущий вопрос"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={activeFaqIndex === formData.faq.length - 1}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
+                          onClick={() => scrollToFaqIndex(Math.min(formData.faq.length - 1, activeFaqIndex + 1))}
+                          title="Следующий вопрос"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* Точки-индикаторы СТРОГО по центру карточки с плавным перетеканием */}
+                      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 py-0.5 pointer-events-auto">
+                        {formData.faq.map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => scrollToFaqIndex(i)}
+                            className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
+                            title={`Вопрос ${i + 1}`}
+                          />
+                        ))}
+                        {/* Плавно переливающийся оранжевый индикатор */}
+                        <div
+                          ref={dotRef}
+                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-xs pointer-events-none"
+                          style={{
+                            left: `${dotOffset}px`,
+                            transition: "left 60ms ease-out",
+                          }}
+                        />
+                      </div>
+
+                      {/* Мусорка в правом углу */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10"
+                        onClick={() => handleDeleteFaq(activeFaqIndex)}
+                        title="Удалить этот вопрос"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ============ КЛАССИФИКАЦИЯ ============ */}
+          <Collapsible open={categoryOpen} onOpenChange={handleCategoryOpenChange}>
+            <SectionHeader label="Классификация" open={categoryOpen} />
+            <CollapsibleContent className="space-y-4 pt-4">
+              {/* Состояние загрузки AI */}
+              {aiLoading && (
+                <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 px-3 py-2 rounded-xl border border-primary/20">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
+                  <span>Подбираем категорию и тему с помощью AI...</span>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center text-sm sm:text-base font-semibold text-foreground">
+                      {t("productFormCategory")} <ReqStar />
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => triggerAiCategory(true)}
+                      disabled={aiLoading}
+                      className="h-7 px-2.5 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1.5 transition-all"
+                      title="Определить категорию, подкатегорию и тему по названию и описанию"
+                    >
+                      {aiLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      <span>Обновить через ИИ</span>
+                    </Button>
+                  </div>
+                  <Select
+                    value={formData.categoryId || undefined}
+                    onValueChange={(value) => {
+                      isUserSelectedCategory.current = true;
+                      setFormData((prev) => ({
+                        ...prev,
+                        categoryId: value,
+                        subcategoryId: "",
+                        topic: "",
+                      }));
+                      if (errors.categoryId) setErrors((prev) => ({ ...prev, categoryId: undefined }));
+                      setTimeout(() => {
+                        const el = document.getElementById("field-category");
+                        if (el) {
+                          el.classList.remove("ring-2", "ring-[#FF6B00]");
+                          el.blur();
+                        }
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                      }, 50);
+                    }}
+                  >
+                    <SelectTrigger
+                      id="field-category"
                       className={cn(
-                        "rounded-2xl border transition-all overflow-hidden",
-                        isExpanded
-                          ? "border-primary/50 bg-card shadow-sm"
-                          : "border-border bg-card/80 hover:border-border/80 hover:bg-muted/30"
+                        "h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base",
+                        errors.categoryId && "border-destructive ring-1 ring-destructive"
                       )}
                     >
-                      {/* Строка варианта */}
-                      <div
-                        onClick={() => setExpandedOptionId(isExpanded ? null : opt.id)}
-                        className="flex items-center justify-between p-3.5 sm:p-4 cursor-pointer gap-2 sm:gap-3"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                            <span className="font-semibold text-sm sm:text-base text-foreground">
-                              {summaryText}
-                            </span>
-                            {opt.hasFreeTrial && (
-                              <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                                Пробный {opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      <SelectValue placeholder={t("selectCategory")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {taxonomyCategories.map((category) => (
+                        <SelectItem key={category.id} value={category.id} className="text-base py-2.5">
+                          {categoryLabel(category, language)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.categoryId && (
+                    <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{errors.categoryId}</span>
+                    </p>
+                  )}
+                </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <div className="text-muted-foreground p-1">
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4" />
-                            )}
-                          </div>
-                        </div>
+                {formData.categoryId && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center text-sm sm:text-base font-semibold text-foreground">
+                      {t("productFormSubcategory")} <ReqStar />
+                    </Label>
+                    <Select
+                      value={formData.subcategoryId || undefined}
+                      onValueChange={(value) => {
+                        isUserSelectedCategory.current = true;
+                        const cat = taxonomyCategories.find((c) => c.id === formData.categoryId);
+                        const sub = cat?.subcategories?.find((s) => s.id === value);
+                        const topics = cat ? getPresetTopics(cat.slug, sub?.slug) : [];
+                        setFormData((prev) => {
+                          const prevTopics = parseTopicsList(prev.topic);
+                          const remaining = prevTopics.filter((item) =>
+                            topics.some((t) => isExactTopicMatch(item, t))
+                          );
+                          return {
+                            ...prev,
+                            subcategoryId: value,
+                            topic: serializeTopicsList(remaining),
+                          };
+                        });
+                        if (errors.subcategoryId) setErrors((prev) => ({ ...prev, subcategoryId: undefined }));
+                        setTimeout(() => {
+                          const el = document.getElementById("field-subcategory");
+                          if (el) {
+                            el.classList.remove("ring-2", "ring-[#FF6B00]");
+                            el.blur();
+                          }
+                          if (document.activeElement instanceof HTMLElement) {
+                            document.activeElement.blur();
+                          }
+                        }, 50);
+                      }}
+                    >
+                      <SelectTrigger
+                        id="field-subcategory"
+                        className={cn(
+                          "h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base",
+                          errors.subcategoryId && "border-destructive ring-1 ring-destructive"
+                        )}
+                      >
+                        <SelectValue placeholder={t("selectSubcategory")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(
+                          taxonomyCategories.find((category) => category.id === formData.categoryId)
+                            ?.subcategories ?? []
+                        ).map((subcategory) => (
+                          <SelectItem key={subcategory.id} value={subcategory.id} className="text-base py-2.5">
+                            {subcategoryLabel(subcategory, language)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.subcategoryId && (
+                      <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{errors.subcategoryId}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Выбор и добавление Темы */}
+                {formData.categoryId && formData.subcategoryId && (() => {
+                  const selectedTopics = parseTopicsList(formData.topic);
+
+                  return (
+                    <div className="space-y-3 pt-2 border-t border-border/60">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm sm:text-base font-semibold text-foreground">Тема продукта</Label>
                       </div>
 
-                      {/* Настройки внутри варианта */}
-                      {isExpanded && (
-                        <div className="p-4 pt-2 space-y-4 border-t border-border/60">
-                          {/* Разово / Регулярно */}
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                type="button"
-                                variant={opt.paymentType === "one_time" ? "default" : "toggle"}
-                                className="text-sm sm:text-base h-11"
-                                onClick={() => updateOption(opt.id, { paymentType: "one_time" })}
-                              >
-                                Разово
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={opt.paymentType === "recurring" ? "default" : "toggle"}
-                                className="text-sm sm:text-base h-11"
-                                onClick={() => updateOption(opt.id, { paymentType: "recurring" })}
-                              >
-                                Регулярно
-                              </Button>
-                            </div>
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              {opt.paymentType === "one_time"
-                                ? "Доступ выдается без ограничения по времени, но вы всегда можете закрыть его вручную."
-                                : "Доступ действует до окончания оплаченного периода. Если оплата не продлилась, доступ автоматически закрывается."}
-                            </p>
-                          </div>
-
-                          {opt.paymentType === "one_time" ? (
-                            <div className="space-y-2">
-                              <Label className="flex items-center text-sm sm:text-base font-medium">
-                                Цена (тенге) <ReqStar />
-                              </Label>
-                              <Input
-                                id={`price-${opt.id}`}
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="49 000"
-                                className="h-12 text-base"
-                                value={formatPriceDisplay(opt.price)}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/\D/g, "");
-                                  updateOption(opt.id, { price: raw });
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-2">
-                                  <Label className="flex items-center text-sm sm:text-base font-medium">
-                                    Цена (тенге) <ReqStar />
-                                  </Label>
-                                  <Input
-                                    id={`price-${opt.id}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    placeholder="49 000"
-                                    className="h-12 text-base"
-                                    value={formatPriceDisplay(opt.price)}
-                                    onChange={(e) => {
-                                      const raw = e.target.value.replace(/\D/g, "");
-                                      updateOption(opt.id, { price: raw });
-                                    }}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="flex items-center text-sm sm:text-base font-medium">
-                                    Период оплаты <ReqStar />
-                                  </Label>
-                                  <Select
-                                    value={opt.recurringInterval}
-                                    onValueChange={(val) => updateOption(opt.id, { recurringInterval: val })}
-                                  >
-                                    <SelectTrigger id={`recurring-interval-${opt.id}`} className="h-12 text-base">
-                                      <SelectValue placeholder="Выберите период" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="7d" className="text-base py-2">7 дней</SelectItem>
-                                      <SelectItem value="14d" className="text-base py-2">14 дней</SelectItem>
-                                      <SelectItem value="1m" className="text-base py-2">1 месяц</SelectItem>
-                                      <SelectItem value="3m" className="text-base py-2">3 месяца</SelectItem>
-                                      <SelectItem value="1y" className="text-base py-2">1 год</SelectItem>
-                                      <SelectItem value="custom" className="text-base py-2">Выбрать</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              {opt.recurringInterval === "custom" && (
-                                <div className="flex items-center gap-2 pt-1">
-                                  <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                    Число дней:
-                                  </Label>
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    className="h-10 w-32 text-base"
-                                    placeholder="30"
-                                    value={opt.recurringCustomDays || ""}
-                                    onChange={(e) =>
-                                      updateOption(opt.id, {
-                                        recurringCustomDays: Number(e.target.value) || 0,
-                                      })
-                                    }
-                                  />
-                                  <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Бесплатный пробный период */}
-                          <div className="rounded-xl border border-border p-3 sm:p-4 space-y-3 bg-muted/20">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Label className="text-sm sm:text-base font-medium cursor-pointer">
-                                  Бесплатный пробный период
-                                </Label>
-                                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                                  Дать покупателям доступ на несколько дней перед оплатой
-                                </p>
-                              </div>
-                              <Switch
-                                checked={opt.hasFreeTrial}
-                                onCheckedChange={(checked) =>
-                                  updateOption(opt.id, { hasFreeTrial: checked })
-                                }
-                              />
-                            </div>
-
-                            {opt.hasFreeTrial && (
-                              <div className="space-y-2 pt-2 border-t border-border/60">
-                                <Label className="text-xs sm:text-sm text-muted-foreground">Длительность пробного периода</Label>
-                                <div className="grid grid-cols-4 gap-2">
-                                  {(["3", "7", "30", "custom"] as const).map((preset) => (
-                                    <Button
-                                      key={preset}
-                                      type="button"
-                                      size="sm"
-                                      variant={opt.trialPreset === preset ? "default" : "toggle"}
-                                      onClick={() => updateOption(opt.id, { trialPreset: preset })}
-                                      className="text-xs sm:text-sm h-9"
-                                    >
-                                      {preset === "custom" ? "Выбрать" : `${preset} ${preset === "3" ? "дня" : "дней"}`}
-                                    </Button>
-                                  ))}
-                                </div>
-
-                                {opt.trialPreset === "custom" && (
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                      Число дней:
-                                    </Label>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      className="h-10 w-32 text-base"
-                                      placeholder="14"
-                                      value={opt.trialCustomDays || ""}
-                                      onChange={(e) =>
-                                        updateOption(opt.id, {
-                                          trialCustomDays: Number(e.target.value) || 0,
-                                        })
-                                      }
-                                    />
-                                    <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Способ оплаты через Kaspi для этого варианта */}
-                          <div className="space-y-2 pt-2 border-t border-border/60">
-                            <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
-                              Способ оплаты Kaspi <ReqStar />
-                            </Label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={opt.kaspiMethod === "link" ? "default" : "toggle"}
-                                onClick={() => updateOption(opt.id, { kaspiMethod: "link" })}
-                                className="text-xs sm:text-sm h-9"
-                              >
-                                Ссылка
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={opt.kaspiMethod === "phone" ? "default" : "toggle"}
-                                onClick={() => updateOption(opt.id, { kaspiMethod: "phone" })}
-                                className="text-xs sm:text-sm h-9"
-                              >
-                                Номер телефона
-                              </Button>
-                            </div>
-                            {opt.kaspiMethod === "link" ? (
-                              <Input
-                                id={`kaspi-link-${opt.id}`}
-                                type="url"
-                                placeholder={t("kaspiLinkPlaceholder")}
-                                className="h-11 text-base"
-                                value={opt.kaspiLink}
-                                onChange={(e) => updateOption(opt.id, { kaspiLink: e.target.value })}
-                              />
-                            ) : (
-                              <Input
-                                id={`kaspi-phone-${opt.id}`}
-                                type="tel"
-                                placeholder="+7 776 475 00-99"
-                                className="h-11 text-base"
-                                value={opt.kaspiPhone}
-                                onChange={(e) => {
-                                  const formatted = formatPhone(e.target.value);
-                                  updateOption(opt.id, { kaspiPhone: formatted });
-                                }}
-                              />
-                            )}
-                          </div>
-
-                          {/* Footer внутри карточки варианта */}
-                          <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                            {(formData.pricingOptions || []).length > 1 ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs sm:text-sm flex items-center gap-1.5"
-                                onClick={() => removeOption(opt.id)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Удалить этот вариант
-                              </Button>
-                            ) : <div />}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
-                              onClick={() => setExpandedOptionId(null)}
+                      {/* Выбранные темы в виде плашек с крестиком (над поиском) */}
+                      {selectedTopics.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {selectedTopics.map((topicItem) => (
+                            <span
+                              key={topicItem}
+                              className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl text-sm sm:text-base font-normal bg-primary/10 text-primary border border-primary/20 shadow-2xs transition-all"
                             >
-                              <span>Свернуть</span>
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </Button>
+                              <span>{topicItem}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  isUserSelectedCategory.current = true;
+                                  const updated = selectedTopics.filter((t) => !isExactTopicMatch(t, topicItem));
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    topic: serializeTopicsList(updated),
+                                  }));
+                                }}
+                                className="w-4 h-4 rounded-full inline-flex items-center justify-center hover:bg-primary/20 text-primary/80 hover:text-primary transition-colors cursor-pointer"
+                                title={`Убрать тему ${topicItem}`}
+                                aria-label={`Убрать тему ${topicItem}`}
+                              >
+                                <XIcon className="w-3.5 h-3.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Поиск темы */}
+                      <Input
+                        placeholder="Например (Английский, ЕНТ, Бизнес)..."
+                        value={searchTopic}
+                        onChange={(e) => setSearchTopic(e.target.value)}
+                        className="h-11 bg-background text-base rounded-xl"
+                      />
+
+                      {/* Список тем в виде бейджей */}
+                      <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto p-1 border rounded-xl bg-background/50">
+                        {(() => {
+                          const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
+                          const currentSub = currentCat?.subcategories?.find((s) => s.id === formData.subcategoryId);
+                          const presetList = getPresetTopics(currentCat?.slug || "", currentSub?.slug);
+                          const allTopics = Array.from(new Set([...presetList, ...customTopics]));
+
+                          // Убираем уже выбранные темы из списка предложений
+                          const unselectedTopics = allTopics.filter(
+                            (topicItem) => !selectedTopics.some((sel) => isExactTopicMatch(sel, topicItem))
+                          );
+
+                          const filtered = searchTopic.trim()
+                            ? unselectedTopics.filter((t) =>
+                              t.toLowerCase().includes(searchTopic.trim().toLowerCase())
+                            )
+                            : unselectedTopics;
+
+                          if (filtered.length === 0) {
+                            return (
+                              <p className="text-xs sm:text-sm text-muted-foreground p-2">
+                                {searchTopic.trim()
+                                  ? "Подходящая тема не найдена. Вы можете добавить её ниже."
+                                  : unselectedTopics.length === 0 && allTopics.length > 0
+                                    ? "Все темы из списка уже выбраны."
+                                    : "Темы не найдены. Вы можете добавить свою тему ниже."}
+                              </p>
+                            );
+                          }
+
+                          return filtered.map((topicItem) => (
+                            <button
+                              key={topicItem}
+                              type="button"
+                              onClick={() => {
+                                isUserSelectedCategory.current = true;
+                                const updated = [...selectedTopics, topicItem];
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  topic: serializeTopicsList(updated),
+                                }));
+                              }}
+                              className="text-sm sm:text-base px-3.5 py-1.5 rounded-xl border transition-all text-left bg-background hover:bg-muted text-foreground border-border hover:border-primary/40 cursor-pointer font-normal"
+                            >
+                              {topicItem}
+                            </button>
+                          ));
+                        })()}
+                      </div>
+
+                      {/* Предложить новую тему */}
+                      {!isAddingTopic ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full h-11 border-dashed border-border hover:border-primary/60 hover:bg-primary/5 text-foreground hover:text-foreground flex items-center justify-center gap-2 text-sm sm:text-base font-medium rounded-xl transition-all"
+                          onClick={() => setIsAddingTopic(true)}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Предложить новую
+                        </Button>
+                      ) : (
+                        <div className="relative p-3.5 border border-dashed border-primary/40 rounded-2xl bg-card space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-sm sm:text-base font-semibold text-foreground">
+                                Предложить новую тему
+                              </Label>
+                              <button
+                                type="button"
+                                disabled={isAutoGeneratingTopic}
+                                onClick={handleAutoSuggestTopic}
+                                className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors flex items-center justify-center disabled:opacity-50"
+                                title="Подобрать тему автоматически"
+                                aria-label="Подобрать тему автоматически"
+                              >
+                                {isAutoGeneratingTopic ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                ) : (
+                                  <Wand2 className="w-4 h-4 text-primary" />
+                                )}
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAddingTopic(false);
+                                setNewTopicName("");
+                              }}
+                              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              title="Закрыть"
+                              aria-label="Закрыть"
+                            >
+                              <XIcon className="w-4 h-4" />
+                            </button>
                           </div>
+
+                          {(() => {
+                            const handleTopicSubmit = async () => {
+                              if (!formData.categoryId) {
+                                toast.error("Сначала выберите категорию");
+                                return;
+                              }
+                              const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
+                              const currentSub = currentCat?.subcategories?.find((s) => s.id === formData.subcategoryId);
+                              const presetList = getPresetTopics(currentCat?.slug || "", currentSub?.slug);
+                              const allTopics = Array.from(new Set([...presetList, ...customTopics]));
+                              const check = validateNewTopic(newTopicName, allTopics);
+                              if (!check.isValid) {
+                                toast.error(check.error || "Недопустимое название");
+                                return;
+                              }
+                              try {
+                                const { error } = await supabase
+                                  .from("topics" as any)
+                                  .upsert(
+                                    {
+                                      category_id: formData.categoryId,
+                                      subcategory_id: formData.subcategoryId || null,
+                                      name: check.formatted,
+                                      normalized_name: check.normalized,
+                                      status: "pending",
+                                      created_by:
+                                        (typeof window !== "undefined" && localStorage.getItem("profile_display_name")) ||
+                                        creatorCreds().creatorName ||
+                                        null,
+                                    },
+                                    { onConflict: "category_id,normalized_name" }
+                                  );
+                                if (error) {
+                                  if (error.message?.includes("duplicate") || error.code === "23505") {
+                                    toast.info("Эта тема уже была предложена и находится на проверке");
+                                  } else {
+                                    console.warn("Failed to suggest topic:", error);
+                                    toast.error("Не удалось отправить тему");
+                                  }
+                                  return;
+                                }
+                                setNewTopicName("");
+                                setIsAddingTopic(false);
+                                toast.success("Тема отправлена на модерацию");
+
+                                // Отправка push-уведомления модераторам
+                                fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-api`, {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                                    Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                                  },
+                                  body: JSON.stringify({
+                                    action: "notify_new_topic",
+                                    topic_name: check.formatted,
+                                    creator_name:
+                                      (typeof window !== "undefined" && localStorage.getItem("profile_display_name")) ||
+                                      creatorCreds().creatorName ||
+                                      null,
+                                  }),
+                                }).catch((e) => console.warn("Failed to notify moderator:", e));
+                              } catch (err) {
+                                console.warn("Failed to suggest topic:", err);
+                                toast.error("Ошибка при отправке темы");
+                              }
+                            };
+
+                            return (
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  placeholder="Например (🇩🇪 Немецкий язык, 🍳 Кулинария)..."
+                                  value={newTopicName}
+                                  onChange={(e) => setNewTopicName(e.target.value)}
+                                  className="h-11 text-base bg-background flex-1 rounded-xl"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void handleTopicSubmit();
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-11 w-11 shrink-0 rounded-xl bg-background hover:bg-muted text-foreground border-border hover:text-foreground flex items-center justify-center transition-all cursor-pointer"
+                                  onClick={handleTopicSubmit}
+                                  title="Отправить тему"
+                                  aria-label="Отправить тему"
+                                >
+                                  <ArrowRight className="w-5 h-5" />
+                                </Button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
                   );
-                })}
+                })()}
+
+                {/* Поля для Мероприятия: Дата и время, Количество мест */}
+                {(() => {
+                  const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
+                  if (currentCat?.slug === "events") {
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-border/60">
+                        <div id="field-event-starts-at" className="space-y-1.5">
+                          <Label htmlFor="eventStartsAt" className="flex items-center text-sm font-semibold text-foreground">
+                            {t("productFormEventDate")} <ReqStar />
+                          </Label>
+                          <Input
+                            id="eventStartsAt"
+                            type="datetime-local"
+                            value={formData.eventStartsAt || ""}
+                            onChange={(e) => {
+                              setFormData((prev) => ({ ...prev, eventStartsAt: e.target.value }));
+                              if (errors.eventStartsAt) setErrors((prev) => ({ ...prev, eventStartsAt: undefined }));
+                            }}
+                            className={cn(
+                              "h-12 bg-background rounded-xl text-base",
+                              errors.eventStartsAt && "border-destructive ring-1 ring-destructive"
+                            )}
+                          />
+                          {errors.eventStartsAt && (
+                            <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{errors.eventStartsAt}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        <div id="field-capacity" className="space-y-1.5">
+                          <Label htmlFor="capacity" className="flex items-center text-sm font-semibold text-foreground">
+                            {t("productFormCapacity")} <ReqStar />
+                          </Label>
+                          <Input
+                            id="capacity"
+                            type="number"
+                            min="1"
+                            placeholder="Например, 25"
+                            value={formData.capacity || ""}
+                            onChange={(e) => {
+                              setFormData((prev) => ({ ...prev, capacity: e.target.value }));
+                              if (errors.capacity) setErrors((prev) => ({ ...prev, capacity: undefined }));
+                            }}
+                            className={cn(
+                              "h-12 bg-background rounded-xl text-base",
+                              errors.capacity && "border-destructive ring-1 ring-destructive"
+                            )}
+                          />
+                          {errors.capacity && (
+                            <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{errors.capacity}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (currentCat?.slug === "subscriptions") {
+                    return (
+                      <div id="field-billing-period" className="space-y-1.5 pt-3 border-t border-border/60">
+                        <Label className="flex items-center text-sm font-semibold text-foreground">
+                          {t("productFormBillingPeriod")} <ReqStar />
+                        </Label>
+                        <Select
+                          value={formData.billingPeriod || undefined}
+                          onValueChange={(val: "month" | "quarter" | "year") => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              billingPeriod: val,
+                              recurringInterval: val === "month" ? "1m" : val === "quarter" ? "3m" : "1y",
+                            }));
+                            if (errors.billingPeriod) setErrors((prev) => ({ ...prev, billingPeriod: undefined }));
+                          }}
+                        >
+                          <SelectTrigger className={cn("h-12 bg-background rounded-xl text-base", errors.billingPeriod && "border-destructive ring-1 ring-destructive")}>
+                            <SelectValue placeholder="Выберите период списания" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="month" className="text-base py-2.5">Ежемесячно (30 дней)</SelectItem>
+                            <SelectItem value="quarter" className="text-base py-2.5">Каждые 3 месяца (90 дней)</SelectItem>
+                            <SelectItem value="year" className="text-base py-2.5">Ежегодно (365 дней)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {errors.billingPeriod && (
+                          <p className="text-xs sm:text-sm font-medium text-destructive mt-1 flex items-center gap-1 animate-fade-in">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{errors.billingPeriod}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Footer с кнопкой "Свернуть" справа снизу */}
+                <div className="flex items-center justify-end pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCategoryOpen(false);
+                    }}
+                  >
+                    <span>Свернуть</span>
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* ============ ОПЛАТА ============ */}
+          <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
+            <SectionHeader label="Оплата" open={paymentOpen} />
+            <CollapsibleContent className="space-y-4 pt-4">
+              {/* Choice between Free access and Paid access (Whop style) */}
+              <div className="space-y-2">
+                <Label className="text-sm sm:text-base font-semibold text-foreground">Как люди получат доступ?</Label>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
+                  {/* Карточка 1: Бесплатно */}
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, isPaid: false }))}
+                    className={cn(
+                      "relative flex items-center justify-between p-3 sm:p-4 rounded-2xl border cursor-pointer transition-all",
+                      !formData.isPaid
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
+                        : "border-border/80 bg-card hover:border-border hover:bg-muted/30"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className={cn(
+                        "w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                        !formData.isPaid ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                      )}>
+                        <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <p className="font-semibold text-sm sm:text-base text-foreground truncate">Бесплатно</p>
+                    </div>
+                    <div className={cn(
+                      "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
+                      !formData.isPaid ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                    )}>
+                      {!formData.isPaid && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+
+                  {/* Карточка 2: Платно */}
+                  <div
+                    onClick={() => {
+                      setFormData(prev => {
+                        const opts = prev.pricingOptions && prev.pricingOptions.length > 0
+                          ? prev.pricingOptions
+                          : [createDefaultPricingOption()];
+                        return {
+                          ...prev,
+                          isPaid: true,
+                          pricingOptions: opts,
+                          price: opts[0]?.price || "49000",
+                        };
+                      });
+                      if (!expandedOptionId && formData.pricingOptions?.[0]) {
+                        setExpandedOptionId(formData.pricingOptions[0].id);
+                      }
+                    }}
+                    className={cn(
+                      "relative flex items-center justify-between p-3 sm:p-4 rounded-2xl border cursor-pointer transition-all",
+                      formData.isPaid
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
+                        : "border-border/80 bg-card hover:border-border hover:bg-muted/30"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className={cn(
+                        "w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                        formData.isPaid ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                      )}>
+                        <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <p className="font-semibold text-sm sm:text-base text-foreground truncate">Платно</p>
+                    </div>
+                    <div className={cn(
+                      "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
+                      formData.isPaid ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                    )}>
+                      {formData.isPaid && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Кнопка добавления варианта оплаты */}
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11 border-dashed border-border hover:border-primary/60 hover:bg-primary/5 text-foreground hover:text-foreground flex items-center justify-center gap-2 text-sm sm:text-base font-medium rounded-xl transition-all"
-                onClick={addOption}
-              >
-                <Plus className="w-4 h-4" />
-                Добавить вариант оплаты
-              </Button>
-            </div>
-          </div>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
+              {/* Информационный блок если доступ бесплатный */}
+              {!formData.isPaid && (
+                <div className="rounded-2xl border border-border/80 bg-muted/30 p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    Покупатели получат моментальный доступ к продукту сразу, без необходимости оплачивать или вводить платёжные данные.
+                  </p>
+                </div>
+              )}
 
-    <Button 
-      type="submit" 
-      variant="cta" 
-      className="w-full"
-      disabled={isPending}
-    >
-      {isPending ? (
-        <span className="flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          {isEdit ? "Сохранение..." : "Создание..."}
-        </span>
-      ) : (
-        isEdit ? "Сохранить изменения" : "Создать продукт"
-      )}
-    </Button>
+              {/* Если доступ платный */}
+              {formData.isPaid && (
+                <div id="field-pricing-options" className="space-y-4 pt-1">
+                  {errors.price && (
+                    <p className="text-xs sm:text-sm font-medium text-destructive flex items-center gap-1 animate-fade-in">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{errors.price}</span>
+                    </p>
+                  )}
+                  <div className="space-y-3">
+                    <div className="space-y-2.5">
+                      {(formData.pricingOptions || []).map((opt) => {
+                        const isExpanded = expandedOptionId === opt.id;
+                        const summaryText = getPricingOptionSummary(opt);
+
+                        return (
+                          <div
+                            key={opt.id}
+                            className={cn(
+                              "rounded-2xl border transition-all overflow-hidden",
+                              isExpanded
+                                ? "border-primary/50 bg-card shadow-sm"
+                                : "border-border bg-card/80 hover:border-border/80 hover:bg-muted/30"
+                            )}
+                          >
+                            {/* Строка варианта */}
+                            <div
+                              onClick={() => setExpandedOptionId(isExpanded ? null : opt.id)}
+                              className="flex items-center justify-between p-3.5 sm:p-4 cursor-pointer gap-2 sm:gap-3"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                  <span className="font-semibold text-sm sm:text-base text-foreground">
+                                    {summaryText}
+                                  </span>
+                                  {opt.hasFreeTrial && (
+                                    <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                                      Пробный {opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <div className="text-muted-foreground p-1">
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Настройки внутри варианта */}
+                            {isExpanded && (
+                              <div className="p-4 pt-2 space-y-4 border-t border-border/60">
+                                {/* Разово / Регулярно */}
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                      type="button"
+                                      variant={opt.paymentType === "one_time" ? "default" : "toggle"}
+                                      className="text-sm sm:text-base h-11"
+                                      onClick={() => updateOption(opt.id, { paymentType: "one_time" })}
+                                    >
+                                      Разово
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={opt.paymentType === "recurring" ? "default" : "toggle"}
+                                      className="text-sm sm:text-base h-11"
+                                      onClick={() => updateOption(opt.id, { paymentType: "recurring" })}
+                                    >
+                                      Регулярно
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs sm:text-sm text-muted-foreground">
+                                    {opt.paymentType === "one_time"
+                                      ? "Доступ выдается без ограничения по времени, но вы всегда можете закрыть его вручную."
+                                      : "Доступ действует до окончания оплаченного периода. Если оплата не продлилась, доступ автоматически закрывается."}
+                                  </p>
+                                </div>
+
+                                {opt.paymentType === "one_time" ? (
+                                  <div className="space-y-2">
+                                    <Label className="flex items-center text-sm sm:text-base font-medium">
+                                      Цена (тенге) <ReqStar />
+                                    </Label>
+                                    <Input
+                                      id={`price-${opt.id}`}
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="49 000"
+                                      className="h-12 text-base"
+                                      value={formatPriceDisplay(opt.price)}
+                                      onChange={(e) => {
+                                        const raw = e.target.value.replace(/\D/g, "");
+                                        updateOption(opt.id, { price: raw });
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div className="space-y-2">
+                                        <Label className="flex items-center text-sm sm:text-base font-medium">
+                                          Цена (тенге) <ReqStar />
+                                        </Label>
+                                        <Input
+                                          id={`price-${opt.id}`}
+                                          type="text"
+                                          inputMode="numeric"
+                                          placeholder="49 000"
+                                          className="h-12 text-base"
+                                          value={formatPriceDisplay(opt.price)}
+                                          onChange={(e) => {
+                                            const raw = e.target.value.replace(/\D/g, "");
+                                            updateOption(opt.id, { price: raw });
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label className="flex items-center text-sm sm:text-base font-medium">
+                                          Период оплаты <ReqStar />
+                                        </Label>
+                                        <Select
+                                          value={opt.recurringInterval}
+                                          onValueChange={(val) => updateOption(opt.id, { recurringInterval: val })}
+                                        >
+                                          <SelectTrigger id={`recurring-interval-${opt.id}`} className="h-12 text-base">
+                                            <SelectValue placeholder="Выберите период" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="7d" className="text-base py-2">7 дней</SelectItem>
+                                            <SelectItem value="14d" className="text-base py-2">14 дней</SelectItem>
+                                            <SelectItem value="1m" className="text-base py-2">1 месяц</SelectItem>
+                                            <SelectItem value="3m" className="text-base py-2">3 месяца</SelectItem>
+                                            <SelectItem value="1y" className="text-base py-2">1 год</SelectItem>
+                                            <SelectItem value="custom" className="text-base py-2">Выбрать</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+
+                                    {opt.recurringInterval === "custom" && (
+                                      <div className="flex items-center gap-2 pt-1">
+                                        <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                                          Число дней:
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          className="h-10 w-32 text-base"
+                                          placeholder="30"
+                                          value={opt.recurringCustomDays || ""}
+                                          onChange={(e) =>
+                                            updateOption(opt.id, {
+                                              recurringCustomDays: Number(e.target.value) || 0,
+                                            })
+                                          }
+                                        />
+                                        <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Бесплатный пробный период */}
+                                <div className="rounded-xl border border-border p-3 sm:p-4 space-y-3 bg-muted/20">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <Label className="text-sm sm:text-base font-medium cursor-pointer">
+                                        Бесплатный пробный период
+                                      </Label>
+                                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                                        Дать покупателям доступ на несколько дней перед оплатой
+                                      </p>
+                                    </div>
+                                    <Switch
+                                      checked={opt.hasFreeTrial}
+                                      onCheckedChange={(checked) =>
+                                        updateOption(opt.id, { hasFreeTrial: checked })
+                                      }
+                                    />
+                                  </div>
+
+                                  {opt.hasFreeTrial && (
+                                    <div className="space-y-2 pt-2 border-t border-border/60">
+                                      <Label className="text-xs sm:text-sm text-muted-foreground">Длительность пробного периода</Label>
+                                      <div className="grid grid-cols-4 gap-2">
+                                        {(["3", "7", "30", "custom"] as const).map((preset) => (
+                                          <Button
+                                            key={preset}
+                                            type="button"
+                                            size="sm"
+                                            variant={opt.trialPreset === preset ? "default" : "toggle"}
+                                            onClick={() => updateOption(opt.id, { trialPreset: preset })}
+                                            className="text-xs sm:text-sm h-9"
+                                          >
+                                            {preset === "custom" ? "Выбрать" : `${preset} ${preset === "3" ? "дня" : "дней"}`}
+                                          </Button>
+                                        ))}
+                                      </div>
+
+                                      {opt.trialPreset === "custom" && (
+                                        <div className="flex items-center gap-2 pt-1">
+                                          <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                                            Число дней:
+                                          </Label>
+                                          <Input
+                                            type="number"
+                                            min={1}
+                                            className="h-10 w-32 text-base"
+                                            placeholder="14"
+                                            value={opt.trialCustomDays || ""}
+                                            onChange={(e) =>
+                                              updateOption(opt.id, {
+                                                trialCustomDays: Number(e.target.value) || 0,
+                                              })
+                                            }
+                                          />
+                                          <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Footer внутри карточки варианта */}
+                                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                                  {(formData.pricingOptions || []).length > 1 ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs sm:text-sm flex items-center gap-1.5"
+                                      onClick={() => removeOption(opt.id)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Удалить этот вариант
+                                    </Button>
+                                  ) : <div />}
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
+                                    onClick={() => setExpandedOptionId(null)}
+                                  >
+                                    <span>Свернуть</span>
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Кнопка добавления варианта оплаты */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-11 border-dashed border-border hover:border-primary/60 hover:bg-primary/5 text-foreground hover:text-foreground flex items-center justify-center gap-2 text-sm sm:text-base font-medium rounded-xl transition-all"
+                      onClick={addOption}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Добавить вариант оплаты
+                    </Button>
+                  </div>
+
+                  {/* Способы оплаты (reusable methods owned by seller profile) */}
+                  <div id="field-payment-methods" className="space-y-1.5 pt-1 rounded-xl">
+                    <ProductPaymentMethodsSection
+                      ref={paymentEditorRef}
+                      selectedIds={formData.paymentMethodIds || EMPTY_PAYMENT_METHOD_IDS}
+                      onChange={handlePaymentMethodsChange}
+                      isPaid={formData.isPaid}
+                      errorMessage={errors.paymentMethodIds}
+                      hasSubmitAttempt={hasSubmitAttempt}
+                    />
+                  </div>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       )}
-  </form>
+    </form>
   );
 };
 
@@ -2448,7 +2673,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
-  
+
   const [isCreating, setIsCreating] = useState(false);
   const [isCroppingMedia, setIsCroppingMedia] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -2466,7 +2691,13 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   const [pauseMessage, setPauseMessage] = useState<string>("");
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
-  
+
+  const [availableDraft, setAvailableDraft] = useState<Partial<FormData> | null>(null);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const initialFormDataRef = useRef<string>("");
+  const poppedStateRef = useRef<boolean>(false);
+  const isClosingRef = useRef<boolean>(false);
+
   const [formData, setFormData] = useState<FormData>({
     categoryId: "",
     subcategoryId: "",
@@ -2495,9 +2726,78 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     trialPreset: "7",
     trialCustomDays: 7,
     pricingOptions: [createDefaultPricingOption()],
+    paymentMethodIds: [],
   });
 
-  const resetForm = () => {
+  const getDraftKey = useCallback(
+    (productId?: string | null) => {
+      return productId ? `product_draft_${productId}` : `product_draft_new_${creatorName || "default"}`;
+    },
+    [creatorName]
+  );
+
+  const serializeDraftData = useCallback((data: FormData) => {
+    return {
+      categoryId: data.categoryId,
+      subcategoryId: data.subcategoryId,
+      topic: data.topic,
+      lessonFormat: data.lessonFormat,
+      eventStartsAt: data.eventStartsAt,
+      capacity: data.capacity,
+      billingPeriod: data.billingPeriod,
+      title: data.title,
+      headline: data.headline,
+      description: data.description,
+      price: data.price,
+      kaspiLink: data.kaspiLink,
+      telegramLink: data.telegramLink,
+      imageUrl: data.imageUrl,
+      videoUrl: data.videoUrl,
+      media: (data.media || []).map((m) => ({
+        id: m.id,
+        type: m.type,
+        url: m.url?.startsWith("blob:") ? "" : m.url,
+        objectPosition: m.objectPosition,
+      })),
+      faq: data.faq,
+      isPaid: data.isPaid,
+      kaspiMethod: data.kaspiMethod,
+      kaspiPhone: data.kaspiPhone,
+      paymentType: data.paymentType,
+      recurringInterval: data.recurringInterval,
+      recurringCustomDays: data.recurringCustomDays,
+      hasFreeTrial: data.hasFreeTrial,
+      trialPreset: data.trialPreset,
+      trialCustomDays: data.trialCustomDays,
+      pricingOptions: data.pricingOptions,
+      paymentMethodIds: data.paymentMethodIds,
+    };
+  }, []);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (isClosingRef.current) return false;
+    if (!isCreating && !editingProduct) return false;
+    if (!initialFormDataRef.current) return false;
+    const current = JSON.stringify(serializeDraftData(formData));
+    return current !== initialFormDataRef.current;
+  }, [formData, isCreating, editingProduct, serializeDraftData]);
+
+  // Debounced auto-save to localStorage
+  useEffect(() => {
+    if (!isCreating && !editingProduct) return;
+    const timer = setTimeout(() => {
+      try {
+        const key = getDraftKey(editingProduct?.id);
+        const serialized = serializeDraftData(formData);
+        localStorage.setItem(key, JSON.stringify(serialized));
+      } catch (err) {
+        console.warn("Draft auto-save failed:", err);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [formData, isCreating, editingProduct, getDraftKey, serializeDraftData]);
+
+  const resetForm = useCallback(() => {
     const defaultOpt = createDefaultPricingOption();
     setFormData({
       categoryId: "",
@@ -2527,27 +2827,173 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       trialPreset: defaultOpt.trialPreset,
       trialCustomDays: defaultOpt.trialCustomDays,
       pricingOptions: [defaultOpt],
+      paymentMethodIds: [],
     });
     setPendingImageFile(null);
     setPendingVideoFile(null);
+  }, []);
+
+  const performDirectClose = useCallback(() => {
+    isClosingRef.current = true;
+    setShowUnsavedConfirm(false);
+    if (!poppedStateRef.current && typeof window !== "undefined" && window.history.state?.modal === "product-modal") {
+      try {
+        window.history.back();
+      } catch { }
+    }
+    setIsCreating(false);
+    setEditingProduct(null);
+    resetForm();
+    setIsCroppingMedia(false);
+    setAvailableDraft(null);
+    initialFormDataRef.current = "";
+    poppedStateRef.current = false;
+  }, [resetForm]);
+
+  const handleRequestClose = useCallback(() => {
+    if (isClosingRef.current) return;
+    if (hasUnsavedChanges) {
+      setShowUnsavedConfirm(true);
+    } else {
+      performDirectClose();
+    }
+  }, [hasUnsavedChanges, performDirectClose]);
+
+  const handleRequestCloseRef = useRef(handleRequestClose);
+  handleRequestCloseRef.current = handleRequestClose;
+
+  const handleCancelUnsavedClose = useCallback(() => {
+    setShowUnsavedConfirm(false);
+    if (poppedStateRef.current && typeof window !== "undefined") {
+      window.history.pushState({ modal: "product-modal" }, "");
+      poppedStateRef.current = false;
+    }
+  }, []);
+
+  // Intercept Android back gesture
+  useEffect(() => {
+    const isModalOpen = isCreating || Boolean(editingProduct);
+    if (!isModalOpen) return;
+
+    if (typeof window !== "undefined") {
+      window.history.pushState({ modal: "product-modal" }, "");
+      poppedStateRef.current = false;
+
+      const handlePopState = () => {
+        if (isClosingRef.current) return;
+        poppedStateRef.current = true;
+        handleRequestCloseRef.current();
+      };
+
+      window.addEventListener("popstate", handlePopState);
+      return () => {
+        window.removeEventListener("popstate", handlePopState);
+      };
+    }
+  }, [isCreating, Boolean(editingProduct)]);
+
+  const handleRestoreDraft = () => {
+    if (!availableDraft) return;
+    setFormData((prev) => ({
+      ...prev,
+      ...availableDraft,
+      pricingOptions: availableDraft.pricingOptions || prev.pricingOptions,
+      paymentMethodIds: availableDraft.paymentMethodIds || prev.paymentMethodIds,
+    }));
+    toast.success("Черновик восстановлен");
+    setAvailableDraft(null);
+  };
+
+  const handleDiscardDraft = () => {
+    try {
+      const key = getDraftKey(editingProduct?.id);
+      localStorage.removeItem(key);
+    } catch { }
+    setAvailableDraft(null);
+    toast.info("Черновик удалён");
+  };
+
+  const handleOpenCreate = () => {
+    isClosingRef.current = false;
+    resetForm();
+    setIsCroppingMedia(false);
+    const defaultOpt = createDefaultPricingOption();
+    const initData: FormData = {
+      categoryId: "",
+      subcategoryId: "",
+      topic: "",
+      lessonFormat: "",
+      eventStartsAt: "",
+      capacity: "",
+      billingPeriod: "",
+      title: "",
+      headline: "",
+      description: "",
+      price: defaultOpt.price,
+      kaspiLink: "",
+      telegramLink: "",
+      imageUrl: "",
+      videoUrl: "",
+      media: [],
+      faq: [{ question: "", answer: "" }],
+      isPaid: true,
+      kaspiMethod: "link",
+      kaspiPhone: "",
+      paymentType: defaultOpt.paymentType,
+      recurringInterval: defaultOpt.recurringInterval,
+      recurringCustomDays: defaultOpt.recurringCustomDays,
+      hasFreeTrial: defaultOpt.hasFreeTrial,
+      trialPreset: defaultOpt.trialPreset,
+      trialCustomDays: defaultOpt.trialCustomDays,
+      pricingOptions: [defaultOpt],
+      paymentMethodIds: [],
+    };
+    setFormData(initData);
+    initialFormDataRef.current = JSON.stringify(serializeDraftData(initData));
+
+    // Check draft for new product
+    try {
+      const key = getDraftKey(null);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && (parsed.title || parsed.description || parsed.categoryId || parsed.price !== defaultOpt.price)) {
+          setAvailableDraft(parsed);
+        } else {
+          setAvailableDraft(null);
+        }
+      } else {
+        setAvailableDraft(null);
+      }
+    } catch {
+      setAvailableDraft(null);
+    }
+
+    setIsCreating(true);
   };
 
   // copyLink function removed - now using ShareLinkDialog for all link copying
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent, customData?: FormData) => {
     e.preventDefault();
+    const activeData = customData || formData;
 
-    const taxonomyError = validateTaxonomyFields(formData, taxonomyCategories);
-    if (!formData.title || taxonomyError) {
+    const taxonomyError = validateTaxonomyFields(activeData, taxonomyCategories);
+    if (!activeData.title || taxonomyError) {
       toast.error(taxonomyError || "Заполните обязательные поля");
       return;
     }
 
-    const options = formData.pricingOptions && formData.pricingOptions.length > 0
-      ? formData.pricingOptions
+    if (activeData.isPaid && (!activeData.paymentMethodIds || activeData.paymentMethodIds.length === 0)) {
+      toast.error("Для платного продукта выберите хотя бы один способ оплаты");
+      return;
+    }
+
+    const options = activeData.pricingOptions && activeData.pricingOptions.length > 0
+      ? activeData.pricingOptions
       : [createDefaultPricingOption()];
 
-    if (formData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
+    if (activeData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
       toast.error("Укажите цену для всех вариантов оплаты");
       return;
     }
@@ -2555,15 +3001,15 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
     let primaryBillingPeriod: string | null = null;
-    if (formData.isPaid && primaryOpt.paymentType === "recurring") {
+    if (activeData.isPaid && primaryOpt.paymentType === "recurring") {
       primaryBillingPeriod =
         primaryOpt.recurringInterval === "1m"
           ? "month"
           : primaryOpt.recurringInterval === "3m"
-          ? "quarter"
-          : primaryOpt.recurringInterval === "1y"
-          ? "year"
-          : primaryOpt.recurringInterval;
+            ? "quarter"
+            : primaryOpt.recurringInterval === "1y"
+              ? "year"
+              : primaryOpt.recurringInterval;
 
       if (primaryOpt.recurringInterval === "7d") primaryAccessDays = 7;
       else if (primaryOpt.recurringInterval === "14d") primaryAccessDays = 14;
@@ -2574,81 +3020,78 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     }
 
     let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
+    if (activeData.isPaid && primaryOpt.hasFreeTrial) {
       if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
       else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
       else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
       else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
     }
 
-    const serializedOptions = formData.isPaid
+    const serializedOptions = activeData.isPaid
       ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
+        let accessDays: number | null = null;
+        let bp: string | null = null;
+        if (opt.paymentType === "recurring") {
+          bp =
+            opt.recurringInterval === "1m"
+              ? "month"
+              : opt.recurringInterval === "3m"
                 ? "quarter"
                 : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
-          };
-        })
+                  ? "year"
+                  : opt.recurringInterval;
+          if (opt.recurringInterval === "7d") accessDays = 7;
+          else if (opt.recurringInterval === "14d") accessDays = 14;
+          else if (opt.recurringInterval === "1m") accessDays = 30;
+          else if (opt.recurringInterval === "3m") accessDays = 90;
+          else if (opt.recurringInterval === "1y") accessDays = 365;
+          else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
+        }
+        let tDays: number | null = null;
+        if (opt.hasFreeTrial) {
+          if (opt.trialPreset === "3") tDays = 3;
+          else if (opt.trialPreset === "7") tDays = 7;
+          else if (opt.trialPreset === "30") tDays = 30;
+          else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
+        }
+        return {
+          id: opt.id,
+          payment_type: opt.paymentType,
+          price: Number(opt.price) || 0,
+          recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
+          access_duration_days: accessDays,
+          billing_period: bp,
+          has_free_trial: opt.hasFreeTrial,
+          trial_days: tDays,
+        };
+      })
       : [];
 
     try {
       const created = await createProduct.mutateAsync({
-        title: formData.title,
-        headline: formData.headline || null,
-        description: formData.description || null,
-        price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
+        title: activeData.title,
+        headline: activeData.headline || null,
+        description: activeData.description || null,
+        price: activeData.isPaid ? Number(primaryOpt.price) : 0,
         telegram_link: null,
-        payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
-        recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
+        payment_type: activeData.isPaid ? primaryOpt.paymentType : "one_time",
+        recurring_interval: activeData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
+        has_free_trial: activeData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
+        payment_method_ids: activeData.isPaid ? (activeData.paymentMethodIds || []) : [],
         has_schedule: false,
         is_active: true,
-        faq: (formData.faq || [])
+        faq: (activeData.faq || [])
           .filter(it => (it?.question || "").trim() || (it?.answer || "").trim())
           .map(it => ({ question: (it?.question || "").trim(), answer: (it?.answer || "").trim() })),
-        ...buildTaxonomyPayload(formData, taxonomyCategories),
+        ...buildTaxonomyPayload(activeData, taxonomyCategories),
       });
 
       // Upload pending media (if any)
       const finalMedia: Array<{ type: "image" | "video"; url: string; objectPosition?: string }> = [];
-      for (const item of (formData.media || [])) {
+      for (const item of (activeData.media || [])) {
         if (item.file && created?.id) {
           const toastId = toast.loading(`Загрузка ${item.type === "video" ? "видео (0%)..." : "фото..."}`);
           try {
@@ -2690,9 +3133,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         }
       }
 
+      try {
+        localStorage.removeItem(getDraftKey(null));
+      } catch { }
+      performDirectClose();
       toast.success("Продукт создан!");
-      setIsCreating(false);
-      resetForm();
     } catch (error: any) {
       console.error("Create product error:", error);
       toast.error(error?.message || "Ошибка при создании продукта");
@@ -2700,6 +3145,8 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   };
 
   const handleEdit = (product: Product) => {
+    isClosingRef.current = false;
+    setIsCroppingMedia(false);
     setEditingProduct(product);
     const eventLocal =
       product.event_starts_at && !Number.isNaN(Date.parse(product.event_starts_at))
@@ -2715,7 +3162,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         else if (po.trial_days === 30) tPreset = "30";
         else if (po.trial_days) tPreset = "custom";
 
-        const kMethod = po.kaspi_phone ? "phone" : (po.kaspi_link ? "link" : (product.kaspi_phone ? "phone" : "link"));
+        const kMethod = po.kaspi_phone ? "phone" : "link";
 
         return {
           id: po.id || Math.random().toString(36).slice(2, 10),
@@ -2727,8 +3174,8 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
           trialPreset: tPreset,
           trialCustomDays: po.trial_days || 7,
           kaspiMethod: kMethod,
-          kaspiLink: po.kaspi_link || product.kaspi_link || "",
-          kaspiPhone: po.kaspi_phone || product.kaspi_phone || "",
+          kaspiLink: po.kaspi_link || "",
+          kaspiPhone: po.kaspi_phone || "",
         };
       });
     } else {
@@ -2754,9 +3201,9 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         hasFreeTrial: Boolean(product.has_free_trial),
         trialPreset: trialPreset as any,
         trialCustomDays: trialDays || 7,
-        kaspiMethod: product.kaspi_phone ? "phone" : "link",
-        kaspiLink: product.kaspi_link || "",
-        kaspiPhone: product.kaspi_phone || "",
+        kaspiMethod: "link",
+        kaspiLink: "",
+        kaspiPhone: "",
       }];
     }
 
@@ -2779,7 +3226,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       }
     }
 
-    setFormData({
+    const initialPaymentMethodIds = (product as any).payment_method_ids
+      || ((product as any).payment_methods?.map((m: any) => m?.id).filter(Boolean))
+      || [];
+
+    const initialForm: FormData = {
       categoryId: product.category_id || "",
       subcategoryId: product.subcategory_id || "",
       topic: (product as any).topic || "",
@@ -2807,23 +3258,51 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       trialPreset: firstOpt.trialPreset,
       trialCustomDays: firstOpt.trialCustomDays,
       pricingOptions: loadedOptions,
-    });
+      paymentMethodIds: initialPaymentMethodIds,
+    };
+
+    setFormData(initialForm);
+    initialFormDataRef.current = JSON.stringify(serializeDraftData(initialForm));
+
+    // Check draft for this product
+    try {
+      const key = getDraftKey(product.id);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && JSON.stringify(parsed) !== initialFormDataRef.current) {
+          setAvailableDraft(parsed);
+        } else {
+          setAvailableDraft(null);
+        }
+      } else {
+        setAvailableDraft(null);
+      }
+    } catch {
+      setAvailableDraft(null);
+    }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent, customData?: FormData) => {
     e.preventDefault();
+    const activeData = customData || formData;
 
-    const taxonomyError = validateTaxonomyFields(formData, taxonomyCategories);
-    if (!editingProduct || !formData.title || taxonomyError) {
+    const taxonomyError = validateTaxonomyFields(activeData, taxonomyCategories);
+    if (!editingProduct || !activeData.title || taxonomyError) {
       toast.error(taxonomyError || "Заполните обязательные поля");
       return;
     }
 
-    const options = formData.pricingOptions && formData.pricingOptions.length > 0
-      ? formData.pricingOptions
+    if (activeData.isPaid && (!activeData.paymentMethodIds || activeData.paymentMethodIds.length === 0)) {
+      toast.error("Для платного продукта выберите хотя бы один способ оплаты");
+      return;
+    }
+
+    const options = activeData.pricingOptions && activeData.pricingOptions.length > 0
+      ? activeData.pricingOptions
       : [createDefaultPricingOption()];
 
-    if (formData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
+    if (activeData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
       toast.error("Укажите цену для всех вариантов оплаты");
       return;
     }
@@ -2831,15 +3310,15 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
     let primaryBillingPeriod: string | null = null;
-    if (formData.isPaid && primaryOpt.paymentType === "recurring") {
+    if (activeData.isPaid && primaryOpt.paymentType === "recurring") {
       primaryBillingPeriod =
         primaryOpt.recurringInterval === "1m"
           ? "month"
           : primaryOpt.recurringInterval === "3m"
-          ? "quarter"
-          : primaryOpt.recurringInterval === "1y"
-          ? "year"
-          : primaryOpt.recurringInterval;
+            ? "quarter"
+            : primaryOpt.recurringInterval === "1y"
+              ? "year"
+              : primaryOpt.recurringInterval;
 
       if (primaryOpt.recurringInterval === "7d") primaryAccessDays = 7;
       else if (primaryOpt.recurringInterval === "14d") primaryAccessDays = 14;
@@ -2850,82 +3329,83 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     }
 
     let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
+    if (activeData.isPaid && primaryOpt.hasFreeTrial) {
       if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
       else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
       else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
       else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
     }
 
-    const serializedOptions = formData.isPaid
+    const serializedOptions = activeData.isPaid
       ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
+        let accessDays: number | null = null;
+        let bp: string | null = null;
+        if (opt.paymentType === "recurring") {
+          bp =
+            opt.recurringInterval === "1m"
+              ? "month"
+              : opt.recurringInterval === "3m"
                 ? "quarter"
                 : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            kaspi_link: opt.kaspiMethod === "link" ? (opt.kaspiLink || null) : null,
-            kaspi_phone: opt.kaspiMethod === "phone" ? (opt.kaspiPhone || null) : null,
-          };
-        })
+                  ? "year"
+                  : opt.recurringInterval;
+          if (opt.recurringInterval === "7d") accessDays = 7;
+          else if (opt.recurringInterval === "14d") accessDays = 14;
+          else if (opt.recurringInterval === "1m") accessDays = 30;
+          else if (opt.recurringInterval === "3m") accessDays = 90;
+          else if (opt.recurringInterval === "1y") accessDays = 365;
+          else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
+        }
+        let tDays: number | null = null;
+        if (opt.hasFreeTrial) {
+          if (opt.trialPreset === "3") tDays = 3;
+          else if (opt.trialPreset === "7") tDays = 7;
+          else if (opt.trialPreset === "30") tDays = 30;
+          else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
+        }
+        return {
+          id: opt.id,
+          payment_type: opt.paymentType,
+          price: Number(opt.price) || 0,
+          recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
+          access_duration_days: accessDays,
+          billing_period: bp,
+          has_free_trial: opt.hasFreeTrial,
+          trial_days: tDays,
+        };
+      })
       : [];
 
     try {
       await updateProduct.mutateAsync({
         id: editingProduct.id,
-        title: formData.title,
-        headline: formData.headline || null,
-        description: formData.description || null,
-        price: formData.isPaid ? Number(primaryOpt.price) : 0,
-        kaspi_link: formData.isPaid && primaryOpt.kaspiMethod === "link" ? (primaryOpt.kaspiLink || null) : null,
-        kaspi_phone: formData.isPaid && primaryOpt.kaspiMethod === "phone" ? (primaryOpt.kaspiPhone || null) : null,
-        payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
-        recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
+        title: activeData.title,
+        headline: activeData.headline || null,
+        description: activeData.description || null,
+        price: activeData.isPaid ? Number(primaryOpt.price) : 0,
+        payment_type: activeData.isPaid ? primaryOpt.paymentType : "one_time",
+        recurring_interval: activeData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
+        has_free_trial: activeData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
-        image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,
-        video_url: (formData.media || []).find((m) => m.type === "video")?.url || null,
-        media: (formData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
-        faq: (formData.faq || [])
+        payment_method_ids: activeData.isPaid ? (activeData.paymentMethodIds || []) : [],
+        image_url: (activeData.media || []).find((m) => m.type === "image")?.url || null,
+        video_url: (activeData.media || []).find((m) => m.type === "video")?.url || null,
+        media: (activeData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
+        faq: (activeData.faq || [])
           .filter(it => (it?.question || "").trim() || (it?.answer || "").trim())
           .map(it => ({ question: (it?.question || "").trim(), answer: (it?.answer || "").trim() })),
-        ...buildTaxonomyPayload(formData, taxonomyCategories),
+        ...buildTaxonomyPayload(activeData, taxonomyCategories),
       });
-      
+
+      try {
+        if (editingProduct?.id) {
+          localStorage.removeItem(getDraftKey(editingProduct.id));
+        }
+      } catch { }
+      performDirectClose();
       toast.success("Продукт обновлён!");
-      setEditingProduct(null);
-      resetForm();
     } catch (error: any) {
       console.error("Failed to update product:", error);
       toast.error(error?.message || "Ошибка при обновлении продукта");
@@ -2994,19 +3474,52 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{t("products")}</h2>
-        <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) { resetForm(); setIsCroppingMedia(false); } }}>
-          <DialogTrigger asChild>
-            <Button variant="default" size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              {t("create")}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
-            <DialogHeader>
-              <DialogTitle>{isCroppingMedia ? "Настройка обложки" : "Создать продукт"}</DialogTitle>
-            </DialogHeader>
-            <ProductForm 
-              onSubmit={handleCreate} 
+        <Button variant="default" size="sm" onClick={handleOpenCreate} className="h-10 min-h-[40px] px-4 font-medium">
+          <Plus className="w-4 h-4 mr-2" />
+          {t("create")}
+        </Button>
+      </div>
+
+      {/* Create Dialog */}
+      <Dialog
+        open={isCreating}
+        onOpenChange={(open) => {
+          if (!open && !isClosingRef.current) handleRequestClose();
+        }}
+      >
+        <DialogContent
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault();
+            if (createProduct.isPending || isClosingRef.current) return;
+            handleRequestClose();
+          }}
+          className="[&>button:last-child]:hidden p-0 gap-0 overflow-hidden flex flex-col w-full h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl border-none sm:border bg-background"
+        >
+          {/* Pinned Header with × in top-left */}
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border/80 bg-background/95 backdrop-blur z-10">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={handleRequestClose}
+                disabled={createProduct.isPending || isClosingRef.current}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all -ml-2 disabled:opacity-50 disabled:pointer-events-none"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-base sm:text-lg font-semibold text-foreground truncate">
+                {isCroppingMedia ? "Настройка обложки" : "Создать продукт"}
+              </h2>
+            </div>
+          </div>
+
+          {/* Middle Scrollable Section with 6px scrollbar */}
+          <div className="flex-1 overflow-y-auto modal-scrollbar p-4 sm:p-6 min-h-0">
+            <ProductForm
+              id="product-create-form"
+              onSubmit={handleCreate}
               formData={formData}
               setFormData={setFormData}
               isPending={createProduct.isPending}
@@ -3017,30 +3530,151 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
               setPendingImageFile={setPendingImageFile}
               setPendingVideoFile={setPendingVideoFile}
               onCroppingChange={setIsCroppingMedia}
+              availableDraft={availableDraft}
+              onRestoreDraft={handleRestoreDraft}
+              onDiscardDraft={handleDiscardDraft}
             />
-          </DialogContent>
-        </Dialog>
-      </div>
+          </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) { setEditingProduct(null); resetForm(); setIsCroppingMedia(false); } }}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
-          <DialogHeader>
-            <DialogTitle>{isCroppingMedia ? "Настройка обложки" : `${t("edit")} продукт`}</DialogTitle>
-          </DialogHeader>
-          <ProductForm 
-            onSubmit={handleUpdate} 
-            isEdit 
-            formData={formData}
-            setFormData={setFormData}
-            isPending={updateProduct.isPending}
-            t={t}
-            taxonomyCategories={taxonomyCategories}
-            editingProductId={editingProduct?.id || null}
-            onCroppingChange={setIsCroppingMedia}
-          />
+          {/* Pinned Footer with Сохранить / Создать */}
+          <div className="shrink-0 px-4 py-3 border-t border-border/80 bg-background/95 backdrop-blur z-10 flex items-center justify-end gap-2.5">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={handleRequestClose}
+              className="h-11 min-h-[44px] px-4 text-sm font-medium"
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              form="product-create-form"
+              type="submit"
+              disabled={createProduct.isPending}
+              className="h-11 min-h-[44px] px-6 font-medium text-sm sm:text-base min-w-[130px]"
+            >
+              {createProduct.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Сохранение...
+                </>
+              ) : (
+                "Создать продукт"
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={Boolean(editingProduct)}
+        onOpenChange={(open) => {
+          if (!open && !isClosingRef.current) handleRequestClose();
+        }}
+      >
+        <DialogContent
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault();
+            if (updateProduct.isPending || isClosingRef.current) return;
+            handleRequestClose();
+          }}
+          className="[&>button:last-child]:hidden p-0 gap-0 overflow-hidden flex flex-col w-full h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl border-none sm:border bg-background"
+        >
+          {/* Pinned Header with × in top-left */}
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border/80 bg-background/95 backdrop-blur z-10">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={handleRequestClose}
+                disabled={updateProduct.isPending || isClosingRef.current}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all -ml-2 disabled:opacity-50 disabled:pointer-events-none"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-base sm:text-lg font-semibold text-foreground truncate">
+                {isCroppingMedia ? "Настройка обложки" : `${t("edit")} продукт`}
+              </h2>
+            </div>
+          </div>
+
+          {/* Middle Scrollable Section with 6px scrollbar */}
+          <div className="flex-1 overflow-y-auto modal-scrollbar p-4 sm:p-6 min-h-0">
+            <ProductForm
+              id="product-edit-form"
+              onSubmit={handleUpdate}
+              isEdit
+              formData={formData}
+              setFormData={setFormData}
+              isPending={updateProduct.isPending}
+              t={t}
+              taxonomyCategories={taxonomyCategories}
+              editingProductId={editingProduct?.id || null}
+              onCroppingChange={setIsCroppingMedia}
+              availableDraft={availableDraft}
+              onRestoreDraft={handleRestoreDraft}
+              onDiscardDraft={handleDiscardDraft}
+            />
+          </div>
+
+          {/* Pinned Footer with Сохранить */}
+          <div className="shrink-0 px-4 py-3 border-t border-border/80 bg-background/95 backdrop-blur z-10 flex items-center justify-end gap-2.5">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={handleRequestClose}
+              className="h-11 min-h-[44px] px-4 text-sm font-medium"
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              form="product-edit-form"
+              type="submit"
+              disabled={updateProduct.isPending}
+              className="h-11 min-h-[44px] px-6 font-medium text-sm sm:text-base min-w-[130px]"
+            >
+              {updateProduct.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Сохранение...
+                </>
+              ) : (
+                "Сохранить"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unsaved Changes Confirmation Dialog */}
+      <AlertDialog open={showUnsavedConfirm} onOpenChange={setShowUnsavedConfirm}>
+        <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold">
+              Закрыть без сохранения?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm sm:text-base text-muted-foreground">
+              Все внесённые данные сохранятся в локальном черновике, но не будут применены к продукту.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+            <AlertDialogCancel
+              onClick={handleCancelUnsavedClose}
+              className="h-11 min-h-[44px] text-sm sm:text-base font-medium rounded-xl"
+            >
+              Продолжить редактирование
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={performDirectClose}
+              className="h-11 min-h-[44px] text-sm sm:text-base font-medium rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Закрыть
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
@@ -3053,7 +3687,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -3075,131 +3709,152 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
           const coverVid = (firstMedia && firstMedia.type === "video" ? firstMedia.url : null) || product.video_url;
 
           return (
-          <Card key={product.id} className="overflow-hidden">
-            <CardContent className={isMobile ? "p-3" : "p-4"}>
-              <div className="flex items-start gap-3 mb-2">
-                {/* Thumbnail */}
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 bg-muted border border-border/60 flex items-center justify-center relative shadow-xs">
-                  {coverImg ? (
-                    <img src={coverImg} alt="" className="w-full h-full object-cover" />
-                  ) : coverVid ? (
-                    <div className="w-full h-full relative flex items-center justify-center bg-black/5 isolate">
-                      <video src={coverVid} className="w-full h-full object-cover pointer-events-none" preload="auto" muted playsInline webkit-playsinline="true" />
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10" style={{ transform: "translate3d(0, 0, 10px)" }}>
-                        <div className="w-6 h-6 rounded-full bg-[#FF6B00] flex items-center justify-center shadow-xs">
-                          <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+            <Card key={product.id} className="overflow-hidden">
+              <CardContent className={isMobile ? "p-3" : "p-4"}>
+                <div className="flex items-start gap-3 mb-2">
+                  {/* Thumbnail */}
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 bg-muted border border-border/60 flex items-center justify-center relative shadow-xs">
+                    {coverImg ? (
+                      <img src={coverImg} alt="" className="w-full h-full object-cover" />
+                    ) : coverVid ? (
+                      <div className="w-full h-full relative flex items-center justify-center bg-black/5 isolate">
+                        <video src={coverVid} className="w-full h-full object-cover pointer-events-none" preload="auto" muted playsInline webkit-playsinline="true" />
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10" style={{ transform: "translate3d(0, 0, 10px)" }}>
+                          <div className="w-6 h-6 rounded-full bg-[#FF6B00] flex items-center justify-center shadow-xs">
+                            <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
-                  )}
-                </div>
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
+                    )}
+                  </div>
 
-                {/* Header: title + price */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-foreground ${isMobile ? "text-sm line-clamp-2" : "text-base"}`}>{product.title}</h3>
-                      {product.headline && (
-                        <p className={`text-muted-foreground mt-0.5 ${isMobile ? "text-xs line-clamp-1" : "text-sm"}`}>{product.headline}</p>
+                  {/* Header: title + price */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-semibold text-foreground ${isMobile ? "text-sm line-clamp-2" : "text-base"}`}>{product.title}</h3>
+                        {product.headline && (
+                          <p className={`text-muted-foreground mt-0.5 ${isMobile ? "text-xs line-clamp-1" : "text-sm"}`}>{product.headline}</p>
+                        )}
+                      </div>
+                      <span className={`font-bold text-primary whitespace-nowrap ${isMobile ? "text-sm" : "text-base"}`}>
+                        {formatPriceTenge(Number(product.price))}
+                      </span>
+                    </div>
+
+                    {/* Badges */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      {product.billing_period && (
+                        <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                          {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
+                        </span>
                       )}
+                      {product.has_schedule && (
+                        <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                          {language === "ru" ? "Расписание" : "Кесте"}
+                        </span>
+                      )}
+                      {Array.isArray((product as any).payment_methods) && (product as any).payment_methods.filter(Boolean).length > 0 && (() => {
+                        const validMethods = (product as any).payment_methods.filter(Boolean);
+                        if (validMethods.length === 1) {
+                          const m = validMethods[0];
+                          let label = "Ссылка";
+                          if (m?.bank) {
+                            label = m.bank === "other"
+                              ? m.bank_name || "Банк"
+                              : String(m.bank).toUpperCase();
+                          } else if (m?.type === "phone") {
+                            label = "Телефон";
+                          } else if (m?.type === "card") {
+                            label = "Карта";
+                          }
+                          return (
+                            <span className={`bg-success/10 text-success px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                              {label}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className={`bg-success/10 text-success px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                            {`Оплата (${validMethods.length})`}
+                          </span>
+                        );
+                      })()}
                     </div>
-                    <span className={`font-bold text-primary whitespace-nowrap ${isMobile ? "text-sm" : "text-base"}`}>
-                      {formatPriceTenge(Number(product.price))}
-                    </span>
-                  </div>
-
-                  {/* Badges */}
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    {product.billing_period && (
-                      <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
-                      </span>
-                    )}
-                    {product.has_schedule && (
-                      <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        {language === "ru" ? "Расписание" : "Кесте"}
-                      </span>
-                    )}
-                    {product.kaspi_link && (
-                      <span className={`bg-success/10 text-success px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        Kaspi
-                      </span>
-                    )}
                   </div>
                 </div>
-              </div>
-              
-              {/* Actions */}
-              <div className={`flex items-center justify-end ${isMobile ? "flex-wrap gap-1.5" : "gap-2 flex-wrap"}`}>
-                <ShareProductButton
-                  title={product.title}
-                  id={product.id}
-                  slug={product.slug}
-                  sellerHandle={sellerHandle}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPreviewProduct(product as Product)}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span className="ml-1">{language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEdit(product)}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span className="ml-1">{t("edit")}</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if ((product as any).is_paused) {
-                      updateProduct.mutate(
-                        { id: product.id, is_paused: false } as any,
-                        {
-                          onSuccess: () => toast.success(language === "ru" ? "Продукт возобновлён" : "Өнім қайта іске қосылды"),
-                          onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                        }
-                      );
-                    } else {
-                      setPauseMessage(
-                        (product as any).paused_message ||
+
+                {/* Actions */}
+                <div className={`flex items-center justify-end ${isMobile ? "flex-wrap gap-1.5" : "gap-2 flex-wrap"}`}>
+                  <ShareProductButton
+                    title={product.title}
+                    id={product.id}
+                    slug={product.slug}
+                    sellerHandle={sellerHandle}
+                    className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewProduct(product as Product)}
+                    className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span className="ml-1">{language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(product)}
+                    className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span className="ml-1">{t("edit")}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if ((product as any).is_paused) {
+                        updateProduct.mutate(
+                          { id: product.id, is_paused: false } as any,
+                          {
+                            onSuccess: () => toast.success(language === "ru" ? "Продукт возобновлён" : "Өнім қайта іске қосылды"),
+                            onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
+                          }
+                        );
+                      } else {
+                        setPauseMessage(
+                          (product as any).paused_message ||
                           (language === "ru"
                             ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
                             : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
-                      );
-                      setPausingProduct(product as Product);
-                    }
-                  }}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                  <span className="ml-1">
-                    {(product as any).is_paused
-                      ? (language === "ru" ? "Возобновить" : "Қайта қосу")
-                      : (language === "ru" ? "Приостановить" : "Тоқтату")}
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeletingProduct(product)}
-                  className={`text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 ${isMobile ? "h-8 px-2 text-xs" : "h-9"}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                        );
+                        setPausingProduct(product as Product);
+                      }
+                    }}
+                    className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  >
+                    {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
+                    <span className="ml-1">
+                      {(product as any).is_paused
+                        ? (language === "ru" ? "Возобновить" : "Қайта қосу")
+                        : (language === "ru" ? "Приостановить" : "Тоқтату")}
+                    </span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeletingProduct(product)}
+                    className={`text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 ${isMobile ? "h-8 px-2 text-xs" : "h-9"}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
@@ -3211,118 +3866,118 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         </div>
       )}
 
-    {/* Materials Manager */}
-    {materialsProduct && (
-      <ProductMaterialsManager
-        productId={materialsProduct.id}
-        productTitle={materialsProduct.title}
-        isOpen={!!materialsProduct}
-        onClose={() => setMaterialsProduct(null)}
-      />
-    )}
+      {/* Materials Manager */}
+      {materialsProduct && (
+        <ProductMaterialsManager
+          productId={materialsProduct.id}
+          productTitle={materialsProduct.title}
+          isOpen={!!materialsProduct}
+          onClose={() => setMaterialsProduct(null)}
+        />
+      )}
 
-    {/* Preview Dialog */}
-    <Dialog open={!!previewProduct} onOpenChange={(open) => { if (!open) setPreviewProduct(null); }}>
-      <DialogContent className="max-w-md w-[95vw] p-4 dialog-mobile-fullscreen flex flex-col max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 pr-8">
-            <span className="truncate text-base sm:text-lg">
-              {language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}: {previewProduct?.title}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 min-h-0 flex justify-center items-stretch bg-muted/30 rounded-lg p-2 sm:p-3 overflow-auto relative">
-          {previewProduct && (
-            <>
-              {previewLoading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm rounded-lg">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">
-                    {language === "ru" ? "Загрузка страницы…" : "Бет жүктелуде…"}
-                  </span>
-                </div>
-              )}
-              <iframe
-                key={previewProduct.id}
-                src={previewProduct.slug ? `/p/${encodeURIComponent(previewProduct.slug)}` : `/p/${previewProduct.id}`}
-                title="preview"
-                className="bg-background border border-border rounded-lg shadow-lg max-w-full h-full relative z-0"
-                style={{ width: "min(390px, 100%)", minHeight: 600 }}
-                onLoad={() => setPreviewLoading(false)}
-              />
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Pause Dialog */}
-    <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            {language === "ru"
-              ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="pause-message">
-              {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
-            </Label>
-            <Textarea
-              id="pause-message"
-              rows={4}
-              value={pauseMessage}
-              onChange={(e) => setPauseMessage(e.target.value)}
-              placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
-            />
-            <p className="text-xs text-muted-foreground">
-              {language === "ru"
-                ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
-                : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
-            </p>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setPausingProduct(null)}>
-            {t("cancel")}
-          </Button>
-          <Button
-            onClick={() => {
-              if (!pausingProduct) return;
-              updateProduct.mutate(
-                {
-                  id: pausingProduct.id,
-                  is_paused: true,
-                  paused_message: pauseMessage.trim() || null,
-                } as any,
-                {
-                  onSuccess: () => {
-                    toast.success(language === "ru" ? "Продукт приостановлен" : "Өнім тоқтатылды");
-                    setPausingProduct(null);
-                  },
-                  onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                }
-              );
-            }}
-            disabled={updateProduct.isPending}
-          >
-            {updateProduct.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              language === "ru" ? "Приостановить" : "Тоқтату"
+      {/* Preview Dialog */}
+      <Dialog open={!!previewProduct} onOpenChange={(open) => { if (!open) setPreviewProduct(null); }}>
+        <DialogContent className="max-w-md w-[95vw] p-4 dialog-mobile-fullscreen flex flex-col max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 pr-8">
+              <span className="truncate text-base sm:text-lg">
+                {language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}: {previewProduct?.title}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 flex justify-center items-stretch bg-muted/30 rounded-lg p-2 sm:p-3 overflow-auto relative">
+            {previewProduct && (
+              <>
+                {previewLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm rounded-lg">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground">
+                      {language === "ru" ? "Загрузка страницы…" : "Бет жүктелуде…"}
+                    </span>
+                  </div>
+                )}
+                <iframe
+                  key={previewProduct.id}
+                  src={previewProduct.slug ? `/p/${encodeURIComponent(previewProduct.slug)}` : `/p/${previewProduct.id}`}
+                  title="preview"
+                  className="bg-background border border-border rounded-lg shadow-lg max-w-full h-full relative z-0"
+                  style={{ width: "min(390px, 100%)", minHeight: 600 }}
+                  onLoad={() => setPreviewLoading(false)}
+                />
+              </>
             )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-  </div>
+      {/* Pause Dialog */}
+      <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              {language === "ru"
+                ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
+                : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="pause-message">
+                {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
+              </Label>
+              <Textarea
+                id="pause-message"
+                rows={4}
+                value={pauseMessage}
+                onChange={(e) => setPauseMessage(e.target.value)}
+                placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
+              />
+              <p className="text-xs text-muted-foreground">
+                {language === "ru"
+                  ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
+                  : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPausingProduct(null)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                if (!pausingProduct) return;
+                updateProduct.mutate(
+                  {
+                    id: pausingProduct.id,
+                    is_paused: true,
+                    paused_message: pauseMessage.trim() || null,
+                  } as any,
+                  {
+                    onSuccess: () => {
+                      toast.success(language === "ru" ? "Продукт приостановлен" : "Өнім тоқтатылды");
+                      setPausingProduct(null);
+                    },
+                    onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
+                  }
+                );
+              }}
+              disabled={updateProduct.isPending}
+            >
+              {updateProduct.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                language === "ru" ? "Приостановить" : "Тоқтату"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+    </div>
   );
 };
 

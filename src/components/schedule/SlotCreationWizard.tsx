@@ -312,7 +312,7 @@ export default function SlotCreationWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-full h-full max-h-full m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50">
+      <DialogContent className="[&>button:last-child]:hidden max-w-full h-full max-h-full m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50">
         <VisuallyHidden>
           <DialogTitle>Slot Creation Wizard</DialogTitle>
         </VisuallyHidden>

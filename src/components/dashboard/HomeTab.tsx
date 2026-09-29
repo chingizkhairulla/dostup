@@ -47,7 +47,12 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   );
 
   const accessiblePurchases = useMemo(() => {
-    const oneTime = purchases.filter((p) => !subscriptionProductIds.has(p.product_id));
+    const oneTime = purchases.filter(
+      (p) =>
+        !subscriptionProductIds.has(p.product_id) &&
+        p.status !== "rejected" &&
+        p.status !== "revoked"
+    );
     const fromSubs = subscriptions
       .filter((s) => s.has_access && s.product)
       .map((s) => ({
@@ -70,6 +75,9 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
 
   const myProducts = useMemo(() => {
     const byId = new Map((catalog.data ?? []).map((product) => [product.id, product]));
+    const purchaseStatusByProductId = new Map(
+      accessiblePurchases.map((p) => [p.product_id, (p as any).status || "completed"])
+    );
     const ordered = [...accessiblePurchases].sort((a, b) => {
       const aIdx = recentIds.indexOf(a.product_id);
       const bIdx = recentIds.indexOf(b.product_id);
@@ -81,7 +89,14 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
     return ordered
-      .map((purchase) => byId.get(purchase.product_id))
+      .map((purchase) => {
+        const prod = byId.get(purchase.product_id);
+        if (!prod) return null;
+        return {
+          ...prod,
+          purchaseStatus: purchaseStatusByProductId.get(purchase.product_id) || "completed",
+        };
+      })
       .filter((product): product is NonNullable<typeof product> => Boolean(product));
   }, [accessiblePurchases, catalog.data, recentIds]);
 

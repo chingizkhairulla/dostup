@@ -13,7 +13,7 @@ const BANNED_PATTERNS = [
  */
 export function normalizeTopic(topic: string): string {
   return topic
-    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}/gu, "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");

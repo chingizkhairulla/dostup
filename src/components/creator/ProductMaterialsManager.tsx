@@ -1002,7 +1002,7 @@ interface FormData {
    return (
      <>
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); setCurrentFolderId(null); setRenamingFolder(false); } }}>
-         <DialogContent mobileFullScreen className="max-w-3xl sm:w-[95vw]">
+         <DialogContent className="max-w-3xl sm:w-[95vw] dialog-mobile-fullscreen">
            <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {mode === "add"

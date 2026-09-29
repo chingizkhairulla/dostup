@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { profileHomePath, storeCreatorSession, parseProfileType } from "@/lib/creatorAuth";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import BackArrowButton from "@/components/ui/BackArrowButton";
 import { toast } from "sonner";
 
 interface PasswordLoginScreenProps {
@@ -104,10 +105,7 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
     <Card className="w-full max-w-md rounded-2xl animate-fade-in">
       <CardHeader className="pb-2">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
-          <Button variant="ghost" size="sm" className="px-2 -ml-2" onClick={onBack} aria-label={t("back")}>
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline ml-1">{t("back")}</span>
-          </Button>
+          <BackArrowButton onClick={onBack} label={t("back")} className="-ml-2" />
           <CardTitle className="text-xl font-bold text-center truncate">{t("signInWithPassword")}</CardTitle>
           <span className="w-8 sm:w-16" aria-hidden />
         </div>
