@@ -45,7 +45,8 @@ export interface BuyerPurchase extends AccessSource {
 interface Props {
   purchase: BuyerPurchase | null;
   onOpenChange: (open: boolean) => void;
-  onRevokeAccess: (purchaseId: string) => Promise<void>;
+  /** "forever" opens access again with no end date. */
+  onSetAccess: (purchaseId: string, mode: "revoke" | "forever") => Promise<void>;
   teachers: { id: string; name: string }[];
   teacherValue: string;
   onTeacherChange: (value: string) => void;
@@ -69,8 +70,8 @@ export const UrgencyBadge = ({ purchase, className }: { purchase: AccessSource; 
   );
 };
 
-/** Seller's card for one buyer: last payment, access status, receipts and a button to close access. */
-const BuyerDetailsDialog = ({ purchase, onOpenChange, onRevokeAccess, teachers, teacherValue, onTeacherChange }: Props) => {
+/** Seller's card for one buyer: last payment, access status, receipts and a button to close or reopen access. */
+const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, teacherValue, onTeacherChange }: Props) => {
   const { t, language } = useLanguage();
   const locale = language === "kk" ? kk : ru;
   const [saving, setSaving] = useState(false);
@@ -96,11 +97,11 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onRevokeAccess, teachers, 
   const { urgency } = accessUrgency(purchase);
   const fmt = (d: Date) => format(d, "d MMMM yyyy", { locale });
 
-  const revoke = async () => {
+  const setAccess = async (mode: "revoke" | "forever") => {
     setSaving(true);
     try {
-      await onRevokeAccess(purchase.id);
-      toast.success(t("buyerAccessClosed"));
+      await onSetAccess(purchase.id, mode);
+      toast.success(t(mode === "revoke" ? "buyerAccessClosed" : "buyerAccessOpened"));
     } catch {
       toast.error(t("buyerAccessSaveError"));
     } finally {
@@ -175,7 +176,12 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onRevokeAccess, teachers, 
             </Row>
           </dl>
 
-          {urgency !== "closed" && (
+          {urgency === "closed" ? (
+            <Button className="h-10 w-full" disabled={saving} onClick={() => void setAccess("forever")}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t("buyerOpenAccess")}
+            </Button>
+          ) : (
             <Button
               variant="destructive"
               className="h-10 w-full"
@@ -294,7 +300,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onRevokeAccess, teachers, 
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => void revoke()}
+              onClick={() => void setAccess("revoke")}
             >
               {t("revokeAccess")}
             </AlertDialogAction>

@@ -144,12 +144,12 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     enabled: !!creatorName,
   });
 
-  const revokeAccess = async (purchaseId: string) => {
+  const setAccess = async (purchaseId: string, mode: "revoke" | "forever") => {
     await invokeApi("manage-products", {
       action: "set_purchase_access",
       ...creatorCreds(),
       purchaseId,
-      mode: "revoke",
+      mode,
     });
     await queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
   };
@@ -351,7 +351,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       <BuyerDetailsDialog
         purchase={opened}
         onOpenChange={(open) => !open && setOpenId(null)}
-        onRevokeAccess={revokeAccess}
+        onSetAccess={setAccess}
         teachers={opened ? teachersMap[opened.product_id] || [] : []}
         teacherValue={opened ? getCurrentValue(opened) : "author"}
         onTeacherChange={(value) => opened && handleTeacherChange(opened.id, value)}
