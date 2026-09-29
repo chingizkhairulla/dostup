@@ -137,9 +137,6 @@ Deno.serve(async (req) => {
         target = await createSellerProfile(supabase, authUserId!, createType, displayName)
       }
       if (!target) return json({ error: 'Failed to create profile' }, 500)
-      if (createType === 'creator' || createType === 'school') {
-        await findOrCreateProfile(supabase, authUserId!, 'buyer', '')
-      }
       const sellerType = accountTypeFor(createType)
       if (sellerType) {
         const account = await ensureCreatorAccount(supabase, {

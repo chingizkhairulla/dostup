@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
+import CatalogSectionHeader from "@/components/marketplace/CatalogSectionHeader";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import BuyerAppShell from "@/components/layout/BuyerAppShell";
 import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
@@ -22,18 +23,19 @@ const NewProductsPage = () => {
       <MarketplaceHeader />
       <main className="flex flex-1 flex-col pb-0 pt-0 md:pb-16">
         <section className="w-full px-6 pb-16 pt-10">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <h1 className="text-[26px] font-bold tracking-tight text-[#1F2328]">
-              🆕 {t("newProductsHeading")}
-            </h1>
-            <Link
-              to="/"
-              className="inline-flex shrink-0 items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>{t("back")}</span>
-            </Link>
-          </div>
+          <CatalogSectionHeader
+            as="h1"
+            title={<>🆕 {t("newProductsHeading")}</>}
+            action={
+              <Link
+                to="/"
+                className="inline-flex shrink-0 items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>{t("back")}</span>
+              </Link>
+            }
+          />
 
           {search.isLoading ? (
             <div className="flex justify-center py-16">

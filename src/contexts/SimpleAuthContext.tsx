@@ -8,8 +8,10 @@ import {
   profileHomePath,
   readAuthEmail,
   readStoredAppSession,
+  readStoredOnboardingSession,
   readStoredProfiles,
   storeCreatorSession,
+  storeOnboardingSession,
   type AppProfile,
   type ProfileType,
   type SessionPayload,
@@ -33,6 +35,9 @@ interface SimpleAuthContextType {
   sessionToken: string | null;
   profileType: ProfileType | null;
   profiles: AppProfile[];
+  /** Signed in, but the identity has no profile yet (role picker pending). */
+  needsOnboarding: boolean;
+  startOnboarding: (token: string, creatorName: string) => void;
   refreshSession: () => Promise<void>;
   applySession: (session: SessionPayload, expiresAt?: string | null) => void;
   switchProfile: (opts: {
@@ -46,7 +51,7 @@ interface SimpleAuthContextType {
   }) => Promise<{ path: string } | { error: string }>;
   setProfileAvatar: (url: string | null) => void;
   setProfileName: (name: string) => void;
-  removeProfile: (deletedId: string, newSession: SessionPayload | null) => void;
+  removeProfile: (deletedId: string, newSession: SessionPayload | null, nextProfiles?: AppProfile[]) => void;
   logout: () => Promise<void>;
 }
 
@@ -70,6 +75,7 @@ type HydratedAuthState = {
   sessionToken: string | null;
   profileType: ProfileType | null;
   profiles: AppProfile[];
+  needsOnboarding?: boolean;
 };
 
 function hydrateAuthState(): HydratedAuthState {
@@ -91,6 +97,18 @@ function hydrateAuthState(): HydratedAuthState {
       sessionToken: null,
       profileType: null,
       profiles: [],
+    };
+  }
+
+  const onboarding = readStoredOnboardingSession();
+  if (onboarding) {
+    return {
+      status: "authenticated",
+      user: null,
+      sessionToken: onboarding.token,
+      profileType: null,
+      profiles: [],
+      needsOnboarding: true,
     };
   }
 
@@ -127,6 +145,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
   const [sessionToken, setSessionToken] = useState<string | null>(initial.sessionToken);
   const [profileType, setProfileType] = useState<ProfileType | null>(initial.profileType);
   const [profiles, setProfiles] = useState<AppProfile[]>(initial.profiles);
+  const [needsOnboarding, setNeedsOnboarding] = useState(Boolean(initial.needsOnboarding));
   const validating = useRef(false);
 
   const setGuest = useCallback(() => {
@@ -134,10 +153,22 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
     setSessionToken(null);
     setProfileType(null);
     setProfiles([]);
+    setNeedsOnboarding(false);
     setStatus("guest");
   }, []);
 
+  const startOnboarding = useCallback((token: string, creatorName: string) => {
+    storeOnboardingSession(token, creatorName);
+    setUser(null);
+    setSessionToken(token);
+    setProfileType(null);
+    setProfiles([]);
+    setNeedsOnboarding(true);
+    setStatus("authenticated");
+  }, []);
+
   const applyBuyer = useCallback((token: string, next: SimpleUser, nextProfiles: AppProfile[]) => {
+    setNeedsOnboarding(false);
     setUser(next);
     setSessionToken(token);
     setProfileType("buyer");
@@ -146,6 +177,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
   }, []);
 
   const applyStoredSession = useCallback((stored: StoredAppSession) => {
+    setNeedsOnboarding(false);
     setSessionToken(stored.token);
     setProfileType(stored.profileType);
     setProfiles(stored.profiles);
@@ -171,6 +203,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
       expiresAt,
     });
     const nextProfiles = session.profiles ?? [];
+    setNeedsOnboarding(false);
     setSessionToken(session.token);
     setProfileType(session.profileType);
     setProfiles(nextProfiles);
@@ -231,13 +264,8 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
       }
 
       if (data.needsOnboarding) {
-        setSessionToken(token);
-        setProfileType(null);
-        setUser(null);
-        setProfiles([]);
-        setStatus("authenticated");
-        localStorage.removeItem("profile_id");
-        localStorage.removeItem("profile_type");
+        const onboardingToken = typeof data.newToken === "string" && data.newToken ? data.newToken : token;
+        startOnboarding(onboardingToken, String(data.creatorName || creatorName));
         return;
       }
 
@@ -249,6 +277,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
 
       const nextType = parseProfileType(data.profileType) || storedType;
       const nextProfiles = (data.profiles as AppProfile[] | undefined) ?? readStoredProfiles();
+      setNeedsOnboarding(false);
       setProfiles(nextProfiles);
       setProfileType(nextType);
       setSessionToken(activeToken);
@@ -289,7 +318,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
         setStatus("authenticated");
       }
     }
-  }, [applyBuyer, setGuest]);
+  }, [applyBuyer, setGuest, startOnboarding]);
 
   const refreshSession = useCallback(async () => {
     const stored = readStoredAppSession();
@@ -343,13 +372,14 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
         profiles: data.profiles,
       });
       const nextType = parseProfileType(data.profileType) || "buyer";
+      setNeedsOnboarding(false);
       setProfileType(nextType);
       setProfiles((data.profiles as AppProfile[]) ?? []);
       if (nextType === "buyer") {
         applyBuyer(data.token, {
           id: data.profileId,
           phone: "",
-          name: data.displayName || data.creatorName,
+          name: data.displayName || readAuthEmail().split("@")[0] || "",
           role: "student",
           created_at: localStorage.getItem("creator_created_at") || new Date().toISOString(),
         }, (data.profiles as AppProfile[]) ?? []);
@@ -427,46 +457,20 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
     }
   };
 
-  const removeProfile = useCallback((deletedId: string, newSession: SessionPayload | null) => {
-    // 1. Compute filtered list
-    setProfiles((prev) => {
-      const next = prev.filter((p) => p.id !== deletedId);
-      try {
-        localStorage.setItem("identity_profiles", JSON.stringify(next));
-      } catch { /* private mode */ }
-
-      // 2. Apply new buyer session using the filtered list
-      if (newSession) {
-        storeCreatorSession({
-          token: newSession.token,
-          creatorName: newSession.creatorName,
-          accountType: newSession.accountType,
-          profileType: newSession.profileType,
-          profileId: newSession.profileId,
-          displayName: newSession.displayName,
-          handle: newSession.handle,
-          createdAt: newSession.createdAt,
-        });
-        // setSessionToken / setProfileType / setUser / setStatus
-        // are called outside setState but batched by React 18
-      }
-
-      return next;
-    });
-
+  const removeProfile = useCallback((deletedId: string, newSession: SessionPayload | null, nextProfiles?: AppProfile[]) => {
+    const remaining = (nextProfiles ?? readStoredProfiles()).filter((p) => p.id !== deletedId);
     if (newSession) {
-      setSessionToken(newSession.token);
-      setProfileType(newSession.profileType);
-      if (newSession.profileType === "buyer") {
-        setUser(buyerUserFromSession({
-          profileId: newSession.profileId,
-          displayName: newSession.displayName ?? null,
-          createdAt: newSession.createdAt ?? null,
-        }));
-      }
-      setStatus("authenticated");
+      // The active profile was deleted: continue in the profile the server picked.
+      applySession({ ...newSession, profiles: remaining });
+      return;
     }
-  }, []);
+    setProfiles(remaining);
+    try {
+      localStorage.setItem("identity_profiles", JSON.stringify(remaining));
+    } catch {
+      // private mode
+    }
+  }, [applySession]);
 
   const logout = async () => {
     clearAppSession();
@@ -521,6 +525,8 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
       sessionToken,
       profileType,
       profiles,
+      needsOnboarding,
+      startOnboarding,
       refreshSession,
       applySession,
       switchProfile,

@@ -1,17 +1,14 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import {
-  accountTypeFor,
   displayNameFrom,
-  ensureCreatorAccount,
-  findOrCreateProfile,
   isGoogleOAuthUser,
   issueAppSession,
+  issueOnboardingSession,
   linkAccountsByEmail,
   listProfiles,
-  loadAccountForProfile,
   needsDisplayNamePrompt,
   normalizeEmail,
-  pickProfile,
+  pickUsableProfile,
   publicProfiles,
 } from '../_shared/profiles.ts'
 import { serviceClient } from '../_shared/session.ts'
@@ -57,60 +54,38 @@ Deno.serve(async (req) => {
       return ''
     })()
 
-    let profiles = await listProfiles(supabase, user.id)
-    const hadBuyer = profiles.some((p) => p.type === 'buyer')
-
-    if (!hadBuyer) {
-      const buyerProfile = await findOrCreateProfile(supabase, user.id, 'buyer', displayName)
-      if (!buyerProfile) {
-        return json({ error: 'Failed to create profile' }, 500)
-      }
-    }
-
     await linkAccountsByEmail(supabase, user.id, email)
+    const profiles = await listProfiles(supabase, user.id)
 
-    profiles = await listProfiles(supabase, user.id)
-
-    if (!profiles.some((p) => p.type === 'buyer')) {
-      const buyerProfile = await findOrCreateProfile(supabase, user.id, 'buyer', displayName)
-      if (!buyerProfile) {
-        return json({ error: 'Failed to create profile' }, 500)
-      }
-      profiles = await listProfiles(supabase, user.id)
-    }
-
-    // First verify always lands on the buyer. Returning identities keep last_used_at.
-    const target = !hadBuyer
-      ? (profiles.find((p) => p.type === 'buyer') ?? pickProfile(profiles, null))
-      : pickProfile(profiles, null)
-
-    if (!target) {
-      return json({ error: 'Failed to resolve profile' }, 500)
-    }
-
-    let account = await loadAccountForProfile(supabase, target.id)
-    const sellerType = hadBuyer ? accountTypeFor(target.type) : null
-    if (sellerType) {
-      account = await ensureCreatorAccount(supabase, {
-        authUserId: user.id,
-        email,
-        displayName: target.display_name || displayName,
-        profile: target,
-        accountType: sellerType,
+    // No profiles yet: do not create a buyer silently. The client shows the
+    // role picker and creates the first profile through create-profile.
+    if (profiles.length === 0) {
+      const onboarding = await issueOnboardingSession(supabase, user.id)
+      if (!onboarding.ok) return onboarding.response
+      return json({
+        success: true,
+        needsOnboarding: true,
+        token: onboarding.token,
+        creatorName: onboarding.creatorName,
+        profiles: [],
+        suggestedDisplayName: displayName,
       })
-      if (!account) {
-        return json({ error: 'Failed to create account' }, 500)
-      }
     }
 
-    const issued = await issueAppSession(supabase, { profile: target, account })
+    // Returning identities reopen the most recently used profile.
+    const picked = await pickUsableProfile(supabase, { authUserId: user.id, email, profiles })
+    if (!picked) {
+      return json({ success: false, error: 'Account blocked' })
+    }
+
+    const issued = await issueAppSession(supabase, picked)
     if (!issued.ok) return issued.response
 
     return json({
       success: true,
       ...issued.session,
       profiles: publicProfiles(profiles),
-      needsNamePrompt: needsDisplayNamePrompt(target.display_name || displayName, email),
+      needsNamePrompt: needsDisplayNamePrompt(picked.profile.display_name || displayName, email),
     })
   } catch (error) {
     console.error('exchange-auth-session error:', error)

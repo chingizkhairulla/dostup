@@ -11,7 +11,6 @@ import CancellationReasonDialog from "@/components/CancellationReasonDialog";
 import RescheduleSlotDialog from "@/components/RescheduleSlotDialog";
 import EditSlotTimeDialog from "@/components/EditSlotTimeDialog";
 import { useCreatorProducts } from "@/hooks/useProducts";
-import ProductSwitcher from "./ProductSwitcher";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
@@ -163,16 +162,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   // Fetch products
   const { data: products = [], isLoading: productsLoading } = useCreatorProducts(creatorName);
   const allProductIds = useMemo(() => products.map(p => p.id), [products]);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!selectedProductId && products.length > 0) {
-      setSelectedProductId(products[0].id);
-    }
-    if (selectedProductId && !products.some(p => p.id === selectedProductId) && products.length > 0) {
-      setSelectedProductId(products[0].id);
-    }
-  }, [products, selectedProductId]);
-  const productIds = useMemo(() => selectedProductId ? [selectedProductId] : [], [selectedProductId]);
+  // A seller keeps one schedule for all products: every product's author schedule is shown
+  // together, and new slots go into the first one (created under the first product if none).
+  const productIds = allProductIds;
+  const selectedProductId: string | null = products[0]?.id ?? null;
 
   // Fetch creator's own schedules (where teacher_id IS NULL)
   const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
@@ -185,7 +178,10 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         productIds,
         creatorOnly: true,
       });
-      return data.schedules ?? [];
+      // Oldest first, so the shared schedule new slots go into stays the same one.
+      return [...(data.schedules ?? [])].sort((a, b) =>
+        String((a as { created_at?: string }).created_at ?? "").localeCompare(String((b as { created_at?: string }).created_at ?? "")),
+      );
     },
     enabled: productIds.length > 0,
   });
@@ -1450,13 +1446,8 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         {language === "kk" ? "Кесте" : "Расписание"}
       </h2>
 
-      {/* Top Bar: Product Switcher & Actions */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <ProductSwitcher
-          products={products.map((p) => ({ id: p.id, title: p.title }))}
-          selectedId={selectedProductId}
-          onChange={setSelectedProductId}
-        />
+      {/* Top Bar: Actions */}
+      <div className="flex items-center justify-end gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <Button 
             size="sm"
@@ -1613,7 +1604,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-base flex items-center gap-2 capitalize">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Users className="w-4 h-4 text-primary" />
                 {language === "ru" ? "Записи на " : ""}
                 {(() => {
@@ -1767,7 +1758,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={isDayScheduleDialogOpen} onOpenChange={setIsDayScheduleDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2 capitalize">
+            <DialogTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
               {language === "ru" ? "Записи на " : ""}
               {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: ru })}
@@ -1803,12 +1794,6 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <DialogTitle>{language === "ru" ? "Создать расписание" : "Кесте жасау"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); createSchedule.mutate(); }} className="space-y-4 mt-4">
-            <div className="text-sm text-muted-foreground">
-              {language === "ru" ? "Продукт" : "Өнім"}:{" "}
-              <span className="font-medium text-foreground">
-                {products.find(p => p.id === selectedProductId)?.title}
-              </span>
-            </div>
             <div className="space-y-2">
               <Label>{language === "ru" ? "Название" : "Атауы"} *</Label>
               <Input

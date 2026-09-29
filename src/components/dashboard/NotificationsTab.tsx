@@ -257,8 +257,6 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-foreground">{t("notifications")}</h2>
-
       {!hasNotifications ? (
         <Card>
           <CardContent className="py-12 text-center">

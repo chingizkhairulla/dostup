@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { withSignedAttachmentUrls } from '../_shared/chatAttachments.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -178,7 +179,9 @@ serve(async (req) => {
         await supabase.from('support_threads').update({ unread_for_moderator: 0 }).eq('id', thread_id)
         await supabase.from('support_messages').update({ read_at: new Date().toISOString() }).eq('thread_id', thread_id).eq('sender', 'user').is('read_at', null)
       }
-      return json({ success: true, messages: data ?? [] })
+      // Attachments are private (bucket or S3), so sign them for the moderator too.
+      const messages = await withSignedAttachmentUrls(supabase, 'support-attachments', data ?? [])
+      return json({ success: true, messages })
     }
     if (action === 'support_send_message') {
       const { thread_id, text } = body as any

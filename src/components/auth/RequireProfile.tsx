@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthSplash from "@/components/auth/AuthSplash";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { ONBOARDING_PATH } from "@/lib/creatorAuth";
 
 type RequireProfileProps = {
   children: ReactNode;
@@ -12,7 +13,7 @@ type RequireProfileProps = {
  */
 const RequireProfile = ({ children }: RequireProfileProps) => {
   const navigate = useNavigate();
-  const { status, profileType, sessionToken } = useSimpleAuth();
+  const { status, profileType, sessionToken, needsOnboarding } = useSimpleAuth();
   const [blocked, setBlocked] = useState(true);
 
   useEffect(() => {
@@ -21,13 +22,17 @@ const RequireProfile = ({ children }: RequireProfileProps) => {
       navigate("/login", { replace: true });
       return;
     }
+    if (needsOnboarding) {
+      navigate(ONBOARDING_PATH, { replace: true });
+      return;
+    }
     const missingProfile = Boolean(sessionToken && !profileType && !localStorage.getItem("profile_id"));
     if (missingProfile) {
       navigate("/login", { replace: true });
       return;
     }
     setBlocked(false);
-  }, [navigate, profileType, sessionToken, status]);
+  }, [navigate, needsOnboarding, profileType, sessionToken, status]);
 
   if (status === "loading" || blocked) {
     return <AuthSplash />;

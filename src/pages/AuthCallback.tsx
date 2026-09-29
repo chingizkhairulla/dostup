@@ -14,7 +14,7 @@ type CallbackPhase = "exchanging" | "error";
 const AuthCallback = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { applySession } = useSimpleAuth();
+  const { applySession, startOnboarding } = useSimpleAuth();
   const [phase, setPhase] = useState<CallbackPhase>("exchanging");
   const [message, setMessage] = useState(t("authExchanging"));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -45,12 +45,14 @@ const AuthCallback = () => {
       }
       if (result.session) {
         applySession(result.session);
+      } else if (result.onboarding) {
+        startOnboarding(result.onboarding.token, result.onboarding.creatorName);
       }
       if (result.path) {
         navigate(result.path, { replace: true });
       }
     },
-    [applySession, logFailure, navigate, t],
+    [applySession, logFailure, navigate, startOnboarding, t],
   );
 
   const obtainSupabaseSession = useCallback(async (): Promise<Session | null> => {

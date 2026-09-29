@@ -2,19 +2,13 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, addHours, isBefore, isAfter } from "date-fns";
 import { ru, kk } from "date-fns/locale";
-import {
-  useSimplePurchases,
-  useSimpleSubscriptions,
-  useSimpleBookings,
-  useSimpleMaterials,
-} from "@/hooks/useSimplePurchases";
-import { useAnnouncementsForProducts } from "@/hooks/useAnnouncements";
+import { useSimpleBookings, useSimpleMaterials } from "@/hooks/useSimplePurchases";
+import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
 import { useCatalogPreview, useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
-import AnnouncementView from "@/components/dashboard/AnnouncementView";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { readLastOpenedMaterial, readRecentProductIds } from "@/lib/buyerActivity";
@@ -36,35 +30,10 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   const { user } = useSimpleAuth();
   const locale = language === "kk" ? kk : ru;
 
-  const { data: purchases = [], isLoading: purchasesLoading } = useSimplePurchases();
-  const { data: subscriptions = [], isLoading: subsLoading } = useSimpleSubscriptions();
+  const { accessiblePurchases, productIds, isLoading: accessLoading } = useAccessibleProducts();
   const { data: bookings = [], isLoading: bookingsLoading } = useSimpleBookings();
   const { data: materials = [] } = useSimpleMaterials();
 
-  const subscriptionProductIds = useMemo(
-    () => new Set(subscriptions.filter((s) => s.has_access).map((s) => s.product_id)),
-    [subscriptions],
-  );
-
-  const accessiblePurchases = useMemo(() => {
-    const oneTime = purchases.filter((p) => !subscriptionProductIds.has(p.product_id));
-    const fromSubs = subscriptions
-      .filter((s) => s.has_access && s.product)
-      .map((s) => ({
-        id: s.id,
-        product_id: s.product_id,
-        product: s.product,
-        created_at: s.current_period_start,
-      }));
-    return [...oneTime, ...fromSubs];
-  }, [purchases, subscriptions, subscriptionProductIds]);
-
-  const productIds = useMemo(
-    () => [...new Set(accessiblePurchases.map((p) => p.product_id))],
-    [accessiblePurchases],
-  );
-
-  const { data: announcements = [], isLoading: annLoading } = useAnnouncementsForProducts(productIds);
   const recentIds = user ? readRecentProductIds(user.id) : [];
   const catalog = useCatalogProductsByIds(productIds);
 
@@ -114,23 +83,11 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
     return Math.round(((index + 1) / inProduct.length) * 100);
   }, [lastMaterial, materials]);
 
-  const flatAnnouncements = useMemo(() => {
-    return [...announcements]
-      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-      .slice(0, 8);
-  }, [announcements]);
-
-  const loading =
-    purchasesLoading ||
-    subsLoading ||
-    bookingsLoading ||
-    annLoading ||
-    (productIds.length > 0 && catalog.isLoading);
+  const loading = accessLoading || bookingsLoading || (productIds.length > 0 && catalog.isLoading);
   const showLesson = Boolean(nextLesson);
   const showContinue = Boolean(lastMaterial);
   const showProducts = myProducts.length > 0;
-  const showAnnouncements = flatAnnouncements.length > 0;
-  const allEmpty = !showLesson && !showContinue && !showProducts && !showAnnouncements;
+  const allEmpty = !showLesson && !showContinue && !showProducts;
   const popular = useCatalogPreview(allEmpty && !loading, 4);
 
   if (loading) {
@@ -158,7 +115,7 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
 
         {(popular.isLoading || suggested.length > 0) && (
           <section className="mt-12">
-            <h2 className="mb-6 text-lg font-semibold text-foreground">{t("popular")}</h2>
+            <h2 className="mb-6 text-lg font-semibold text-foreground">{t("newProductsHeading")}</h2>
             {popular.isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -242,21 +199,6 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
         <section>
           <h2 className="mb-3 text-lg font-semibold text-foreground">{t("myProducts")}</h2>
           <CatalogGrid products={myProducts} />
-        </section>
-      )}
-
-      {flatAnnouncements.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-lg font-semibold text-foreground">{t("announcements")}</h2>
-          <div className="space-y-2">
-            {flatAnnouncements.map((a) => (
-              <Card key={a.id}>
-                <CardContent className="p-4">
-                  <AnnouncementView html={a.content_html} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </section>
       )}
     </div>

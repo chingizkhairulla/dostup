@@ -312,22 +312,23 @@ export default function SlotCreationWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-full h-full max-h-full m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50">
+      {/* 100dvh, not 100%: on phones the browser toolbar would otherwise hide the bottom bar with "Готово". */}
+      <DialogContent hideCloseButton className="max-w-full h-[100dvh] max-h-[100dvh] m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50">
         <VisuallyHidden>
           <DialogTitle>Slot Creation Wizard</DialogTitle>
         </VisuallyHidden>
 
         {/* Top Header */}
-        <header className="flex-none flex items-center justify-between px-4 sm:px-6 py-3 border-b bg-card">
+        <header className="flex-none flex items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-card">
           {/* Step Title (left) - with padding, no left cross */}
-          <div className="pl-1 sm:pl-2">
-            <h2 className="text-base sm:text-lg font-semibold text-foreground">
+          <div className="min-w-0 pl-1 sm:pl-2">
+            <h2 className="truncate text-base sm:text-lg font-semibold text-foreground">
               {step === 1 ? t.step1 : step === 2 ? t.step2 : t.step3}
             </h2>
           </div>
 
-          {/* Right Controls: settings-style round close button */}
-          <div className="flex items-center gap-2">
+          {/* Right Controls: settings-style round close button. On phones the actions are icon-only. */}
+          <div className="flex flex-none items-center gap-1.5 sm:gap-2">
             {step === 1 && (
               <>
                 {selectedCells.size > 0 && (
@@ -335,17 +336,25 @@ export default function SlotCreationWizard({
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedCells(new Set())}
-                    className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
+                    aria-label={t.clearAll}
+                    title={t.clearAll}
+                    className="text-xs h-8 w-8 sm:w-auto p-0 sm:px-3 text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    {t.clearAll}
+                    <span className="hidden sm:inline">{t.clearAll}</span>
                   </Button>
                 )}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={t.timeRange}
+                      title={t.timeRange}
+                      className="h-8 w-8 sm:w-auto p-0 sm:px-3 text-xs gap-1.5"
+                    >
                       <Clock className="w-3.5 h-3.5" />
-                      <span>{t.timeRange}</span>
+                      <span className="hidden sm:inline">{t.timeRange}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-64 p-3" align="end">
@@ -392,7 +401,7 @@ export default function SlotCreationWizard({
         </header>
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto pb-28">
+        <div className="flex-1 overflow-y-auto overflow-x-auto pb-[calc(7rem+env(safe-area-inset-bottom))]">
           {/* STEP 1: Google Calendar Week Grid */}
           {step === 1 && (
             <div className="min-w-[650px] max-w-5xl mx-auto p-2 sm:p-4">
@@ -757,11 +766,11 @@ export default function SlotCreationWizard({
           )}
         </div>
 
-        {/* Bottom Navigation Bar */}
-        <div className="fixed bottom-0 left-0 right-0 px-4 sm:px-6 py-3 bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
-          <div className="w-full flex items-center justify-between">
+        {/* Bottom Navigation Bar (clears the iPhone home indicator) */}
+        <div className="fixed bottom-0 left-0 right-0 px-3 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-card/95 backdrop-blur-sm border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
+          <div className="w-full flex items-center justify-between gap-2">
             {/* Left: Back button */}
-            <div className="w-20 sm:w-24 flex items-center justify-start">
+            <div className="w-8 sm:w-24 flex-none flex items-center justify-start">
               {step > 1 && (
                 <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setStep(step - 1)}>
                   <ChevronLeft className="w-4 h-4" />
@@ -770,8 +779,8 @@ export default function SlotCreationWizard({
             </div>
 
             {/* Center: Stepper (strictly ends at step 3) + Next button */}
-            <div className="flex items-center justify-center gap-2">
-              <div className="flex items-center justify-center w-52 sm:w-64">
+            <div className="flex-1 min-w-0 flex items-center justify-center">
+              <div className="flex-1 min-w-0 max-w-[16rem] flex items-center justify-center">
                 {/* Step 1 */}
                 <div className="flex flex-col items-center gap-0.5 flex-none">
                   <button
@@ -788,7 +797,7 @@ export default function SlotCreationWizard({
                   </button>
                   <span
                     className={cn(
-                      "text-[10px] tracking-wider uppercase transition-colors select-none",
+                      "text-[10px] tracking-normal sm:tracking-wider uppercase whitespace-nowrap transition-colors select-none",
                       step === 1 ? "text-primary font-bold" : "text-muted-foreground font-medium"
                     )}
                   >
@@ -797,7 +806,7 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Segment 1 -> 2 (strictly stops at step 2) */}
-                <div className="flex-1 h-[2px] mx-2 -mt-3.5 bg-muted overflow-hidden">
+                <div className="flex-1 min-w-2 h-[2px] mx-1 sm:mx-2 -mt-3.5 bg-muted overflow-hidden">
                   <div className={cn("h-full bg-primary transition-all duration-300", step >= 2 ? "w-full" : "w-0")} />
                 </div>
 
@@ -819,7 +828,7 @@ export default function SlotCreationWizard({
                   </button>
                   <span
                     className={cn(
-                      "text-[10px] tracking-wider uppercase transition-colors select-none",
+                      "text-[10px] tracking-normal sm:tracking-wider uppercase whitespace-nowrap transition-colors select-none",
                       step === 2 ? "text-primary font-bold" : "text-muted-foreground font-medium"
                     )}
                   >
@@ -828,7 +837,7 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Segment 2 -> 3 (strictly stops at step 3) */}
-                <div className="flex-1 h-[2px] mx-2 -mt-3.5 bg-muted overflow-hidden">
+                <div className="flex-1 min-w-2 h-[2px] mx-1 sm:mx-2 -mt-3.5 bg-muted overflow-hidden">
                   <div className={cn("h-full bg-primary transition-all duration-300", step >= 3 ? "w-full" : "w-0")} />
                 </div>
 
@@ -850,7 +859,7 @@ export default function SlotCreationWizard({
                   </button>
                   <span
                     className={cn(
-                      "text-[10px] tracking-wider uppercase transition-colors select-none",
+                      "text-[10px] tracking-normal sm:tracking-wider uppercase whitespace-nowrap transition-colors select-none",
                       step === 3 ? "text-primary font-bold" : "text-muted-foreground font-medium"
                     )}
                   >
@@ -864,22 +873,22 @@ export default function SlotCreationWizard({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 rounded-full ml-2 flex-none"
+                  className="h-8 w-8 rounded-full ml-1.5 sm:ml-2 flex-none"
                   onClick={() => setStep(step + 1)}
                   disabled={step === 1 && selectedCells.size === 0}
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               ) : (
-                <div className="w-8 h-8 ml-2 flex-none" />
+                <div className="w-8 h-8 ml-1.5 sm:ml-2 flex-none" />
               )}
             </div>
 
             {/* Right: "Готово" button pinned directly to far-right corner */}
-            <div className="w-20 sm:w-24 flex items-center justify-end">
+            <div className="flex-none sm:w-24 flex items-center justify-end">
               <Button
                 size="sm"
-                className="h-9 px-4 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                className="h-9 px-3 sm:px-4 text-xs font-semibold whitespace-nowrap bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                 onClick={handleReady}
                 disabled={isPending || selectedCells.size === 0}
               >

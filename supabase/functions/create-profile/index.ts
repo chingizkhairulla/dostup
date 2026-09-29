@@ -5,6 +5,7 @@ import {
   displayNameFrom,
   ensureCreatorAccount,
   isDisplayNameTaken,
+  isGoogleOAuthUser,
   listProfiles,
   normalizeEmail,
   parseOnboardingAuthUserId,
@@ -12,6 +13,7 @@ import {
   PROFILE_COLUMNS,
   publicProfiles,
   touchProfile,
+  type CreatorAccountRow,
   type ProfileRow,
 } from '../_shared/profiles.ts'
 import { serviceClient } from '../_shared/session.ts'
@@ -31,8 +33,10 @@ Deno.serve(async (req) => {
     const profileType = parseProfileType(suppliedType)
     if (!profileType) return json({ error: 'profileType required' }, 400)
 
+    const isSeller = profileType === 'creator' || profileType === 'school'
     const customName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : ''
-    if (customName.length < 2) return json({ error: 'displayName required' }, 400)
+    // Sellers need a public name; a buyer may start without one.
+    if (isSeller && customName.length < 2) return json({ error: 'displayName required' }, 400)
 
     const supabase = serviceClient()
     const { data: session } = await supabase
@@ -52,26 +56,28 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'profile_already_set' }, 409)
     }
 
+    // Only one buyer profile per identity (unique index); seller profiles may repeat.
     const existing = await listProfiles(supabase, authUserId)
-    if (existing.some((p) => p.type === profileType)) {
+    if (profileType === 'buyer' && existing.some((p) => p.type === 'buyer')) {
       return json({ success: false, error: 'profile_exists' }, 409)
     }
-    if (profileType !== 'buyer' && !existing.some((p) => p.type === 'buyer')) {
-      return json({ success: false, error: 'buyer_required' }, 409)
-    }
 
-    // Check display_name uniqueness
-    const taken = await isDisplayNameTaken(supabase, customName)
-    if (taken) {
+    if (isSeller && await isDisplayNameTaken(supabase, customName)) {
       return json({ success: false, error: 'name_taken', message: 'Это название уже используется. Выберите другое.' }, 409)
     }
+
+    const { data: userData } = await supabase.auth.admin.getUserById(authUserId)
+    const email = normalizeEmail(userData?.user?.email) || ''
+    const buyerFallbackName = userData?.user && isGoogleOAuthUser(userData.user)
+      ? displayNameFrom(userData.user)
+      : ''
 
     const { data: created, error: insertError } = await supabase
       .from('profiles')
       .insert({
         auth_user_id: authUserId,
         type: profileType,
-        display_name: customName,
+        display_name: customName || buyerFallbackName,
         last_used_at: new Date().toISOString(),
       })
       .select(PROFILE_COLUMNS)
@@ -85,11 +91,9 @@ Deno.serve(async (req) => {
     const profile = created as ProfileRow
     await touchProfile(supabase, profile.id)
 
-    const { data: userData } = await supabase.auth.admin.getUserById(authUserId)
-    const email = normalizeEmail(userData?.user?.email) || ''
     const displayName = profile.display_name || displayNameFrom(userData?.user ?? { email })
 
-    let account = null
+    let account: CreatorAccountRow | null = null
     const sellerType = accountTypeFor(profileType)
     if (sellerType) {
       account = await ensureCreatorAccount(supabase, {

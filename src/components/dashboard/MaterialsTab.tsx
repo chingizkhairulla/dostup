@@ -9,7 +9,6 @@ import { FileText, Video, Type, Download, ExternalLink, Link as LinkIcon, Loader
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import MaterialsSearchBar from "@/components/materials/MaterialsSearchBar";
-import MaterialsProtectionNotice from "@/components/materials/MaterialsProtectionNotice";
 import MaterialsSectionsNav, { type MaterialsSection } from "@/components/materials/MaterialsSectionsNav";
 import BookmarkStars from "@/components/materials/BookmarkStars";
 import { useMemo } from "react";
@@ -549,7 +548,6 @@ const MaterialsTab = () => {
           showAdd={false}
         />
       </div>
-      <MaterialsProtectionNotice />
 
       {hasNoMaterials ? (
         <div className="text-center py-12">

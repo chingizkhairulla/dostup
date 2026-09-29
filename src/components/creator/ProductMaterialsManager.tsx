@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +24,7 @@ import {
 import { useProductMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial, uploadMaterialFile } from "@/hooks/useMaterials";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Plus, FileText, Folder, Trash2, Edit, Loader2, Upload, GripVertical, ChevronLeft, FolderOpen, Download, X, Clock, Link as LinkIcon, Type, Clipboard } from "lucide-react";
-import { ExternalLink, ChevronRight, ChevronDown, Home } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -112,8 +111,6 @@ interface FormData {
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [addTargetFolderId, setAddTargetFolderId] = useState<string | null>(null);
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
-  const [expandedPickerFolders, setExpandedPickerFolders] = useState<Set<string>>(new Set());
 
     const [formData, setFormData] = useState<FormData>({
       title: "",
@@ -391,7 +388,8 @@ interface FormData {
         }
       } catch (err) {
         console.error(err);
-        toast.error("Ошибка при добавлении");
+        const detail = err instanceof Error && err.message ? err.message : "";
+        toast.error(detail ? `Ошибка при добавлении: ${detail}` : "Ошибка при добавлении");
       } finally {
         setIsUploading(false);
       }
@@ -510,123 +508,6 @@ interface FormData {
 
    const renderAddForm = () => (
      <form onSubmit={handleAdd} className="space-y-4">
-      {(() => {
-        const targetFolder = addTargetFolderId
-          ? (allMaterials as Material[]).find((m) => m.id === addTargetFolderId)
-          : null;
-        const lockTarget = mode === "add" && !!initialFolderId;
-
-        const togglePickerFolder = (id: string) => {
-          setExpandedPickerFolders((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-          });
-        };
-
-        const renderFolderTree = (parentId: string | null, depth: number): JSX.Element[] => {
-          const folders = (allMaterials as Material[]).filter(
-            (m) => m.type === "folder" && (m.parent_id ?? null) === parentId
-          );
-          return folders.flatMap((f) => {
-            const hasChildren = (allMaterials as Material[]).some(
-              (m) => m.type === "folder" && m.parent_id === f.id
-            );
-            const expanded = expandedPickerFolders.has(f.id);
-            const isCurrent = addTargetFolderId === f.id;
-            const nodes: JSX.Element[] = [];
-            if (!isCurrent) {
-              nodes.push(
-                <div
-                  key={f.id}
-                  className="w-full flex items-center rounded hover:bg-accent hover:text-accent-foreground text-sm group"
-                  style={{ paddingLeft: 4 + depth * 16 }}
-                >
-                  {hasChildren ? (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); togglePickerFolder(f.id); }}
-                      className="p-1 flex-shrink-0 hover:opacity-80"
-                      aria-label={expanded ? "Свернуть" : "Развернуть"}
-                    >
-                      {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                    </button>
-                  ) : (
-                    <span className="w-[22px] flex-shrink-0" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setAddTargetFolderId(f.id); setFolderPickerOpen(false); }}
-                    className="flex-1 text-left px-1 py-1.5 flex items-center gap-2 min-w-0"
-                  >
-                    <Folder className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate">{f.title}</span>
-                  </button>
-                </div>
-              );
-            }
-            // Render children: at same depth if parent hidden, or +1 if expanded
-            if (isCurrent) {
-              nodes.push(...renderFolderTree(f.id, depth));
-            } else if (expanded) {
-              nodes.push(...renderFolderTree(f.id, depth + 1));
-            }
-            return nodes;
-          });
-        };
-
-        return (
-          <div className="flex items-center gap-2 flex-wrap p-2 bg-muted/30 rounded-md">
-            <span className="text-xs text-muted-foreground">
-              {language === "kk" ? "Қайда қосу:" : "Куда добавить:"}
-            </span>
-            <div className="flex items-center gap-1 text-sm font-medium">
-              {targetFolder ? (
-                <>
-                  <Folder className="w-4 h-4 text-primary" />
-                  <span className="truncate max-w-[180px]">{targetFolder.title}</span>
-                </>
-              ) : (
-                <>
-                  <FolderOpen className="w-4 h-4 text-primary" />
-                  <span>{language === "kk" ? "Үй" : "Дом"}</span>
-                </>
-              )}
-            </div>
-            {!lockTarget && (
-              <Popover open={folderPickerOpen} onOpenChange={setFolderPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto h-7 text-xs"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5 mr-1" />
-                    {targetFolder
-                      ? (language === "kk" ? "Өзгерту" : "Изменить")
-                      : (language === "kk" ? "Папканы таңдау" : "Выбрать папку")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 p-1 max-h-72 overflow-y-auto" align="end">
-                  {targetFolder && (
-                    <button
-                      type="button"
-                      onClick={() => { setAddTargetFolderId(null); setFolderPickerOpen(false); }}
-                      className="w-full text-left px-2 py-1.5 hover:bg-accent hover:text-accent-foreground rounded text-sm flex items-center gap-2"
-                    >
-                      <Home className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{language === "kk" ? "Үй" : "Дом"}</span>
-                    </button>
-                  )}
-                  {renderFolderTree(null, 0)}
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-        );
-      })()}
-
        <div className="space-y-3">
          <Label>Что добавить?</Label>
           <RadioGroup

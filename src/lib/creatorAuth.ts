@@ -34,7 +34,12 @@ export type GoogleOAuthResult = {
   error: { message: string; code?: string; name?: string; status?: number } | null;
   path?: string;
   session?: SessionPayload;
+  /** Identity has no profiles yet; an onboarding session was stored. */
+  onboarding?: { token: string; creatorName: string };
 };
+
+/** Role picker shown to an identity that has no profiles yet. */
+export const ONBOARDING_PATH = "/welcome";
 
 export const CREATOR_TOKEN_EXPIRES_KEY = "creator_token_expires_at";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -219,12 +224,23 @@ export function isOnboardingSession(creatorName?: string | null) {
 
 export function storeOnboardingSession(token: string, creatorName: string) {
   localStorage.setItem("creator_token", token);
+  localStorage.setItem(CREATOR_TOKEN_EXPIRES_KEY, new Date(Date.now() + SESSION_TTL_MS).toISOString());
   localStorage.setItem("creator_name", creatorName);
   localStorage.removeItem("creator_account_type");
   localStorage.removeItem("profile_type");
   localStorage.removeItem("profile_id");
   localStorage.removeItem("profile_display_name");
   localStorage.removeItem("profile_handle");
+  localStorage.removeItem("identity_profiles");
+}
+
+/** Stored onboarding session (signed in, no profile chosen yet), if any. */
+export function readStoredOnboardingSession(): { token: string; creatorName: string } | null {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("creator_token");
+  const creatorName = localStorage.getItem("creator_name");
+  if (!token || !isOnboardingSession(creatorName) || isStoredSessionExpired()) return null;
+  return { token, creatorName: creatorName as string };
 }
 
 export const AUTH_NEXT_KEY = "dostup_auth_next";
@@ -239,6 +255,20 @@ export function isSafeInternalPath(path: string | null | undefined): path is str
 export function rememberAuthNext(path: string | null | undefined) {
   if (!isSafeInternalPath(path)) return;
   sessionStorage.setItem(AUTH_NEXT_KEY, path);
+}
+
+/** Pending post-login path, left in place for whoever consumes it. */
+export function peekAuthNext() {
+  const path = sessionStorage.getItem(AUTH_NEXT_KEY);
+  return isSafeInternalPath(path) ? path : null;
+}
+
+/**
+ * Sign-ins that started on a product or its checkout are buyers: they get a buyer profile
+ * straight away instead of the role picker.
+ */
+export function isPurchaseIntentPath(path: string | null | undefined) {
+  return typeof path === "string" && /^\/(checkout|p|product)\/[^/]+/.test(path);
 }
 
 export function consumeAuthNext() {
@@ -356,6 +386,7 @@ type ExchangeAuthResult = {
   error?: string;
   needsOnboarding?: boolean;
   needsNamePrompt?: boolean;
+  suggestedDisplayName?: string;
 };
 
 function sessionFromExchange(data: ExchangeAuthResult): SessionPayload | null {
@@ -431,6 +462,19 @@ export async function exchangeCreatorAccessToken(
       }
       const code = errCode === "account_type_required" ? "account_type_required" : "exchange_failed";
       return { error: { message: code, code } };
+    }
+
+    if (result.success && result.needsOnboarding && typeof result.token === "string" && result.token) {
+      const creatorName = String(result.creatorName || "");
+      storeOnboardingSession(result.token, creatorName);
+      if (normEmail) rememberAuthEmail(normEmail);
+      clearOAuthAccountType();
+      // Keep any pending "next" path; it is used after the first profile is created.
+      return {
+        error: null,
+        onboarding: { token: result.token, creatorName },
+        path: ONBOARDING_PATH,
+      };
     }
 
     const resolved = await resolveExchangePayload(result);
