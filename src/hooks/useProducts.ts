@@ -55,6 +55,7 @@ export interface ProductPricingOption {
   has_free_trial: boolean;
   trial_preset?: "3" | "7" | "30" | "custom";
   trial_days?: number | null;
+  access_duration_days?: number | null;
   kaspi_link?: string | null;
   kaspi_phone?: string | null;
   /** Card number, digits grouped in fours. Lives only in pricing_options, no column. */

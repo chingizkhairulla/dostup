@@ -503,7 +503,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
     localStorage.setItem("profile_display_name", name);
     setProfiles((prev) => {
       const next = prev.map((profile) =>
-        profile.id === profileId || (!profileId && profile.isCurrent)
+        profile.id === profileId
           ? { ...profile, displayName: name }
           : profile,
       );
