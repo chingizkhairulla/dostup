@@ -49,7 +49,7 @@ type ProfileAccountRowsProps = {
   creatingType: ProfileType | null;
   onSwitch: (profile: AppProfile) => void;
   onCreateSeller: (
-    type: "creator" | "school",
+    type: ProfileType,
     displayName: string,
     avatarFile?: File | null,
   ) => void | Promise<boolean | { ok: boolean; error?: string } | void> | boolean | { ok: boolean; error?: string };
@@ -300,7 +300,7 @@ export function useProfileAccountActions() {
   };
 
   const createSeller = async (
-    type: "creator" | "school",
+    type: ProfileType,
     displayName: string,
     navigate: (path: string) => void,
     onDone?: () => void,

@@ -6,6 +6,7 @@ import CategoryMenu from "@/components/marketplace/CategoryMenu";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import PublicContainer from "@/components/marketplace/PublicContainer";
+import CatalogSectionHeader from "@/components/marketplace/CatalogSectionHeader";
 import BuyerAppShell from "@/components/layout/BuyerAppShell";
 import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
 import PublicFooter from "@/components/layout/PublicFooter";
@@ -59,6 +60,8 @@ const MarketplacePage = () => {
   );
   const newProducts = useNewProducts(isDefaultView);
   const topRatedProducts = useTopRatedProducts(isDefaultView);
+  // "Popular" and "Trending" rails (usePopularProducts / useTrendingProducts) come back once the
+  // catalog is big enough for sales rankings to mean something — see docs/marketplace-roadmap.md.
 
   const products = search.data ?? [];
   const loading = isDefaultView
@@ -140,32 +143,32 @@ const MarketplacePage = () => {
               <>
                 {(newProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <div className="mb-6 flex items-center justify-between gap-4">
-                      <h2 className="text-[26px] font-bold tracking-tight text-[#1F2328]">
-                        🆕 {t("newProductsHeading")}
-                      </h2>
-                      <Link
-                        to="/new"
-                        className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline focus-ring rounded-md"
-                      >
-                        {t("newProductsSeeAll")}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </div>
+                    <CatalogSectionHeader
+                      title={<>🆕 {t("newProductsHeading")}</>}
+                      action={
+                        <Link
+                          to="/new"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+                        >
+                          {t("newProductsSeeAll")}
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      }
+                    />
                     <CatalogGrid products={newProducts.data ?? []} />
                   </div>
                 )}
 
+
                 {(topRatedProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <h2 className="mb-6 text-[26px] font-bold tracking-tight text-[#1F2328]">
-                      ⭐ {t("topRatedHeading")}
-                    </h2>
+                    <CatalogSectionHeader title={<>⭐ {t("topRatedHeading")}</>} />
                     <CatalogGrid products={topRatedProducts.data ?? []} />
                   </div>
                 )}
 
-                {(newProducts.data?.length ?? 0) === 0 && (topRatedProducts.data?.length ?? 0) === 0 && (
+                {(newProducts.data?.length ?? 0) === 0 &&
+                  (topRatedProducts.data?.length ?? 0) === 0 && (
                   <div className="rounded-2xl border border-border px-6 py-16 text-center">
                     <p className="text-lg font-medium text-foreground">{t("catalogEmpty")}</p>
                     <p className="public-meta mt-2">{t("catalogEmptyHint")}</p>

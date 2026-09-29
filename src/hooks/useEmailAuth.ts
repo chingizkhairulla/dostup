@@ -24,7 +24,7 @@ type PendingExchange = {
 export function useEmailAuth(options: UseEmailAuthOptions = {}) {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { applySession } = useSimpleAuth();
+  const { applySession, startOnboarding } = useSimpleAuth();
   const { onAuthRedirect } = options;
   const [googleLoading, setGoogleLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -57,6 +57,8 @@ export function useEmailAuth(options: UseEmailAuthOptions = {}) {
     setExchangeError(null);
     if (result.session) {
       applySession(result.session);
+    } else if (result.onboarding) {
+      startOnboarding(result.onboarding.token, result.onboarding.creatorName);
     }
     if (result.path) {
       await redirectAfterAuth(result.path);

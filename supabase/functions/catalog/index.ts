@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
         .select(CATALOG_COLUMNS)
         .eq('is_active', true)
         .eq('is_paused', false)
+        .eq('is_published', true)
         .order('created_at', { ascending: false })
         .limit(200)
       if (error) return json({ error: error.message }, 500)

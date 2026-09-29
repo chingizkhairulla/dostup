@@ -74,8 +74,8 @@ export const MaterialsSectionsNav = ({
           compact ? "w-9 px-0" : "px-3"
         } ${
           active
-            ? "bg-accent text-accent-foreground border-accent"
-            : "bg-background text-muted-foreground border-input hover:bg-accent/10 hover:text-foreground"
+            ? "bg-primary/15 text-primary border-primary/30"
+            : "bg-background text-muted-foreground border-input hover:bg-muted hover:text-foreground"
         }`}
       >
         <Icon className="w-4 h-4" />

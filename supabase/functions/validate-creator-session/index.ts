@@ -3,9 +3,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   findOrCreateProfile,
   issueAppSession,
+  issueOnboardingSession,
   listProfiles,
   loadAccountForProfile,
   parseOnboardingAuthUserId,
+  pickUsableProfile,
   PROFILE_COLUMNS,
   profileTypeForAccount,
   publicProfiles,
@@ -63,27 +65,39 @@ serve(async (req) => {
         )
       }
       // Re-establish session for user via JWT
+      const { data: userData } = await supabase.auth.admin.getUserById(authUserId)
+      const email: string | null = userData?.user?.email?.trim().toLowerCase() ?? null
       const allProfiles = await listProfiles(supabase, authUserId)
       if (allProfiles.length === 0) {
+        // Identity without profiles: resume the role picker.
+        const onboarding = await issueOnboardingSession(supabase, authUserId)
+        return new Response(
+          JSON.stringify(onboarding.ok
+            ? {
+                valid: true,
+                needsOnboarding: true,
+                creatorName: onboarding.creatorName,
+                profiles: [],
+                newToken: onboarding.token,
+              }
+            : { valid: false }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
+      }
+      // Same rule as login: reopen the most recently used profile.
+      const picked = await pickUsableProfile(supabase, {
+        authUserId,
+        email: email ?? '',
+        profiles: allProfiles,
+      })
+      const issued = picked ? await issueAppSession(supabase, picked) : null
+      if (!picked || !issued?.ok) {
         return new Response(
           JSON.stringify({ valid: false }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         )
       }
-      const buyer = allProfiles.find(p => p.type === 'buyer')
-      const profile = buyer || allProfiles[0]
-      const account = await loadAccountForProfile(supabase, profile.id)
-      const issued = await issueAppSession(supabase, { profile, account })
-      if (!issued.ok) {
-        return new Response(
-          JSON.stringify({ valid: false }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
-
-      let email: string | null = null
-      const { data: userData } = await supabase.auth.admin.getUserById(authUserId)
-      email = userData?.user?.email?.trim().toLowerCase() ?? null
+      const { profile, account } = picked
 
       return new Response(
         JSON.stringify({

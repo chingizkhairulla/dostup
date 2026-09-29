@@ -1,6 +1,7 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import {
   CHECKOUT_COLUMNS,
+  CREATOR_PRODUCT_COLUMNS,
   creatorOwnsProduct,
   creatorProductIds,
   resolveCaller,
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
       if (caller.kind === 'creator') {
         const { data, error } = await supabase
           .from('products')
-          .select(CHECKOUT_COLUMNS)
+          .select(CREATOR_PRODUCT_COLUMNS)
           .eq('creator_account_id', caller.accountId)
           .order('created_at', { ascending: false })
         if (error) return json({ error: error.message }, 500)
@@ -75,6 +76,8 @@ Deno.serve(async (req) => {
           telegram_link: product.telegram_link || null,
           has_schedule: product.has_schedule || false,
           is_active: product.is_active ?? true,
+          // New products are always private; publishing is a separate, explicit step.
+          is_published: false,
           image_url: product.image_url || null,
           video_url: product.video_url || null,
           media: Array.isArray(product.media) ? product.media : [],
@@ -217,6 +220,32 @@ Deno.serve(async (req) => {
         supabase,
         (data ?? []).map((p: { id: string }) => p.id),
       )
+      // Every receipt of a purchase (renewals add more), newest first, for the buyer card.
+      const receiptsByPurchase = new Map<string, unknown[]>()
+      const purchaseIds = (data ?? []).map((p: { id: string }) => p.id)
+      if (purchaseIds.length) {
+        const { data: receipts } = await supabase
+          .from('payment_submissions')
+          .select('id, purchase_id, verification_status, detected_amount, detected_currency, receipt_mime_type, created_at')
+          .in('purchase_id', purchaseIds)
+          .order('created_at', { ascending: false })
+        for (const r of (receipts ?? []) as { purchase_id: string }[]) {
+          const list = receiptsByPurchase.get(r.purchase_id) ?? []
+          list.push(r)
+          receiptsByPurchase.set(r.purchase_id, list)
+        }
+      }
+      const subscriptionByKey = new Map<string, unknown>()
+      if (profileIds.length) {
+        const { data: subs } = await supabase
+          .from('subscriptions')
+          .select('id, product_id, buyer_profile_id, billing_period, current_period_start, current_period_end, status')
+          .in('product_id', ids)
+          .in('buyer_profile_id', profileIds)
+        for (const sub of (subs ?? []) as { product_id: string; buyer_profile_id: string }[]) {
+          subscriptionByKey.set(`${sub.product_id}:${sub.buyer_profile_id}`, sub)
+        }
+      }
       return json({
         purchases: (data ?? []).map((p: {
           id: string
@@ -231,6 +260,10 @@ Deno.serve(async (req) => {
               ? { id: profile.id, name: profile.display_name || 'Buyer', phone: '' }
               : null),
             latest_submission: submissions.get(p.id) || null,
+            receipts: receiptsByPurchase.get(p.id) ?? [],
+            subscription: p.buyer_profile_id
+              ? subscriptionByKey.get(`${(p as { product_id?: string }).product_id}:${p.buyer_profile_id}`) ?? null
+              : null,
           }
         }),
       })
@@ -296,6 +329,69 @@ Deno.serve(async (req) => {
       if (!Object.keys(allowed).length) return json({ ok: true })
       const { error } = await supabase.from('simple_purchases').update(allowed).eq('id', purchaseId)
       if (error) return json({ error: error.message }, 500)
+      return json({ ok: true })
+    }
+
+    if (action === 'set_purchase_access') {
+      const denied = requireCreator()
+      if (denied) return denied
+      const purchaseId = String(body.purchaseId || '')
+      const mode = String(body.mode || '')
+      if (!purchaseId || !['forever', 'until', 'revoke'].includes(mode)) return json({ error: 'Bad input' }, 400)
+      const until = mode === 'until' ? new Date(String(body.until || '')) : null
+      if (until && Number.isNaN(until.getTime())) return json({ error: 'Bad date' }, 400)
+
+      const { data: purchase } = await supabase
+        .from('simple_purchases')
+        .select('id, product_id, buyer_profile_id, status, is_trial')
+        .eq('id', purchaseId)
+        .maybeSingle()
+      if (!purchase) return json({ error: 'Not found' }, 404)
+      if (!(await creatorOwnsProduct(supabase, caller.accountId, purchase.product_id))) return forbidden()
+      if (!['completed', 'revoked'].includes(purchase.status)) return json({ error: 'Purchase is not paid' }, 400)
+
+      if (mode === 'revoke') {
+        const { error } = await supabase.from('simple_purchases').update({ status: 'revoked' }).eq('id', purchaseId)
+        if (error) return json({ error: error.message }, 500)
+        if (purchase.buyer_profile_id) {
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'cancelled', current_period_end: new Date().toISOString() })
+            .eq('product_id', purchase.product_id)
+            .eq('buyer_profile_id', purchase.buyer_profile_id)
+        }
+        return json({ ok: true })
+      }
+
+      // Opening access again also turns a trial into a normal purchase.
+      const { error } = await supabase
+        .from('simple_purchases')
+        .update({
+          status: 'completed',
+          access_expires_at: until ? until.toISOString() : null,
+          is_trial: false,
+          trial_ends_at: null,
+        })
+        .eq('id', purchaseId)
+      if (error) return json({ error: error.message }, 500)
+
+      // Subscription products are gated by the subscription row; move its period to match.
+      if (purchase.buyer_profile_id) {
+        const { data: sub } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('product_id', purchase.product_id)
+          .eq('buyer_profile_id', purchase.buyer_profile_id)
+          .maybeSingle()
+        if (sub) {
+          // "Forever" on a subscription: a period end far enough away that it never lapses.
+          const periodEnd = until ? until.toISOString() : '2999-12-31T00:00:00.000Z'
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'active', current_period_end: periodEnd, renewal_reminder_sent_at: null })
+            .eq('id', sub.id)
+        }
+      }
       return json({ ok: true })
     }
 

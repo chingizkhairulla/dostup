@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { ATTACHMENT_LABEL, sanitizeChatAttachments, withSignedAttachmentUrls } from '../_shared/chatAttachments.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,29 +98,42 @@ serve(async (req) => {
     }
 
     if (action === 'get_thread') {
-      const { data: messages } = await supabase.from('support_messages').select('*').eq('thread_id', thread.id).order('created_at', { ascending: true })
+      const { data: rows } = await supabase.from('support_messages').select('*').eq('thread_id', thread.id).order('created_at', { ascending: true })
+      const messages = await withSignedAttachmentUrls(supabase, 'support-attachments', rows ?? [])
       if ((thread.unread_for_user ?? 0) > 0) {
         await supabase.from('support_threads').update({ unread_for_user: 0 }).eq('id', thread.id)
         await supabase.from('support_messages').update({ read_at: new Date().toISOString() }).eq('thread_id', thread.id).eq('sender', 'moderator').is('read_at', null)
       }
-      return json({ success: true, thread, messages: messages ?? [] })
+      return json({ success: true, thread, messages })
     }
 
     if (action === 'send_message') {
-      const { text } = body as any
-      if (typeof text !== 'string' || !text.trim() || text.length > 4000) return json({ error: 'Bad text' }, 400)
-      const { error } = await supabase.from('support_messages').insert({ thread_id: thread.id, sender: 'user', text: text.trim() })
+      const { text, attachments } = body as any
+      const clean = typeof text === 'string' ? text.trim() : ''
+      if (clean.length > 4000) return json({ error: 'Bad text' }, 400)
+      const files = sanitizeChatAttachments(attachments, thread.id, 'support')
+      if (files === null) return json({ error: 'Bad attachments' }, 400)
+      if (!clean && !files.length) return json({ error: 'Bad text' }, 400)
+
+      const { error } = await supabase.from('support_messages').insert({
+        thread_id: thread.id,
+        sender: 'user',
+        text: clean,
+        attachments: files,
+      })
       if (error) return json({ error: error.message }, 500)
+
+      const preview = clean || files.map((f) => ATTACHMENT_LABEL[f.kind]).join(', ')
       await supabase.from('support_threads').update({
         last_message_at: new Date().toISOString(),
-        last_message_preview: text.trim().slice(0, 200),
+        last_message_preview: preview.slice(0, 200),
         unread_for_moderator: (thread.unread_for_moderator ?? 0) + 1,
       }).eq('id', thread.id)
 
       const senderName = display_name || thread.display_name || user_ref || 'Пользователь'
       await notifyModerators(
         `Новое сообщение: ${senderName}`,
-        text.trim().slice(0, 120),
+        preview.slice(0, 120),
         { type: 'moderator_support', threadId: thread.id }
       )
 
