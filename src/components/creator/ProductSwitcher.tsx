@@ -15,9 +15,11 @@ interface Props {
   selectedId: string | null;
   onChange: (id: string) => void;
   className?: string;
+  /** Dimmed while another filter ("all products") is on: a tap picks the shown product instead of opening the list. */
+  inactive?: boolean;
 }
 
-const ProductSwitcher = ({ products, selectedId, onChange, className }: Props) => {
+const ProductSwitcher = ({ products, selectedId, onChange, className, inactive = false }: Props) => {
   const selected = products.find((p) => p.id === selectedId) || products[0];
   if (!selected) return null;
 
@@ -35,16 +37,25 @@ const ProductSwitcher = ({ products, selectedId, onChange, className }: Props) =
     );
   }
 
+  const trigger = (
+    <Button
+      variant="outline"
+      size="sm"
+      className={cn("group gap-2 max-w-full", className)}
+      onClick={inactive ? () => onChange(selected.id) : undefined}
+    >
+      {/* text-inherit on hover: the trigger turns orange, so an orange icon would vanish. */}
+      <Package className="w-4 h-4 flex-shrink-0 text-primary transition-colors group-hover:text-inherit" />
+      <span className="truncate">{selected.title}</span>
+      <ChevronDown className="w-4 h-4 flex-shrink-0 opacity-60" />
+    </Button>
+  );
+
+  if (inactive) return trigger;
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className={cn("group gap-2 max-w-full", className)}>
-          {/* text-inherit on hover: the trigger turns orange, so an orange icon would vanish. */}
-          <Package className="w-4 h-4 flex-shrink-0 text-primary transition-colors group-hover:text-inherit" />
-          <span className="truncate">{selected.title}</span>
-          <ChevronDown className="w-4 h-4 flex-shrink-0 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-[80vw]">
         {products.map((p) => (
           <DropdownMenuItem

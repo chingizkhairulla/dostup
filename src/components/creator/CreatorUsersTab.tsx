@@ -144,13 +144,12 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     enabled: !!creatorName,
   });
 
-  const setAccess = async (purchaseId: string, mode: "forever" | "until" | "revoke", until?: Date) => {
+  const revokeAccess = async (purchaseId: string) => {
     await invokeApi("manage-products", {
       action: "set_purchase_access",
       ...creatorCreds(),
       purchaseId,
-      mode,
-      until: until?.toISOString(),
+      mode: "revoke",
     });
     await queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
   };
@@ -234,6 +233,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 setSelectedProductId(id);
                 setAllProducts(false);
               }}
+              inactive={showAll}
               className={cn(showAll && "opacity-60")}
             />
             {creatorProducts.length >= 2 && (
@@ -327,13 +327,19 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium text-foreground truncate">{purchase.simple_user.name}</h4>
-                  <p className="text-xs text-muted-foreground line-clamp-1">
-                    {showAll && <>{purchase.product.title} · </>}
-                    <span className="text-success">{formatPriceTenge(Number(purchase.amount))}</span>
-                    {" · "}
-                    {new Date(purchase.created_at).toLocaleDateString(language === "kk" ? "kk-KZ" : "ru-RU")}
-                  </p>
-                  <UrgencyBadge purchase={purchase} className="mt-1" />
+                  {/* Price on the left, access status on the right — one line keeps the card short. */}
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="flex min-w-0 flex-1 text-xs text-muted-foreground">
+                      {showAll && (
+                        <>
+                          <span className="truncate">{purchase.product.title}</span>
+                          <span className="shrink-0">&nbsp;·&nbsp;</span>
+                        </>
+                      )}
+                      <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
+                    </p>
+                    <UrgencyBadge purchase={purchase} className="shrink-0" />
+                  </div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
@@ -345,7 +351,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       <BuyerDetailsDialog
         purchase={opened}
         onOpenChange={(open) => !open && setOpenId(null)}
-        onSetAccess={setAccess}
+        onRevokeAccess={revokeAccess}
         teachers={opened ? teachersMap[opened.product_id] || [] : []}
         teacherValue={opened ? getCurrentValue(opened) : "author"}
         onTeacherChange={(value) => opened && handleTeacherChange(opened.id, value)}
