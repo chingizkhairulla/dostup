@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, LogOut, MessageCircle, Settings, UserRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AccountSheet from "@/components/layout/BuyerAccountSheet";
 import AccountSettingsDialog from "@/components/account/AccountSettingsDialog";
+import { SettingsSectionKey } from "@/components/account/AccountSettingsView";
 import {
   initialsFrom,
   profileDisplayLabel,
@@ -136,6 +137,21 @@ export function HeaderAccountControl() {
   const { t } = useLanguage();
   const { user, profileType, profiles } = useSimpleAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [initialSection, setInitialSection] = useState<SettingsSectionKey>("profile");
+
+  useEffect(() => {
+    const handleOpenSettings = (e: Event) => {
+      const customEvent = e as CustomEvent<{ section?: SettingsSectionKey }>;
+      if (customEvent.detail?.section) {
+        setInitialSection(customEvent.detail.section);
+      } else {
+        setInitialSection("profile");
+      }
+      setSettingsOpen(true);
+    };
+    window.addEventListener("open-account-settings", handleOpenSettings);
+    return () => window.removeEventListener("open-account-settings", handleOpenSettings);
+  }, []);
 
   const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") : null;
   const currentUserId = typeof window !== "undefined" ? localStorage.getItem("simple_user_id") || "" : "";
@@ -149,7 +165,10 @@ export function HeaderAccountControl() {
     <>
       <button
         type="button"
-        onClick={() => setSettingsOpen(true)}
+        onClick={() => {
+          setInitialSection("profile");
+          setSettingsOpen(true);
+        }}
         aria-label={t("accountSettings")}
         title={t("accountSettings")}
         className={headerIconButtonClass(settingsOpen)}
@@ -168,6 +187,7 @@ export function HeaderAccountControl() {
         displayName={shownName}
         userId={effectiveUserId}
         createdAt={createdAt}
+        initialSection={initialSection}
       />
     </>
   );

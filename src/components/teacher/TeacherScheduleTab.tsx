@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,11 @@ import RescheduleSlotDialog from "@/components/RescheduleSlotDialog";
 import EditSlotTimeDialog from "@/components/EditSlotTimeDialog";
 import ProductSwitcher from "../creator/ProductSwitcher";
 import SlotCreationWizard from "@/components/schedule/SlotCreationWizard";
+import SlotDetailsDialog from "@/components/schedule/SlotDetailsDialog";
+import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { convertUserTimeToSlotTime } from "@/lib/timezones";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -86,6 +90,7 @@ interface TimeSlot {
   description?: string | null;
   image_url?: string | null;
   slot_group_id?: string | null;
+  location?: string | null;
 }
 
 interface Booking {
@@ -97,6 +102,7 @@ interface Booking {
 
 const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps) => {
   const { t, language } = useLanguage();
+  const { timezone, convertSlotToUser, formatSlotTime } = useTimezone();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
@@ -104,11 +110,52 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const dayBookingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedDate || viewMode !== "week") return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Ignore clicks if a dialog is open or if clicking inside a dialog/overlay/portal
+      if (
+        document.querySelector('[role="dialog"]') ||
+        document.querySelector('.login-modal-backdrop') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.login-modal-backdrop') ||
+        target.closest('[data-radix-portal]') ||
+        target.closest('[data-radix-popper-content-wrapper]')
+      ) {
+        return;
+      }
+
+      if (dayBookingsRef.current && dayBookingsRef.current.contains(target)) {
+        return;
+      }
+
+      if (target.closest('[data-week-day-button]')) {
+        return;
+      }
+
+      setSelectedDate(null);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [selectedDate, viewMode]);
   const [isDayScheduleDialogOpen, setIsDayScheduleDialogOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingSlots, setIsAddingSlots] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [editingSlotDetails, setEditingSlotDetails] = useState<TimeSlot | null>(null);
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const [isManagingSlots, setIsManagingSlots] = useState(false);
   const [manageTab, setManageTab] = useState<"edit" | "reschedule" | "delete">("edit");
@@ -257,6 +304,21 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
     enabled: scheduleIds.length > 0,
   });
 
+  const userTimeSlots = useMemo(() => {
+    return timeSlots.map((slot) => {
+      const startConv = timezone.offset === 5 ? { date: slot.date, time: slot.start_time.slice(0, 5) } : convertSlotToUser(slot.date, slot.start_time);
+      const endConv = timezone.offset === 5 ? { date: slot.date, time: slot.end_time.slice(0, 5) } : convertSlotToUser(slot.date, slot.end_time);
+      const sched = schedules.find((s) => s.id === slot.schedule_id);
+      return {
+        ...slot,
+        date: startConv.date,
+        start_time: `${startConv.time}:00`,
+        end_time: `${endConv.time}:00`,
+        product_id: sched?.product_id || selectedProductId || undefined,
+      };
+    });
+  }, [timeSlots, timezone.offset, convertSlotToUser, schedules, selectedProductId]);
+
   // Fetch bookings for time slots
   const slotIds = useMemo(() => timeSlots.map(s => s.id), [timeSlots]);
   const { data: bookings = [] } = useQuery({
@@ -373,15 +435,32 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
     onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
   });
 
-  const ensureScheduleId = async (): Promise<string> => {
-    if (schedules.length > 0) return schedules[0].id;
-    const activeProductId = selectedProductId || productIds[0] || "";
+  const ensureScheduleId = async (targetProductId?: string): Promise<string> => {
+    const activeProductId = targetProductId || selectedProductId || productIds[0] || "";
     if (!activeProductId) throw new Error(language === "ru" ? "Продукт не найден" : "Өнім табылмады");
+
+    const existingInState = schedules.find((s) => s.product_id === activeProductId);
+    if (existingInState) return existingInState.id;
+
+    try {
+      const data = await invokeApi<{ schedules: Schedule[] }>("manage-schedules", {
+        action: "list_schedules",
+        ...studentCreds(),
+        productIds: [activeProductId],
+      });
+      if (data?.schedules && data.schedules.length > 0) {
+        return data.schedules[0].id;
+      }
+    } catch (e) {
+      console.warn("Could not check existing schedules:", e);
+    }
+
+    const prod = products.find((p) => p.id === activeProductId);
     const data = await invokeApi<{ schedule: Schedule }>("manage-schedules", {
       action: "create_schedule",
       ...studentCreds(),
       productId: activeProductId,
-      title: language === "ru" ? "Расписание" : "Кесте",
+      title: prod?.title || (language === "ru" ? "Расписание" : "Кесте"),
       eventType: "individual",
       maxParticipants: null,
     });
@@ -791,7 +870,13 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
   });
 
   const updateSlotMeta = useMutation({
-    mutationFn: async ({ slotId, updates }: { slotId: string; updates: { title?: string; description?: string; image_url?: string } }) => {
+    mutationFn: async ({
+      slotId,
+      updates,
+    }: {
+      slotId: string;
+      updates: { title?: string | null; description?: string | null; image_url?: string | null; location?: string | null };
+    }) => {
       await invokeApi("manage-schedules", {
         action: "update_slot",
         ...studentCreds(),
@@ -799,7 +884,11 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         updates,
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, { slotId, updates }) => {
+      queryClient.setQueriesData({ queryKey: ["teacher-slots"] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((s) => (s.id === slotId ? { ...s, ...updates } : s));
+      });
       invalidateSlotsAndBookings();
     },
     onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
@@ -837,7 +926,24 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       location?: string;
       deletedSlotIds?: string[];
     }) => {
-      const scheduleId = schedules[0]?.id || (await ensureScheduleId());
+      // Resolve schedules for products
+      const productIdsInParams = new Set<string>();
+      const allIntervals = Object.values(params.daySlots || {}).flat();
+      allIntervals.forEach((interval: any) => {
+        if (interval.productId) productIdsInParams.add(interval.productId);
+      });
+      if ((params as any).productId) productIdsInParams.add((params as any).productId);
+      if (selectedProductId) productIdsInParams.add(selectedProductId);
+      if (productIdsInParams.size === 0 && products.length > 0) productIdsInParams.add(products[0].id);
+
+      const scheduleMap = new Map<string, string>();
+      for (const pId of productIdsInParams) {
+        const sId = await ensureScheduleId(pId);
+        scheduleMap.set(pId, sId);
+      }
+      const allScheduleIds = Array.from(new Set(Array.from(scheduleMap.values())));
+      const defaultScheduleId = allScheduleIds[0] || (await ensureScheduleId());
+
       const today = new Date();
       const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
 
@@ -863,7 +969,6 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       const startDate = params.startDate ? parseISO(params.startDate) : currentWeekStart;
       let maxEndDate = addDays(startDate, 6);
 
-      const allIntervals = Object.values(params.daySlots || {}).flat();
       allIntervals.forEach((interval: any) => {
         const repWeekly = interval.repeatWeekly ?? params.repeatWeekly;
         const repPeriod = interval.repeatPeriod ?? params.repeatPeriod;
@@ -889,19 +994,21 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
       // Pre-fetch all existing slots across the target range to avoid duplicates
       let dbSlots: TimeSlot[] = timeSlots;
-      try {
-        const existingInDb = await invokeApi<{ slots: TimeSlot[] }>("manage-schedules", {
-          action: "list_slots",
-          ...studentCreds(),
-          scheduleIds: [scheduleId],
-          fromDate: format(startDate, "yyyy-MM-dd"),
-          toDate: format(maxEndDate, "yyyy-MM-dd"),
-        });
-        if (existingInDb?.slots) {
-          dbSlots = existingInDb.slots;
+      if (allScheduleIds.length > 0) {
+        try {
+          const existingInDb = await invokeApi<{ slots: TimeSlot[] }>("manage-schedules", {
+            action: "list_slots",
+            ...studentCreds(),
+            scheduleIds: allScheduleIds,
+            fromDate: format(startDate, "yyyy-MM-dd"),
+            toDate: format(maxEndDate, "yyyy-MM-dd"),
+          });
+          if (existingInDb?.slots) {
+            dbSlots = existingInDb.slots;
+          }
+        } catch (err) {
+          console.warn("Could not pre-fetch existing slots:", err);
         }
-      } catch (err) {
-        console.warn("Could not pre-fetch existing slots:", err);
       }
 
       const todayStr = format(today, "yyyy-MM-dd");
@@ -947,6 +1054,8 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         }
 
         for (const interval of intervalsForDay) {
+          const targetProdId = (interval as any).productId || (params as any).productId || selectedProductId || products[0]?.id;
+          const targetScheduleId = scheduleMap.get(targetProdId) || defaultScheduleId;
           const duration = (interval as any).slotDuration || params.slotDuration || 60;
           const maxPart = (interval as any).maxParticipants || params.maxParticipants || 1;
           const slotTitle = (interval as any).title ?? params.title;
@@ -983,15 +1092,26 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
             }
 
             const exists =
-              dbSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5)) ||
-              timeSlots.some((s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5));
+              dbSlots.some((s) => {
+                const checkDate = timezone.offset === 5 ? dateStr : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).date;
+                const checkTime = timezone.offset === 5 ? slotStart.slice(0, 5) : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).time;
+                return s.date === checkDate && s.start_time.slice(0, 5) === checkTime;
+              }) ||
+              timeSlots.some((s) => {
+                const checkDate = timezone.offset === 5 ? dateStr : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).date;
+                const checkTime = timezone.offset === 5 ? slotStart.slice(0, 5) : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).time;
+                return s.date === checkDate && s.start_time.slice(0, 5) === checkTime;
+              });
 
             if (!exists) {
+              const dbStart = timezone.offset === 5 ? { date: dateStr, time: slotStart.slice(0, 5) } : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5);
+              const dbEnd = timezone.offset === 5 ? { date: dateStr, time: slotEnd.slice(0, 5) } : convertUserTimeToSlotTime(dateStr, slotEnd, timezone.offset, 5);
+
               slots.push({
-                schedule_id: scheduleId,
-                date: dateStr,
-                start_time: slotStart,
-                end_time: slotEnd,
+                schedule_id: targetScheduleId,
+                date: dbStart.date,
+                start_time: `${dbStart.time}:00`,
+                end_time: `${dbEnd.time}:00`,
                 is_available: true,
                 max_participants: maxPart,
                 title: slotTitle || null,
@@ -1009,7 +1129,23 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       }
 
       if (slots.length > 0) {
-        await invokeApi("manage-schedules", { action: "create_slots", ...studentCreds(), slots, scheduleId });
+        const slotsBySchedule = new Map<string, any[]>();
+        for (const slot of slots) {
+          const sId = slot.schedule_id;
+          if (!slotsBySchedule.has(sId)) {
+            slotsBySchedule.set(sId, []);
+          }
+          slotsBySchedule.get(sId)!.push(slot);
+        }
+
+        for (const [sId, scheduleSlots] of slotsBySchedule.entries()) {
+          await invokeApi("manage-schedules", {
+            action: "create_slots",
+            ...studentCreds(),
+            slots: scheduleSlots,
+            scheduleId: sId,
+          });
+        }
       }
       return { createdCount: slots.length, deletedCount };
     },
@@ -1064,7 +1200,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
   const getSlotsForDay = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return timeSlots.filter(slot => slot.date === dateStr);
+    return userTimeSlots.filter(slot => slot.date === dateStr);
   };
 
   const getBookingsForSlot = (slotId: string) => {
@@ -1072,7 +1208,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
   };
 
   const getScheduleForSlot = (slotId: string) => {
-    const slot = timeSlots.find(s => s.id === slotId);
+    const slot = userTimeSlots.find(s => s.id === slotId);
     if (!slot) return null;
     return schedules.find(s => s.id === slot.schedule_id);
   };
@@ -1081,7 +1217,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
     const slotBookings = getBookingsForSlot(slotId);
     if (slotBookings.length === 0) return false;
     
-    const slot = timeSlots.find(s => s.id === slotId);
+    const slot = userTimeSlots.find(s => s.id === slotId);
     const schedule = getScheduleForSlot(slotId);
     const maxParticipants = slot?.max_participants ?? (schedule?.event_type === "group" ? (schedule.max_participants ?? 1) : 1);
     return slotBookings.length >= maxParticipants;
@@ -1112,11 +1248,11 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
   const selectedDateSlots = useMemo(() => {
     if (!selectedDate) return [];
     return getSlotsForDay(selectedDate).sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [selectedDate, timeSlots]);
+  }, [selectedDate, userTimeSlots]);
 
   const bookedSlotsInMonth = useMemo(() => {
     const monthPrefix = format(currentMonth, "yyyy-MM");
-    return timeSlots
+    return userTimeSlots
       .filter((slot) => {
         if (!slot.date.startsWith(monthPrefix)) return false;
         const b = getBookingsForSlot(slot.id);
@@ -1127,22 +1263,22 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         if (cmpDate !== 0) return cmpDate;
         return a.start_time.localeCompare(b.start_time);
       });
-  }, [timeSlots, bookings, currentMonth]);
+  }, [userTimeSlots, bookings, currentMonth]);
 
   const bookedSlotsForDay = useMemo(() => {
     if (!selectedDate) return [];
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    return timeSlots.filter((slot) => {
+    return userTimeSlots.filter((slot) => {
       if (slot.date !== dateStr) return false;
       return getBookingsForSlot(slot.id).length > 0;
     }).sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [timeSlots, bookings, selectedDate]);
+  }, [userTimeSlots, bookings, selectedDate]);
 
   const allSlotsForDay = useMemo(() => {
     if (!selectedDate) return [];
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    return timeSlots.filter((slot) => slot.date === dateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [timeSlots, selectedDate]);
+    return userTimeSlots.filter((slot) => slot.date === dateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [userTimeSlots, selectedDate]);
 
   const renderDayBookings = () => {
     if (!selectedDate) return null;
@@ -1157,7 +1293,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
     }
 
     return (
-      <div className="space-y-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {daySlots.map((slot) => {
           const slotBookings = getBookingsForSlot(slot.id);
           const schedule = getScheduleForSlot(slot.id);
@@ -1165,7 +1301,6 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           const isGroup = maxParticipants > 1;
           const timeLabel = `${slot.start_time.slice(0, 5)} – ${slot.end_time.slice(0, 5)}`;
           const status = getSlotStatus(slot.id);
-          const isExpanded = expandedSlotId === slot.id;
           const hasBookings = slotBookings.length > 0;
 
           const statusColor = status === "full" ? "bg-green-500" : status === "partial" ? "bg-orange-500" : "bg-red-400";
@@ -1174,158 +1309,90 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           return (
             <div
               key={slot.id}
-              className={`rounded-xl border ${statusBorder} bg-card transition-colors space-y-0`}
+              className={`rounded-xl border ${statusBorder} bg-card transition-all flex flex-col justify-between overflow-hidden shadow-xs hover:border-primary/40`}
             >
-              {/* Main slot row - clickable to expand */}
+              {/* Main slot row - clickable to open details dialog */}
               <div
-                className="p-3 cursor-pointer hover:bg-muted/30 transition-colors rounded-xl"
-                onClick={() => setExpandedSlotId(isExpanded ? null : slot.id)}
+                className="p-3 cursor-pointer hover:bg-muted/30 transition-colors flex items-center justify-between gap-2"
+                onClick={() => setEditingSlotDetails(slot)}
+                title={language === "ru" ? "Нажмите для редактирования деталей" : "Мәліметтерді өңдеу үшін басыңыз"}
               >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-                    <Badge variant="outline" className="text-xs">
-                      {timeLabel}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
+                  <Badge variant="outline" className="text-xs shrink-0 font-medium">
+                    {timeLabel}
+                  </Badge>
+                  {slot.title && (
+                    <span className="font-medium text-sm truncate" title={slot.title}>
+                      {slot.title}
+                    </span>
+                  )}
+                  {isGroup ? (
+                    <Badge variant="secondary" className="text-[11px] shrink-0">
+                      {slotBookings.length}/{maxParticipants >= 9999 ? "∞" : maxParticipants} {language === "ru" ? "группа" : "топ"}
                     </Badge>
-                    {slot.title && (
-                      <span className="font-medium text-sm">{slot.title}</span>
-                    )}
-                    {isGroup ? (
-                      <Badge variant="secondary" className="text-[11px]">
-                        {slotBookings.length}/{maxParticipants} {language === "ru" ? "группа" : "топ"}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[11px]">
-                        {hasBookings 
-                          ? (language === "ru" ? "Занято" : "Бос емес")
-                          : (language === "ru" ? "Свободно" : "Бос")
-                        }
-                      </Badge>
-                    )}
-                  </div>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] shrink-0">
+                      {hasBookings 
+                        ? (language === "ru" ? "Занято" : "Бос емес")
+                        : (language === "ru" ? "Свободно" : "Бос")
+                      }
+                    </Badge>
+                  )}
+                </div>
 
-                  {/* Action buttons - outside the slot card */}
-                  <div className="flex items-center gap-1">
-                    {/* Video call button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                      onClick={(e) => { e.stopPropagation(); }}
-                      title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
-                    >
-                      <Video className="w-4 h-4" />
-                    </Button>
-                    {/* Reschedule button - always visible between video and delete */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasBookings) {
-                          setReschedulingSlot({ slot, schedule: schedule! });
-                        } else {
-                          setEditingSlotTime(slot);
-                        }
-                      }}
-                      title={language === "ru" ? "Перенести" : "Ауыстыру"}
-                    >
-                      <Clock className="w-4 h-4" />
-                    </Button>
-                    {/* Delete button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasBookings) {
-                          setDeletingSlotWithBookings(slot);
-                        } else {
-                          setDeletingSlot(slot);
-                        }
-                      }}
-                      title={language === "ru" ? "Удалить" : "Жою"}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                {/* Action buttons */}
+                <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {/* Video call button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                    onClick={(e) => { e.stopPropagation(); }}
+                    title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
+                  >
+                    <Video className="w-4 h-4" />
+                  </Button>
+                  {/* Reschedule button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasBookings) {
+                        setReschedulingSlot({ slot, schedule: schedule! });
+                      } else {
+                        setEditingSlotTime(slot);
+                      }
+                    }}
+                    title={language === "ru" ? "Перенести" : "Ауыстыру"}
+                  >
+                    <Clock className="w-4 h-4" />
+                  </Button>
+                  {/* Delete button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasBookings) {
+                        setDeletingSlotWithBookings(slot);
+                      } else {
+                        setDeletingSlot(slot);
+                      }
+                    }}
+                    title={language === "ru" ? "Удалить" : "Жою"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Expanded content: description, image, editable fields for seller */}
-              {isExpanded && (
-                <div className="px-3 pb-3 space-y-3 border-t border-border/50 pt-3 animate-in fade-in slide-in-from-top-2">
-                  {/* Image */}
-                  {slot.image_url && (
-                    <div className="rounded-lg overflow-hidden">
-                      <img src={slot.image_url} alt={slot.title || ""} className="w-full h-40 object-cover" />
-                    </div>
-                  )}
-                  {/* Description */}
-                  {slot.description && (
-                    <p className="text-sm text-muted-foreground">{slot.description}</p>
-                  )}
-                  {/* Editable fields for seller */}
-                  <div className="space-y-2 pt-2 border-t border-border/30">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Название" : "Атауы"}</Label>
-                      <Input
-                        value={slot.title || ""}
-                        placeholder={language === "ru" ? "Название урока" : "Сабақ атауы"}
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { title: e.target.value } });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Описание" : "Сипаттамасы"}</Label>
-                      <Input
-                        value={slot.description || ""}
-                        placeholder={language === "ru" ? "Описание урока" : "Сабақ сипаттамасы"}
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { description: e.target.value } });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Обложка (URL)" : "Мұқаба (URL)"}</Label>
-                      <Input
-                        value={slot.image_url || ""}
-                        placeholder="https://..."
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { image_url: e.target.value } });
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Student list */}
-                  {hasBookings && (
-                    <div className="space-y-1 pt-2 border-t border-border/50">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {language === "ru" ? "Записи:" : "Жазбалар:"}
-                      </span>
-                      {slotBookings.map((b) => (
-                        <div key={b.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/40">
-                          <span className="font-medium text-foreground">{b.user?.name || "—"}</span>
-                          {b.user?.phone && (
-                            <span className="text-muted-foreground text-[11px]">{b.user.phone}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Non-expanded: show student list for booked slots */}
-              {!isExpanded && hasBookings && (
-                <div className="space-y-1 px-3 pb-2 pt-1 border-t border-border/50">
+              {/* Student list for booked slots */}
+              {hasBookings && (
+                <div className="space-y-1 px-3 pb-2 pt-1 border-t border-border/50 bg-muted/10">
                   {slotBookings.map((b) => (
                     <div key={b.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/40">
                       <span className="font-medium text-foreground">{b.user?.name || "—"}</span>
@@ -1418,7 +1485,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                   </div>
                   {isGroup ? (
                     <Badge variant="outline" className="text-[11px] font-medium ml-1">
-                      {slotBookings.length}/{maxParticipants} {language === "ru" ? "мест" : "орын"}
+                      {slotBookings.length}/{maxParticipants >= 9999 ? "∞" : maxParticipants} {language === "ru" ? "мест" : "орын"}
                     </Badge>
                   ) : (
                     <span className={`text-xs font-medium ${styles.text}`}>
@@ -1613,26 +1680,8 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
             }}
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
-            <Plus className="w-4 h-4" />
-            {language === "ru" ? "Слоты" : "Слоттар"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const targetSchedule = schedules[0];
-              if (targetSchedule) {
-                setSelectedScheduleForDelete(targetSchedule);
-                fetchAvailableDates(targetSchedule.id);
-                setSelectedScheduleForLink(targetSchedule);
-                fetchAvailableDatesForLink(targetSchedule.id);
-              }
-              setIsManagingSlots(true);
-            }}
-            className="gap-1.5 border border-input bg-background hover:bg-primary/15 hover:text-primary hover:border-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
             <Settings2 className="w-4 h-4" />
-            {language === "ru" ? "Управлять" : "Басқару"}
+            {language === "ru" ? "Редактор слотов" : "Слоттар редакторы"}
           </Button>
         </div>
       </div>
@@ -1683,7 +1732,9 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-xs sm:text-sm font-medium min-w-[140px] text-center">
-                  {format(currentWeekStart, "d MMM", { locale: ru })} – {format(weekEnd, "d MMM yyyy", { locale: ru })}
+                  {isSameMonth(currentWeekStart, weekEnd)
+                    ? `${format(currentWeekStart, "d")} - ${format(weekEnd, "d MMM yyyy", { locale: ru })}`
+                    : `${format(currentWeekStart, "d MMM", { locale: ru })} - ${format(weekEnd, "d MMM yyyy", { locale: ru })}`}
                 </span>
                 <Button
                   variant="ghost"
@@ -1701,23 +1752,37 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
             </div>
           </CardHeader>
           <CardContent className="pt-0">
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+              {(language === "kk"
+                ? ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"]
+                : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+              ).map((wd, i) => (
+                <div key={wd} className={`text-xs font-semibold py-1 ${i >= 5 ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
+                  {wd}
+                </div>
+              ))}
+            </div>
+
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {weekDays.map((day) => {
                 const dayKey = format(day, "yyyy-MM-dd");
                 const daySlots = getSlotsForDay(day);
-                const bookedSessionsCount = daySlots.filter((slot) =>
-                  bookings.some((b) => b.time_slot_id === slot.id)
-                ).length;
                 const isSelected = selectedDate && isSameDay(selectedDate, day);
                 const isTodayDate = isToday(day);
-                const hasSlots = daySlots.length > 0;
-                const dayStatus = getDayStatus(day);
 
                 return (
                   <button
                     key={dayKey}
                     type="button"
-                    onClick={() => setSelectedDate(day)}
+                    data-week-day-button="true"
+                    onClick={() => {
+                      if (selectedDate && isSameDay(selectedDate, day)) {
+                        setSelectedDate(null);
+                      } else {
+                        setSelectedDate(day);
+                      }
+                    }}
                     className={`p-2 sm:p-2.5 rounded-xl text-center transition-all relative border flex flex-col justify-between items-center min-h-[56px] sm:min-h-[68px] ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
@@ -1726,29 +1791,27 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                           : "bg-card border-border/40 text-foreground hover:bg-muted/60"
                     }`}
                   >
-                    <div className={`text-xs font-semibold ${isSelected ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
-                      {format(day, "EEE", { locale: ru })}
-                    </div>
-                    <div className={`text-sm sm:text-base font-bold my-0.5 ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
+                    <span className={`text-sm sm:text-base font-semibold ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
                       {format(day, "d")}
-                    </div>
-                    <div className="flex items-center justify-center gap-1 min-h-[14px]">
-                      {hasSlots && (
-                        <span
-                          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                            dayStatus === "full"
-                              ? "bg-green-500"
-                              : dayStatus === "partial"
-                                ? "bg-orange-500"
-                                : "bg-red-500"
-                          } ${isSelected ? "ring-1 ring-white/90" : ""}`}
-                        />
-                      )}
-                      {bookedSessionsCount > 0 && (
-                        <span className={`text-[10px] sm:text-xs font-bold ${isSelected ? "text-white" : "text-green-600 dark:text-green-400"}`}>
-                          {bookedSessionsCount}
-                        </span>
-                      )}
+                    </span>
+                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                      {daySlots.map((slot) => {
+                        const slotStatus = getSlotStatus(slot.id);
+                        return (
+                          <span
+                            key={slot.id}
+                            className={cn(
+                              "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0",
+                              slotStatus === "full"
+                                ? "bg-green-500"
+                                : slotStatus === "partial"
+                                  ? "bg-orange-500"
+                                  : "bg-red-500",
+                              isSelected && "ring-1 ring-white/90"
+                            )}
+                          />
+                        );
+                      })}
                     </div>
                   </button>
                 );
@@ -1760,7 +1823,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
       {/* Week Calendar: Day Bookings Underneath */}
       {viewMode === "week" && selectedDate && (
-        <Card>
+        <Card ref={dayBookingsRef}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -1770,9 +1833,6 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                   return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
                 })()}
               </CardTitle>
-              <Badge variant="secondary">
-                {allSlotsForDay.length}
-              </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-2.5">
@@ -1786,11 +1846,12 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-semibold text-foreground">
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" />
                   {language === "kk" ? "Күнтізбе:" : "Календарь на"}
-                </span>
-                <div className="inline-flex items-center rounded-lg bg-muted p-0.5 text-muted-foreground">
+                </CardTitle>
+                <div className="inline-flex rounded-lg border border-border bg-muted/50 p-0.5 text-xs text-muted-foreground">
                   <button
                     type="button"
                     onClick={() => {
@@ -1838,8 +1899,11 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           </CardHeader>
           <CardContent className="pt-0">
             {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2 text-center">
-              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd, i) => (
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+              {(language === "kk"
+                ? ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"]
+                : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+              ).map((wd, i) => (
                 <div key={wd} className={`text-xs font-semibold py-1 ${i >= 5 ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
                   {wd}
                 </div>
@@ -1851,14 +1915,9 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
               {calendarDays.map((day) => {
                 const dayKey = format(day, "yyyy-MM-dd");
                 const daySlots = getSlotsForDay(day);
-                const bookedSessionsCount = daySlots.filter((slot) =>
-                  bookings.some((b) => b.time_slot_id === slot.id)
-                ).length;
-                const isSelected = selectedDate && isSameDay(selectedDate, day);
+                const isSelected = isDayScheduleDialogOpen && selectedDate && isSameDay(selectedDate, day);
                 const isTodayDate = isToday(day);
                 const inMonth = isSameMonth(day, currentMonth);
-                const hasSlots = daySlots.length > 0;
-                const dayStatus = getDayStatus(day);
 
                 return (
                   <button
@@ -1883,25 +1942,24 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                     </span>
                     
                     {/* Indicators */}
-                    <div className="flex flex-col items-center gap-0.5 w-full">
-                      {hasSlots && (
-                        <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                      {daySlots.map((slot) => {
+                        const slotStatus = getSlotStatus(slot.id);
+                        return (
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              dayStatus === "full"
+                            key={slot.id}
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full shrink-0",
+                              slotStatus === "full"
                                 ? "bg-green-500"
-                                : dayStatus === "partial"
+                                : slotStatus === "partial"
                                   ? "bg-orange-500"
-                                  : "bg-red-500"
-                            } ${isSelected ? "ring-1 ring-white/90" : ""}`}
+                                  : "bg-red-500",
+                              isSelected && "ring-1 ring-white/90"
+                            )}
                           />
-                          {bookedSessionsCount > 0 && (
-                            <span className={`text-[10px] font-bold ${isSelected ? "text-white" : "text-green-600 dark:text-green-400"}`}>
-                              {bookedSessionsCount}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   </button>
                 );
@@ -1913,8 +1971,14 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
 
 
       {/* Day Schedule Dialog for Month View */}
-      <Dialog open={isDayScheduleDialogOpen} onOpenChange={setIsDayScheduleDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <Dialog
+        open={isDayScheduleDialogOpen}
+        onOpenChange={(open) => {
+          setIsDayScheduleDialogOpen(open);
+          if (!open) setSelectedDate(null);
+        }}
+      >
+        <DialogContent hideCloseButton className="max-w-3xl sm:max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
@@ -1930,12 +1994,33 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
         </DialogContent>
       </Dialog>
 
+      {/* Slot Details Dialog */}
+      <SlotDetailsDialog
+        open={Boolean(editingSlotDetails)}
+        onOpenChange={(open) => {
+          if (!open) setEditingSlotDetails(null);
+        }}
+        slot={editingSlotDetails}
+        productId={selectedProductId}
+        onSave={async (updates) => {
+          if (!editingSlotDetails) return;
+          await updateSlotMeta.mutateAsync({
+            slotId: editingSlotDetails.id,
+            updates,
+          });
+          setEditingSlotDetails((prev) => (prev ? { ...prev, ...updates } : null));
+        }}
+        language={language as "ru" | "kk"}
+      />
+
       <SlotCreationWizard
         open={isWizardOpen}
         onOpenChange={setIsWizardOpen}
         language={language as "ru" | "kk"}
-        existingSlots={timeSlots}
+        existingSlots={userTimeSlots}
         initialWeekStart={currentWeekStart}
+        products={products.map((p) => ({ id: p.id, title: p.title }))}
+        defaultProductId={selectedProductId || productIds[0] || null}
         onCreateSlots={(params) => createWizardSlots.mutate(params)}
         onDeleteSlots={async (dates) => {
           const scheduleId = schedules[0]?.id || (await ensureScheduleId());

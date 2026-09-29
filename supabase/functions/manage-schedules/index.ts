@@ -335,6 +335,68 @@ Deno.serve(async (req) => {
       return json({ slots: data ?? [] })
     }
 
+    if (action === 'create_google_meet_link') {
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN')
+      if (!clientId || !clientSecret || !refreshToken) {
+        return json({ error: 'Google credentials not configured' }, 500)
+      }
+
+      // Get a fresh access token
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      })
+      const tokenData = await tokenRes.json()
+      if (!tokenData.access_token) {
+        console.error('Failed to get access token:', tokenData)
+        return json({ error: 'Failed to get Google access token' }, 500)
+      }
+
+      // Title and time from body (optional)
+      const eventTitle = String(body.title || 'Урок')
+      const startIso = body.startIso ? String(body.startIso) : new Date().toISOString()
+      const endIso = body.endIso ? String(body.endIso) : new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+      // Create a Calendar event with Meet conference
+      const eventRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          summary: eventTitle,
+          start: { dateTime: startIso, timeZone: 'UTC' },
+          end: { dateTime: endIso, timeZone: 'UTC' },
+          conferenceData: {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: 'hangoutsMeet' },
+            },
+          },
+        }),
+      })
+      const eventData = await eventRes.json()
+      const meetLink = eventData?.conferenceData?.entryPoints?.find(
+        (ep: { entryPointType: string }) => ep.entryPointType === 'video'
+      )?.uri || null
+
+      if (!meetLink) {
+        console.error('Failed to create Meet link:', eventData)
+        return json({ error: 'Failed to create Google Meet link' }, 500)
+      }
+
+      return json({ meetLink })
+    }
+
     return json({ error: 'Unknown action' }, 400)
   } catch (e) {
     console.error('manage-schedules error', e)

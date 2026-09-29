@@ -16,6 +16,7 @@ import { useSimpleAuth } from '@/contexts/SimpleAuthContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { SimpleAuthProvider } from '@/contexts/SimpleAuthContext'
 import { LanguageProvider } from '@/contexts/LanguageContext'
+import { TimezoneProvider } from '@/contexts/TimezoneContext'
 import { InstallPromptProvider } from '@/contexts/InstallPromptContext'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import MarketplacePage from './pages/MarketplacePage'
@@ -174,19 +175,21 @@ const App = () => (
 	<ErrorBoundary>
 		<QueryClientProvider client={queryClient}>
 			<LanguageProvider>
-				<InstallPromptProvider>
-					<SimpleAuthProvider>
-						<AuthProvider>
-							<TooltipProvider>
-								<Toaster />
-								<Sonner />
-								<BrowserRouter>
-									<AppRoutes />
-								</BrowserRouter>
-							</TooltipProvider>
-						</AuthProvider>
-					</SimpleAuthProvider>
-				</InstallPromptProvider>
+				<TimezoneProvider>
+					<InstallPromptProvider>
+						<SimpleAuthProvider>
+							<AuthProvider>
+								<TooltipProvider>
+									<Toaster />
+									<Sonner />
+									<BrowserRouter>
+										<AppRoutes />
+									</BrowserRouter>
+								</TooltipProvider>
+							</AuthProvider>
+						</SimpleAuthProvider>
+					</InstallPromptProvider>
+				</TimezoneProvider>
 			</LanguageProvider>
 		</QueryClientProvider>
 	</ErrorBoundary>
