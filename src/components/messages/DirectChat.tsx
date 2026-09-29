@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
@@ -41,21 +41,39 @@ interface StoredMessage {
   sender: "creator" | "buyer";
   text: string;
   created_at: string;
+  edited_at?: string | null;
   attachments?: ChatAttachment[];
 }
+
+/** Signed links live an hour; reusing one for 45 minutes leaves plenty of margin. */
+const LINK_REUSE_MS = 45 * 60 * 1000;
 
 /** One personal chat between a seller and a buyer; new messages are picked up every few seconds. */
 const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  // Every refresh comes back with freshly signed links. Swapping them in would make the browser
+  // fetch each photo and video again every few seconds, so a file keeps the link it first got.
+  const links = useRef(new Map<string, { url: string; at: number }>());
 
   const load = useCallback(
     async (quiet = false) => {
       if (!quiet) setLoading(true);
       try {
         const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId });
-        setMessages(data.messages ?? []);
+        const now = Date.now();
+        const withStableLinks = (data.messages ?? []).map((m) => ({
+          ...m,
+          attachments: m.attachments?.map((a) => {
+            if (!a.url) return a;
+            const known = links.current.get(a.path);
+            if (known && now - known.at < LINK_REUSE_MS) return { ...a, url: known.url };
+            links.current.set(a.path, { url: a.url, at: now });
+            return a;
+          }),
+        }));
+        setMessages(withStableLinks);
         queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
       } finally {
         if (!quiet) setLoading(false);
@@ -97,12 +115,23 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
     await load(true);
   };
 
+  const edit = async (messageId: string, text: string) => {
+    await directApi(side, { action: "edit_message", peerId, messageId, text });
+    await load(true);
+  };
+
+  const remove = async (messageId: string) => {
+    await directApi(side, { action: "delete_message", peerId, messageId });
+    await load(true);
+  };
+
   const chatMessages: ChatMessage[] = messages.map((m) => ({
     id: m.id,
     mine: m.sender === side,
     text: m.text,
     created_at: m.created_at,
     attachments: m.attachments,
+    edited: !!m.edited_at,
   }));
 
   return (
@@ -113,6 +142,8 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
       canAttach
       uploadFile={uploadFile}
       send={send}
+      onEdit={edit}
+      onDelete={remove}
     />
   );
 };

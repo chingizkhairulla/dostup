@@ -673,12 +673,14 @@ export const translations = {
     buyerReceiptStatus_manual_review: "Ждёт проверки",
     buyerReceiptStatus_confirmed: "Подтверждён",
     buyerReceiptStatus_rejected: "Отклонён",
-    messagesFilterAll: "Все",
     messagesFilterInactive: "Неактивные",
     messagesSeller: "Продавец",
     chatEmpty: "Нет сообщений. Напишите первое сообщение.",
     chatPlaceholder: "Напишите сообщение...",
     chatSendError: "Не удалось отправить сообщение",
+    chatEditError: "Не удалось изменить сообщение",
+    chatDeleteTitle: "Удалить сообщение?",
+    chatDeleteDescription: "Сообщение пропадёт у вас и у собеседника.",
   },
   kk: {
     // Common
@@ -1354,12 +1356,14 @@ export const translations = {
     buyerReceiptStatus_manual_review: "Тексеруді күтуде",
     buyerReceiptStatus_confirmed: "Расталды",
     buyerReceiptStatus_rejected: "Қабылданбады",
-    messagesFilterAll: "Барлығы",
     messagesFilterInactive: "Белсенді емес",
     messagesSeller: "Сатушы",
     chatEmpty: "Хабарлама жоқ. Бірінші хабарламаны жазыңыз.",
     chatPlaceholder: "Хабарлама жазыңыз...",
     chatSendError: "Хабарламаны жіберу мүмкін болмады",
+    chatEditError: "Хабарламаны өзгерту мүмкін болмады",
+    chatDeleteTitle: "Хабарламаны жою керек пе?",
+    chatDeleteDescription: "Хабарлама сізде де, әңгімелесушіде де жойылады.",
   },
 } as const;
 

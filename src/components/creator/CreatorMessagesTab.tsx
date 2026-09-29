@@ -112,9 +112,8 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
         key: "direct",
         label: t("messagesDirect"),
         icon: UserRound,
-        // "All" and each product show buyers who still have access; lapsed ones sit under "Inactive".
+        // Each product shows its buyers who still have access; lapsed ones sit under "Inactive".
         filters: [
-          { key: "all", label: t("messagesFilterAll") },
           ...products
             .filter((p) => contacts.some((c) => c.active && c.product_ids.includes(p.id)))
             .map((p) => ({ key: p.id, label: p.title })),
@@ -128,7 +127,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
             unread: supportUnread,
             avatar: <DostupMark className="h-10 w-10" />,
             verified: true,
-            filterKeys: ["all"],
+            pinned: true,
           },
           ...[...contacts]
             .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
@@ -139,7 +138,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
               timestamp: c.last_message_at ? new Date(c.last_message_at).getTime() : undefined,
               unread: c.unread,
               avatarUrl: c.avatar_url,
-              filterKeys: c.active ? ["all", ...c.product_ids] : ["inactive"],
+              filterKeys: c.active ? c.product_ids : ["inactive"],
             })),
         ],
       },

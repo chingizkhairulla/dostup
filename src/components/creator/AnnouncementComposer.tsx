@@ -15,6 +15,7 @@ import { buildAnnouncementHtml, formatFileSize, type AnnouncementAttachment } fr
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
 
 const MAX_ATTACHMENTS = 10;
+const MAX_FIELD_HEIGHT = 200;
 
 type LocalAttachment = AnnouncementAttachment & { id: string };
 
@@ -84,11 +85,15 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
     }
   }, [editingId, editingHtml]);
 
+  // Grows with the text. scrollHeight leaves out the border, so without it the field ends up
+  // 2px short and shows a scrollbar on every line; it only scrolls past the height cap.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    const full = el.scrollHeight + el.offsetHeight - el.clientHeight;
+    el.style.height = `${Math.min(full, MAX_FIELD_HEIGHT)}px`;
+    el.style.overflowY = full > MAX_FIELD_HEIGHT ? "auto" : "hidden";
   }, [text]);
 
   const pendingRef = useRef(pending);

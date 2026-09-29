@@ -18,6 +18,8 @@ interface Props {
   onIndexChange: (index: number | null) => void;
   /** Buttons placed before "Done" (e.g. a download button for receipts). */
   actions?: ReactNode;
+  /** White window instead of the dark one — for documents such as payment receipts. */
+  light?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * around the window stays free, so a tap anywhere outside it closes the viewer — as does
  * the single "Done" button in the bottom-right corner.
  */
-const MediaViewer = ({ items, index, onIndexChange, actions }: Props) => {
+const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Props) => {
   const { t } = useLanguage();
   const open = index !== null && !!items[index];
   const item = open ? items[index!] : null;
@@ -53,7 +55,8 @@ const MediaViewer = ({ items, index, onIndexChange, actions }: Props) => {
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed z-[60] flex flex-col overflow-hidden rounded-2xl bg-neutral-950 shadow-2xl outline-none",
+            "fixed z-[60] flex flex-col overflow-hidden rounded-2xl shadow-2xl outline-none",
+            light ? "bg-white" : "bg-neutral-950",
             // The margins are the tap-to-close area; the bottom one clears the phone's home bar.
             "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
             "sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16",
@@ -73,7 +76,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions }: Props) => {
                 controls
                 autoPlay
                 playsInline
-                className="max-h-full max-w-full bg-black"
+                className={cn("max-h-full max-w-full", light ? "bg-white" : "bg-black")}
               />
             )}
             {item?.kind === "pdf" && (
@@ -102,9 +105,14 @@ const MediaViewer = ({ items, index, onIndexChange, actions }: Props) => {
             )}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/10 bg-neutral-950 px-3 py-3">
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3",
+              light ? "border-neutral-200 bg-white" : "border-white/10 bg-neutral-950",
+            )}
+          >
             {many && index !== null && (
-              <span className="mr-auto text-xs tabular-nums text-white/60">
+              <span className={cn("mr-auto text-xs tabular-nums", light ? "text-neutral-500" : "text-white/60")}>
                 {index + 1} / {items.length}
               </span>
             )}

@@ -157,7 +157,7 @@ const VideoThumb = ({ url, className }: { url: string; className?: string }) => 
 
 const MediaGrid = ({ media }: { media: ParsedAnnouncement["media"] }) => {
   const [open, setOpen] = useState<number | null>(null);
-  const viewer = <MediaViewer items={media} index={open} onIndexChange={setOpen} />;
+  const viewer = <MediaViewer items={media} index={open} onIndexChange={setOpen} light />;
 
   if (media.length === 1) {
     const [item] = media;

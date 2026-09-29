@@ -80,7 +80,8 @@ export async function compressVideoIfNeeded(
     targetHeight = Math.round(targetHeight / 2) * 2;
 
     const output = new Output({
-      format: new Mp4OutputFormat(),
+      // moov в начале файла: плеер начинает показ, не дожидаясь загрузки конца видео.
+      format: new Mp4OutputFormat({ fastStart: "in-memory" }),
       target: new BufferTarget(),
     });
 
