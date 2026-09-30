@@ -12,11 +12,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Eye, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
+import { Plus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, Check, Globe, Lock, DollarSign, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
 import { predictProductCategory, isTopicMatch, isExactTopicMatch, type CategoryPrediction, suggestCustomTopicWithEmoji } from "@/lib/aiCategory";
 import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } from "@/lib/taxonomyData";
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
+import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import {
   Dialog,
   DialogContent,
@@ -175,6 +176,7 @@ interface Product {
   telegram_link: string | null;
   has_schedule: boolean;
   is_active: boolean;
+  is_published?: boolean;
   image_url?: string | null;
   video_url?: string | null;
   media?: Array<{ type: "image" | "video"; url: string; objectPosition?: string }> | null;
@@ -296,6 +298,80 @@ const ReqStar = () => (
     *
   </span>
 );
+
+// No close button: the dialog closes on an outside click or Escape.
+const ProductDialogHeader = ({ title }: { title: string }) => (
+  <DialogHeader className="space-y-0">
+    <DialogTitle className="min-w-0">{title}</DialogTitle>
+  </DialogHeader>
+);
+
+// Declared at module level so the trigger keeps its identity (and focus) across form re-renders.
+const FormSection = ({
+  label,
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}) => {
+  const headerRef = useRef<HTMLButtonElement>(null);
+
+  const collapseFromBottom = () => {
+    onOpenChange(false);
+    // The header may be far above after a long section; bring it back into view.
+    requestAnimationFrame(() => {
+      headerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  };
+
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <CollapsibleTrigger asChild>
+        <button
+          ref={headerRef}
+          type="button"
+          className="group flex w-full items-center justify-between gap-3 py-4 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <span
+            className={cn(
+              "text-base sm:text-lg transition-colors",
+              open ? "font-semibold text-foreground" : "font-medium text-foreground/80 group-hover:text-foreground",
+            )}
+          >
+            {label}
+          </span>
+          <ChevronRight
+            aria-hidden="true"
+            className={cn(
+              "h-5 w-5 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
+              open ? "rotate-90 text-foreground" : "text-muted-foreground group-hover:text-foreground",
+            )}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="data-[state=open]:animate-section-open data-[state=closed]:animate-collapsible-up data-[state=closed]:overflow-hidden motion-reduce:animate-none">
+        <div className="space-y-4 pt-1 pb-3 w-full min-w-0 max-w-full">
+          {children}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={collapseFromBottom}
+              className="h-8 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:text-white"
+            >
+              Свернуть
+            </Button>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
 const ProductForm = ({
   onSubmit,
@@ -1220,21 +1296,6 @@ const ProductForm = ({
     onSubmit(e);
   };
 
-  const SectionHeader = ({
-    label,
-    open,
-  }: { label: string; open: boolean }) => (
-    <CollapsibleTrigger asChild>
-      <button
-        type="button"
-        className="flex items-center justify-between w-full px-4 py-3 bg-muted/40 hover:bg-muted/60 rounded-xl border border-border transition-colors"
-      >
-        <span className="font-normal text-base sm:text-lg text-foreground">{label}</span>
-        {open ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-      </button>
-    </CollapsibleTrigger>
-  );
-
   const durationPresets = [
     { label: "7 дней", value: 7 },
     { label: "2 недели", value: 14 },
@@ -1264,10 +1325,9 @@ const ProductForm = ({
         </div>
       ) : (
         <div className="space-y-4 w-full min-w-0 max-w-full">
+          <div className="divide-y divide-border border-y border-border">
           {/* ============ ДЕТАЛИ ============ */}
-    <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <SectionHeader label="Детали" open={detailsOpen} />
-      <CollapsibleContent className="space-y-4 pt-4 w-full min-w-0 max-w-full">
+    <FormSection label="Детали" open={detailsOpen} onOpenChange={setDetailsOpen}>
         {/* Unified Cover (Image & Video) upload */}
         <div className="space-y-2 w-full min-w-0 max-w-full">
           <div className="flex items-center justify-between">
@@ -1656,13 +1716,10 @@ const ProductForm = ({
             )}
           </div>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+    </FormSection>
 
     {/* ============ КЛАССИФИКАЦИЯ ============ */}
-    <Collapsible open={categoryOpen} onOpenChange={handleCategoryOpenChange}>
-      <SectionHeader label="Классификация" open={categoryOpen} />
-      <CollapsibleContent className="space-y-4 pt-4">
+    <FormSection label="Классификация" open={categoryOpen} onOpenChange={handleCategoryOpenChange}>
         {/* Состояние загрузки AI */}
         {aiLoading && (
           <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 px-3 py-2 rounded-xl border border-primary/20">
@@ -2034,31 +2091,11 @@ const ProductForm = ({
               </div>
             );
           })()}
-
-          {/* Footer с кнопкой "Свернуть" справа снизу */}
-          <div className="flex items-center justify-end pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
-              onClick={(e) => {
-                e.stopPropagation();
-                setCategoryOpen(false);
-              }}
-            >
-              <span>Свернуть</span>
-              <ChevronUp className="w-3.5 h-3.5" />
-            </Button>
-          </div>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+    </FormSection>
 
     {/* ============ ОПЛАТА ============ */}
-    <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
-      <SectionHeader label="Оплата" open={paymentOpen} />
-      <CollapsibleContent className="space-y-4 pt-4">
+    <FormSection label="Оплата" open={paymentOpen} onOpenChange={setPaymentOpen}>
         {/* Choice between Free access and Paid access (Whop style) */}
         <div className="space-y-2">
           <Label className="text-sm sm:text-base font-semibold text-foreground">Как люди получат доступ?</Label>
@@ -2500,11 +2537,10 @@ const ProductForm = ({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
+                              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-white hover:bg-accent transition-all"
                               onClick={() => setExpandedOptionId(null)}
                             >
-                              <span>Свернуть</span>
-                              <ChevronUp className="w-3.5 h-3.5" />
+                              Свернуть
                             </Button>
                           </div>
                         </div>
@@ -2527,10 +2563,10 @@ const ProductForm = ({
             </div>
           </div>
         )}
-      </CollapsibleContent>
-    </Collapsible>
+    </FormSection>
+          </div>
 
-    <Button 
+    <Button
       type="submit" 
       variant="cta" 
       className="w-full"
@@ -2608,15 +2644,12 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
-  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [visibilityProductId, setVisibilityProductId] = useState<string | null>(null);
   const [pausingProduct, setPausingProduct] = useState<Product | null>(null);
-
-  useEffect(() => {
-    if (previewProduct) {
-      setPreviewLoading(true);
-    }
-  }, [previewProduct?.id]);
+  // Read from the live list so the dialog reflects the saved value after refetch.
+  const visibilityProduct = visibilityProductId
+    ? (products.find((p) => p.id === visibilityProductId) as Product | undefined) ?? null
+    : null;
   const [pauseMessage, setPauseMessage] = useState<string>("");
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
@@ -2849,7 +2882,9 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         }
       }
 
-      toast.success("Продукт создан!");
+      toast.success("Продукт создан!", {
+        description: "Добавьте материалы и расписание, а затем поделитесь ссылкой или выставьте продукт.",
+      });
       setIsCreating(false);
       resetForm();
     } catch (error: any) {
@@ -3294,6 +3329,17 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
                   {/* Badges */}
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {(product as Product).is_published ? (
+                      <span className={`inline-flex items-center gap-1 bg-success/10 text-success px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                        <Check className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        {language === "ru" ? "Опубликован" : "Жарияланған"}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 bg-muted text-muted-foreground px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                        <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        {language === "ru" ? "Приватный" : "Жабық"}
+                      </span>
+                    )}
                     {product.billing_period && (
                       <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
                         {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
@@ -3304,11 +3350,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                         {language === "ru" ? "Расписание" : "Кесте"}
                       </span>
                     )}
-                    {product.kaspi_link && (
-                      <span className={`bg-success/10 text-success px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        Kaspi
-                      </span>
-                    )}
+
                   </div>
                 </div>
               </div>
@@ -3321,15 +3363,20 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                   slug={product.slug}
                   sellerHandle={sellerHandle}
                   className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  warning={
+                    language === "ru"
+                      ? "Перед отправкой добавьте необходимые материалы и/или расписание. Иначе после оплаты покупатель может получить доступ к продукту, в котором пока нет содержимого."
+                      : "Жібермес бұрын қажетті материалдарды және/немесе кестені қосыңыз. Әйтпесе төлемнен кейін сатып алушы әлі мазмұны жоқ өнімге қол жеткізуі мүмкін."
+                  }
                 />
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPreviewProduct(product as Product)}
+                  onClick={() => setVisibilityProductId(product.id)}
                   className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span className="ml-1">{language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}</span>
+                  <Globe className="w-3.5 h-3.5" />
+                  <span className="ml-1">{language === "ru" ? "Выставить" : "Жариялау"}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -3403,40 +3450,11 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       />
     )}
 
-    {/* Preview Dialog */}
-    <Dialog open={!!previewProduct} onOpenChange={(open) => { if (!open) setPreviewProduct(null); }}>
-      <DialogContent className="max-w-md w-[95vw] p-4 dialog-mobile-fullscreen flex flex-col max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 pr-8">
-            <span className="truncate text-base sm:text-lg">
-              {language === "ru" ? "Предпросмотр" : "Алдын ала қарау"}: {previewProduct?.title}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 min-h-0 flex justify-center items-stretch bg-muted/30 rounded-lg p-2 sm:p-3 overflow-auto relative">
-          {previewProduct && (
-            <>
-              {previewLoading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm rounded-lg">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">
-                    {language === "ru" ? "Загрузка страницы…" : "Бет жүктелуде…"}
-                  </span>
-                </div>
-              )}
-              <iframe
-                key={previewProduct.id}
-                src={previewProduct.slug ? `/p/${encodeURIComponent(previewProduct.slug)}` : `/p/${previewProduct.id}`}
-                title="preview"
-                className="bg-background border border-border rounded-lg shadow-lg max-w-full h-full relative z-0"
-                style={{ width: "min(390px, 100%)", minHeight: 600 }}
-                onLoad={() => setPreviewLoading(false)}
-              />
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+    {/* Visibility Dialog */}
+    <ProductVisibilityDialog
+      product={visibilityProduct}
+      onOpenChange={(open) => { if (!open) setVisibilityProductId(null); }}
+    />
 
     {/* Pause Dialog */}
     <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>

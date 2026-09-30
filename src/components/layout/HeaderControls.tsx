@@ -30,8 +30,8 @@ export function headerIconButtonClass(active?: boolean) {
     "h-10 w-10 shrink-0 rounded-full",
     "md:h-auto md:w-auto md:min-w-[48px] md:flex-col md:gap-0.5 md:rounded-xl md:px-1.5 md:py-1",
     active
-      ? "bg-accent text-white md:bg-accent/10 md:text-foreground"
-      : "text-muted-foreground hover:bg-accent/50 md:hover:bg-muted/60 md:hover:text-foreground",
+      ? "bg-primary/15 text-primary md:bg-primary/10"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground md:hover:bg-muted/60",
   );
 }
 
@@ -132,7 +132,7 @@ export function ActiveProfileAvatar({ className }: { className?: string }) {
 }
 
 /** Header settings button — opens account settings modal directly on both desktop and mobile. */
-export function HeaderAccountControl() {
+export function HeaderAccountControl({ mobileNav }: { mobileNav?: React.ReactNode } = {}) {
   const { t } = useLanguage();
   const { user, profileType, profiles } = useSimpleAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -162,6 +162,7 @@ export function HeaderAccountControl() {
         </span>
       </button>
       <AccountSettingsDialog
+        mobileNav={mobileNav}
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         role={profileType || "buyer"}

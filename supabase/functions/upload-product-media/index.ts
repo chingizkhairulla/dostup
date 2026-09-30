@@ -134,23 +134,27 @@ Deno.serve(async (req) => {
       const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const s3Key = `product-media/${folder}/${kind}-${uniqueId}.${safeExt}`
 
-      if (action === 'get_upload_url' && !file) {
-        const proxyUploadUrl = `${supabaseUrl}/functions/v1/upload-product-media?action=stream_s3&productId=${encodeURIComponent(productId)}&token=${encodeURIComponent(creatorToken)}&creatorName=${encodeURIComponent(creatorName || session.creator_name || '')}&fileName=${encodeURIComponent(fileName)}&fileType=${encodeURIComponent(fileType)}`
-        return json({
-          success: true,
-          uploadType: 'proxy_stream',
-          uploadUrl: proxyUploadUrl,
-          path: s3Key,
-          contentType: fileType || 'video/mp4',
-        })
-      }
-
       const s3Signed = await presignPut(s3Key, 7200)
       if (!s3Signed) {
         return json({ error: 'AWS S3 configuration missing' }, 500)
       }
 
       const publicStreamingUrl = `${supabaseUrl}/functions/v1/s3-redirect?path=${encodeURIComponent(s3Signed.storagePath)}`
+
+      // Videos go from the browser straight to AWS S3 with a presigned PUT, so a big file
+      // never passes through this function (the ?action=stream_s3 proxy stays for old clients).
+      if (action === 'get_upload_url' && !file) {
+        return json({
+          success: true,
+          uploadType: 's3',
+          uploadUrl: s3Signed.uploadUrl,
+          url: publicStreamingUrl,
+          publicUrl: publicStreamingUrl,
+          storagePath: s3Signed.storagePath,
+          path: s3Key,
+          contentType: fileType || 'video/mp4',
+        })
+      }
 
       if (action === 'stream_s3') {
         const contentLength = req.headers.get('content-length')

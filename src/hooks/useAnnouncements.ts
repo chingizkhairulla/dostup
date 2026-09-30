@@ -93,29 +93,21 @@ export const useReorderAnnouncements = () => {
   });
 };
 
-export const useSetGroupLink = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { productId: string; groupLinkUrl: string | null; groupLinkLabel: string | null }) =>
-      invokeManage({
-        action: "set_group_link",
-        productId: input.productId,
-        groupLinkUrl: input.groupLinkUrl,
-        groupLinkLabel: input.groupLinkLabel,
-      }),
-    onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ["creator-products"] });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["product", v.productId] });
-    },
-  });
-};
-
 export const uploadAnnouncementMedia = async (
   file: File,
   productId: string,
   kind: "image" | "video" | "file",
+  signal?: AbortSignal,
 ): Promise<string> => {
+  if (kind === "video") {
+    // Heavy clips are shrunk in the browser first, then go straight to AWS S3.
+    const [{ compressVideoIfNeeded }, { uploadProductMedia }] = await Promise.all([
+      import("@/lib/videoCompressor"),
+      import("@/lib/productMediaUpload"),
+    ]);
+    const ready = await compressVideoIfNeeded(file, undefined, signal);
+    return uploadProductMedia(ready, productId, "video", undefined, 1, signal);
+  }
   const { supabase } = await import("@/integrations/supabase/client");
   const creatorName = localStorage.getItem("creator_name") || "";
   const creatorToken = localStorage.getItem("creator_token") || "";
@@ -125,7 +117,7 @@ export const uploadAnnouncementMedia = async (
   form.append("creatorName", creatorName);
   form.append("creatorToken", creatorToken);
   form.append("kind", kind);
-  const { data, error } = await supabase.functions.invoke("upload-product-media", { body: form });
+  const { data, error } = await supabase.functions.invoke("upload-product-media", { body: form, signal });
   if (error) throw error;
   if (!data?.url) throw new Error(data?.error || "Upload failed");
   return data.url as string;

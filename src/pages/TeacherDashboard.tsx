@@ -13,6 +13,7 @@ import {
 } from "@/components/layout/HeaderControls";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAppResume } from "@/hooks/useAppResume";
 import TeacherScheduleTab from "@/components/teacher/TeacherScheduleTab";
 import TeacherMaterialsTab from "@/components/teacher/TeacherMaterialsTab";
 import TeacherNotificationsTab from "@/components/teacher/TeacherNotificationsTab";

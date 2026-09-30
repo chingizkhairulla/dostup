@@ -164,7 +164,7 @@ const AccountSheet = ({
         onConfirm={async (type, displayName, avatarFile) => {
           setCreatingType(type);
           const res = await createSeller(type, displayName, navigate, () => setCreatingType(null), avatarFile);
-          if (res === true || (typeof res === "object" && res?.ok === true)) {
+          if (res?.ok) {
             setWizardOpen(false);
             onOpenChange(false);
           }

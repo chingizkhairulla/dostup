@@ -108,10 +108,14 @@ export async function uploadFileToS3(
 
   if (!presignResponse.ok) {
     const errorData = await presignResponse.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to get upload URL');
+    throw new Error(errorData.error || 'Не удалось получить адрес для загрузки файла');
   }
 
-  const { uploadUrl, storagePath, contentType } = await presignResponse.json();
+  const { uploadUrl, storagePath } = await presignResponse.json().catch(() => ({}));
+  // Without this check a missing URL turns into PUT "undefined" and a confusing 404.
+  if (typeof uploadUrl !== 'string' || !uploadUrl || typeof storagePath !== 'string' || !storagePath) {
+    throw new Error('Не удалось получить адрес для загрузки файла. Попробуйте ещё раз.');
+  }
 
   // Step 2: Upload file directly to S3 using XMLHttpRequest for progress
   await new Promise<void>((resolve, reject) => {
@@ -128,16 +132,17 @@ export async function uploadFileToS3(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
       } else {
-        reject(new Error(`S3 upload failed with status ${xhr.status}: ${xhr.responseText}`));
+        console.error(`S3 upload failed with status ${xhr.status}:`, xhr.responseText);
+        reject(new Error(`Не удалось сохранить файл в хранилище (код ${xhr.status}). Попробуйте ещё раз.`));
       }
     });
-    
+
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error during S3 upload'));
+      reject(new Error('Сетевой сбой при загрузке файла. Проверьте интернет и попробуйте ещё раз.'));
     });
-    
+
     xhr.addEventListener('abort', () => {
-      reject(new Error('Upload was aborted'));
+      reject(new Error('Загрузка файла прервана'));
     });
     
     xhr.open('PUT', uploadUrl);

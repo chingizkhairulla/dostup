@@ -12,9 +12,11 @@ export type BuyerMobileTab = BuyerSectionKey | "account";
 interface BuyerMobileNavProps {
   activeTab?: BuyerMobileTab;
   onTabChange?: (tab: BuyerMobileTab) => void;
+  /** Called after any section is picked — used by full-screen dialogs to close themselves. */
+  onNavigate?: () => void;
 }
 
-const BuyerMobileNav = ({ activeTab, onTabChange }: BuyerMobileNavProps) => {
+const BuyerMobileNav = ({ activeTab, onTabChange, onNavigate }: BuyerMobileNavProps) => {
   const { t } = useLanguage();
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -34,7 +36,10 @@ const BuyerMobileNav = ({ activeTab, onTabChange }: BuyerMobileNavProps) => {
               <Link
                 key={key}
                 to={to}
-                onClick={() => onTabChange?.(key)}
+                onClick={() => {
+                  onTabChange?.(key);
+                  onNavigate?.();
+                }}
                 aria-label={t(labelKey)}
                 className="flex items-center justify-center h-full"
               >
@@ -42,8 +47,8 @@ const BuyerMobileNav = ({ activeTab, onTabChange }: BuyerMobileNavProps) => {
                   className={cn(
                     "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
                     active
-                      ? "bg-accent text-white"
-                      : "text-muted-foreground hover:bg-accent/50",
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <Icon className="h-6 w-6" strokeWidth={1.75} />
@@ -57,7 +62,7 @@ const BuyerMobileNav = ({ activeTab, onTabChange }: BuyerMobileNavProps) => {
             aria-label={t("navProfiles") || "Профиль"}
             className="flex items-center justify-center h-full"
           >
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors text-muted-foreground hover:bg-accent/50">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors text-muted-foreground hover:bg-muted hover:text-foreground">
               <ActiveProfileAvatar className="h-8 w-8" />
             </span>
           </button>

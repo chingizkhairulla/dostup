@@ -169,3 +169,9 @@ verify_jwt = false
 
 [functions.process-subscriptions]
 verify_jwt = false
+
+[functions.support-upload]
+verify_jwt = false
+
+[functions.direct-messages]
+verify_jwt = false

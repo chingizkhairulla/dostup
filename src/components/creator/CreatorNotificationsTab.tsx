@@ -393,7 +393,6 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt, onOpenUsers }: Cre
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-foreground">{t("notifications")}</h2>
       <CreatorPendingPayments creatorName={creatorName} mode="link" onOpenUsers={onOpenUsers} />
 
       {/* Reschedule Requests Section */}

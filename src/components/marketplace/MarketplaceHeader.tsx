@@ -1,30 +1,20 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
-import {
-  HeaderAccountControl,
-  HeaderChatsButton,
-  HeaderNotificationsButton,
-} from "@/components/layout/HeaderControls";
+import { HeaderAccountControl, HeaderNotificationsButton } from "@/components/layout/HeaderControls";
 import PublicLocaleToggle from "@/components/marketplace/PublicLocaleToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { BUYER_NOTIFICATIONS_PATH } from "@/lib/navigation";
-import { profileHomePath } from "@/lib/creatorAuth";
 import { loginState } from "@/lib/loginModal";
 
 type MarketplaceHeaderProps = {
-  supportActive?: boolean;
-  supportUnread?: number;
-  onSupportClick?: () => void;
   notificationCount?: number;
   notificationsActive?: boolean;
   onNotificationsClick?: () => void;
 };
 
+/** Chats live in the Messages section of the rail, so the header only carries alerts. */
 const MarketplaceHeader = ({
-  supportActive,
-  supportUnread = 0,
-  onSupportClick,
   notificationCount = 0,
   notificationsActive,
   onNotificationsClick,
@@ -49,11 +39,6 @@ const MarketplaceHeader = ({
     <AppHeader>
       {status === "loading" ? null : signedIn ? (
         <>
-          <HeaderChatsButton
-            active={supportActive}
-            unread={supportUnread}
-            onClick={onSupportClick ?? (() => navigate(profileHomePath(profileType || "buyer", localStorage.getItem("creator_account_type"))))}
-          />
           <HeaderNotificationsButton
             active={notificationsActive}
             count={notificationCount}

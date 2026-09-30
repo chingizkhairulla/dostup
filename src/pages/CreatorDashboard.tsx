@@ -1,29 +1,25 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import SupportChat from "@/components/SupportChat";
-import { useSupportUnread } from "@/hooks/useSupportUnread";
 import CreatorProductsTab from "@/components/creator/CreatorProductsTab";
 import CreatorUsersTab from "@/components/creator/CreatorUsersTab";
 import CreatorScheduleTab from "@/components/creator/CreatorScheduleTab";
 import CreatorNotificationsTab from "@/components/creator/CreatorNotificationsTab";
 import CreatorAccountTab from "@/components/creator/CreatorAccountTab";
-import CreatorAnnouncementsTab from "@/components/creator/CreatorAnnouncementsTab";
+import CreatorMessagesTab from "@/components/creator/CreatorMessagesTab";
+import CreatorMobileNav from "@/components/layout/CreatorMobileNav";
+import NotificationsDialog from "@/components/dashboard/NotificationsDialog";
 import CreatorMaterialsTab from "@/components/creator/CreatorMaterialsTab";
 import { useCreatorPendingPurchases } from "@/components/creator/CreatorPendingPayments";
 import { useLanguage } from "@/contexts/LanguageContext";
 import AppHeader from "@/components/layout/AppHeader";
 import AppShell from "@/components/layout/BuyerAppShell";
 import {
-  ActiveProfileAvatar,
   HeaderAccountControl,
-  HeaderChatsButton,
   HeaderNotificationsButton,
 } from "@/components/layout/HeaderControls";
-import BuyerAccountSheet from "@/components/layout/BuyerAccountSheet";
 import DisplayNameSetupDialog from "@/components/account/DisplayNameSetupDialog";
 import { creatorTabFromPath, SELLER_NAV_ITEMS } from "@/lib/navigation";
-import { useCreatorMobileNavItems } from "@/lib/mobileNavPreferences";
 
 import { useCreatorProducts } from "@/hooks/useProducts";
 import { useCreatorSimpleBookings } from "@/hooks/useSimplePurchases";
@@ -42,22 +38,20 @@ import { cn } from "@/lib/utils";
 
 const CreatorDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [overlayTab, setOverlayTab] = useState<string | null>(null);
   const urlTab = creatorTabFromPath("/creator", `?${searchParams.toString()}`);
-  const activeTab = overlayTab ?? urlTab;
+  const activeTab = urlTab;
+  // Notifications open over the current tab and close back onto it, like account settings.
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(() => localStorage.getItem("profile_id"));
   const [needsDisplayName, setNeedsDisplayName] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastViewedAt, setLastViewedAt] = useState<Date | null>(null);
-  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   const { t } = useLanguage();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { activeItems: creatorNavActiveItems } = useCreatorMobileNavItems();
   useAppResume();
-  const supportUnread = useSupportUnread("creator", creatorName ?? "");
   
   // Per-user localStorage key for last viewed notifications
   const lastViewedKey = creatorName ? `creator_notifications_last_viewed_${creatorName}` : null;
@@ -71,21 +65,27 @@ const CreatorDashboard = () => {
     }
   }, [lastViewedKey]);
 
-  // Update last viewed when entering OR leaving notifications tab
   const handleTabChange = useCallback((value: string) => {
-    if (lastViewedKey && (value === "notifications" || (activeTab === "notifications" && value !== "notifications"))) {
-      const now = new Date();
-      localStorage.setItem(lastViewedKey, now.toISOString());
-      setLastViewedAt(now);
-      clearAppBadge();
-    }
-    if (value === "notifications" || value === "support") {
-      setOverlayTab(value);
-      return;
-    }
-    setOverlayTab(null);
     setSearchParams({ tab: value });
-  }, [activeTab, lastViewedKey, setSearchParams]);
+  }, [setSearchParams]);
+
+  // Opening the notifications overlay marks everything in it as seen.
+  const openNotifications = useCallback(() => {
+    setNotificationsOpen(true);
+    if (!lastViewedKey) return;
+    const now = new Date();
+    localStorage.setItem(lastViewedKey, now.toISOString());
+    setLastViewedAt(now);
+    clearAppBadge();
+  }, [lastViewedKey]);
+
+  // A push or an old link may still point at ?tab=notifications — show it as the overlay.
+  const rawTab = searchParams.get("tab");
+  useEffect(() => {
+    if (rawTab !== "notifications") return;
+    openNotifications();
+    setSearchParams({ tab: "products" }, { replace: true });
+  }, [rawTab, openNotifications, setSearchParams]);
   
   // Получаем продукты и бронирования для подсчёта уведомлений
   const { data: products } = useCreatorProducts();
@@ -156,11 +156,11 @@ const CreatorDashboard = () => {
 
   // Set initial app badge based on notification count
   useEffect(() => {
-    if (activeTab !== "notifications") {
+    if (!notificationsOpen) {
       // Set badge to current unread count
       setAppBadge(newNotificationsCount);
     }
-  }, [newNotificationsCount, activeTab]);
+  }, [newNotificationsCount, notificationsOpen]);
 
   // Enable real-time notifications for new bookings and purchases (with badge count)
   useRealtimeBookingNotifications(productIds, productIds.length > 0, newNotificationsCount);
@@ -246,6 +246,8 @@ const CreatorDashboard = () => {
 
   if (!creatorName) return null;
 
+  const isMessages = activeTab === "announcements";
+
   if (needsDisplayName) {
     return (
       <div className="min-h-screen bg-background">
@@ -262,30 +264,42 @@ const CreatorDashboard = () => {
 
   return (
     <AppShell sellerTab={urlTab}>
-    <div className={`min-h-screen bg-background ${isMobile ? "pb-20" : ""}`}>
+    <div
+      className={cn(
+        "bg-background",
+        isMessages ? "flex h-[100dvh] flex-col overflow-hidden" : "min-h-screen",
+        isMobile && (isMessages ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : "pb-20"),
+      )}
+    >
       <AppHeader>
-        <HeaderChatsButton
-          active={activeTab === "support"}
-          unread={supportUnread}
-          onClick={() => handleTabChange("support")}
-        />
         <HeaderNotificationsButton
-          active={activeTab === "notifications"}
+          active={notificationsOpen}
           count={newNotificationsCount}
-          onClick={() => handleTabChange("notifications")}
+          onClick={openNotifications}
         />
-        <HeaderAccountControl />
+        <HeaderAccountControl
+          mobileNav={<CreatorMobileNav activeTab={activeTab} onTabChange={handleTabChange} />}
+        />
       </AppHeader>
 
-      <main className={isMobile ? "px-4 py-6" : "mx-auto w-full max-w-5xl px-6 py-6"}>
+      {/* The messenger runs edge to edge and owns its own scrolling. */}
+      <main
+        className={
+          isMessages ? "min-h-0 flex-1" : isMobile ? "px-4 py-6" : "mx-auto w-full max-w-5xl px-6 py-6"
+        }
+      >
           {activeTab === "products" && (
             <div className="animate-fade-in">
               <CreatorProductsTab creatorName={creatorName} onOpenUsers={() => handleTabChange("users")} />
             </div>
           )}
-          {activeTab === "announcements" && (
-            <div className="animate-fade-in">
-              <CreatorAnnouncementsTab creatorName={creatorName} onGoToProducts={() => handleTabChange("products")} />
+          {isMessages && (
+            <div className="h-full animate-fade-in">
+              <CreatorMessagesTab
+                creatorName={creatorName}
+                supportDisplayName={profileDisplayName || creatorName}
+                onGoToProducts={() => handleTabChange("products")}
+              />
             </div>
           )}
           {activeTab === "materials" && (
@@ -303,87 +317,36 @@ const CreatorDashboard = () => {
               <CreatorUsersTab creatorName={creatorName} />
             </div>
           )}
-          {activeTab === "notifications" && (
-            <div className="animate-fade-in">
-              <CreatorNotificationsTab
-                creatorName={creatorName}
-                lastViewedAt={lastViewedAt}
-                onOpenUsers={() => handleTabChange("users")}
-              />
-            </div>
-          )}
           {activeTab === "account" && (
             <div className="animate-fade-in">
               <CreatorAccountTab creatorName={creatorName} />
             </div>
           )}
-          {activeTab === "support" && (
-            <div className="animate-fade-in">
-              <SupportChat userType="creator" userRef={creatorName} displayName={profileDisplayName || creatorName} />
-            </div>
-          )}
         </main>
 
-      {/* Bottom Navigation - Mobile Only */}
-      {isMobile && (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-t border-border safe-area-inset">
-          <div className="max-w-2xl mx-auto">
-            <div
-              className="w-full h-16 bg-transparent rounded-none grid gap-0"
-              style={{ gridTemplateColumns: `repeat(${creatorNavActiveItems.length + 1}, minmax(0, 1fr))` }}
-            >
-              {creatorNavActiveItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button 
-                    key={item.key}
-                    type="button"
-                    onClick={() => handleTabChange(item.key)}
-                    aria-label={t(item.labelKey)}
-                    className="flex items-center justify-center h-full"
-                  >
-                    <span
-                      className={cn(
-                        "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
-                        activeTab === item.key
-                          ? "bg-accent text-white"
-                          : "text-muted-foreground hover:bg-accent/50",
-                      )}
-                    >
-                      <Icon className="h-6 w-6" strokeWidth={1.75} />
-                    </span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setAccountSheetOpen(true)}
-                aria-label={t("navProfiles") || "Профиль"}
-                className="flex items-center justify-center h-full"
-              >
-                <span
-                  className={cn(
-                    "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
-                    activeTab === "users"
-                      ? "bg-accent text-white ring-2 ring-primary"
-                      : "text-muted-foreground hover:bg-accent/50",
-                  )}
-                >
-                  <ActiveProfileAvatar className="h-8 w-8" />
-                </span>
-              </button>
-            </div>
-          </div>
-        </nav>
-      )}
+      <NotificationsDialog
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        mobileNav={
+          <CreatorMobileNav
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            onNavigate={() => setNotificationsOpen(false)}
+          />
+        }
+      >
+        <CreatorNotificationsTab
+          creatorName={creatorName}
+          lastViewedAt={lastViewedAt}
+          onOpenUsers={() => {
+            setNotificationsOpen(false);
+            handleTabChange("users");
+          }}
+        />
+      </NotificationsDialog>
 
-      <BuyerAccountSheet
-        open={accountSheetOpen}
-        onOpenChange={setAccountSheetOpen}
-        onSelectSection={(secKey) => {
-          handleTabChange(secKey);
-        }}
-      />
+      {/* Bottom Navigation - Mobile Only */}
+      {isMobile && <CreatorMobileNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </div>
     </AppShell>
   );

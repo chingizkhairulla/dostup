@@ -1,41 +1,54 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import SupportChat from "@/components/SupportChat";
-import { useSupportUnread } from "@/hooks/useSupportUnread";
 import AuthSplash from "@/components/auth/AuthSplash";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import AppHeader from "@/components/layout/AppHeader";
 import BuyerAppShell from "@/components/layout/BuyerAppShell";
 import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
-import {
-  HeaderAccountControl,
-  HeaderChatsButton,
-  HeaderNotificationsButton,
-} from "@/components/layout/HeaderControls";
+import { HeaderAccountControl, HeaderNotificationsButton } from "@/components/layout/HeaderControls";
 import NotificationsTab from "@/components/dashboard/NotificationsTab";
+import NotificationsDialog from "@/components/dashboard/NotificationsDialog";
 import HomeTab from "@/components/dashboard/HomeTab";
+import MessagesTab from "@/components/dashboard/MessagesTab";
 import AccountTab from "@/components/dashboard/AccountTab";
 import MaterialsTab from "@/components/dashboard/MaterialsTab";
 import ScheduleTab from "@/components/dashboard/ScheduleTab";
+import MaterialsProtectionNotice from "@/components/materials/MaterialsProtectionNotice";
+import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
 import { useRealtimeStudentNotifications } from "@/hooks/useRealtimeStudentNotifications";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { setAppBadge, clearAppBadge } from "@/lib/appBadge";
 import { useAppResume } from "@/hooks/useAppResume";
 import { useQuery } from "@tanstack/react-query";
-import { buyerSectionFromPath, BUYER_NOTIFICATIONS_PATH } from "@/lib/navigation";
+import { buyerSectionFromPath } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 
 const Dashboard = () => {
-  const [supportOpen, setSupportOpen] = useState(false);
   const [lastViewedAt, setLastViewedAt] = useState<Date | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { user, status, profileType } = useSimpleAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isAccountView = location.pathname === "/dashboard/account";
-  const buyerSection = buyerSectionFromPath(location.pathname) ?? "home";
-  const supportUnread = useSupportUnread("student", user?.id ?? "");
+  const routeSection = buyerSectionFromPath(location.pathname) ?? "home";
+  // Notifications are an overlay, not a destination: the section underneath stays put.
+  const lastSectionPath = useRef("/dashboard");
+  const buyerSection =
+    routeSection === "notifications"
+      ? buyerSectionFromPath(lastSectionPath.current) ?? "home"
+      : routeSection;
   useAppResume();
+
+  useEffect(() => {
+    if (routeSection === "notifications") {
+      setNotificationsOpen(true);
+      navigate(lastSectionPath.current, { replace: true });
+    } else if (!isAccountView) {
+      lastSectionPath.current = location.pathname;
+    }
+  }, [routeSection, isAccountView, location.pathname, navigate]);
 
   const lastViewedKey = user?.id ? `student_notifications_last_viewed_${user.id}` : null;
 
@@ -58,6 +71,8 @@ const Dashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  const { productIds: accessibleProductIds } = useAccessibleProducts();
 
   const { data: cancellations = [] } = useQuery({
     queryKey: ["student-cancellations-count", user?.id],
@@ -161,18 +176,18 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
-    if (buyerSection !== "notifications") {
+    if (!notificationsOpen) {
       setAppBadge(newNotificationsCount);
     }
-  }, [newNotificationsCount, buyerSection]);
+  }, [newNotificationsCount, notificationsOpen]);
 
   useEffect(() => {
-    if (buyerSection !== "notifications" || !lastViewedKey) return;
+    if (!notificationsOpen || !lastViewedKey) return;
     const now = new Date();
     localStorage.setItem(lastViewedKey, now.toISOString());
     setLastViewedAt(now);
     clearAppBadge();
-  }, [buyerSection, lastViewedKey]);
+  }, [notificationsOpen, lastViewedKey]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -195,39 +210,43 @@ const Dashboard = () => {
 
   if (!user) return null;
 
+  const isMessages = !isAccountView && buyerSection === "announcements";
+  // A section tapped inside a full-screen overlay navigates and drops the overlay.
+  const closeOverlays = () => setNotificationsOpen(false);
+
   return (
     <BuyerAppShell
       activeSection={isAccountView ? undefined : buyerSection}
       mobileNav={
-        <BuyerMobileNav activeTab={isAccountView ? "account" : buyerSection} />
+        <BuyerMobileNav
+          activeTab={isAccountView ? "account" : notificationsOpen ? "notifications" : buyerSection}
+        />
       }
     >
-      <div className="min-h-screen pb-20 md:pb-6">
+      <div
+        className={cn(
+          isMessages
+            ? "flex h-[100dvh] flex-col overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+            : "min-h-screen pb-20 md:pb-6",
+        )}
+      >
         <AppHeader>
-          <HeaderChatsButton
-            active={supportOpen}
-            unread={supportUnread}
-            onClick={() => setSupportOpen((v) => !v)}
-          />
           <HeaderNotificationsButton
-            active={buyerSection === "notifications"}
+            active={notificationsOpen}
             count={newNotificationsCount}
-            onClick={() => navigate(BUYER_NOTIFICATIONS_PATH)}
+            onClick={() => setNotificationsOpen(true)}
           />
-          <HeaderAccountControl />
+          <HeaderAccountControl mobileNav={<BuyerMobileNav onNavigate={closeOverlays} />} />
         </AppHeader>
 
-        <main className="px-4 py-6 md:px-6">
-          {supportOpen ? (
-            <SupportChat userType="student" userRef={user.id} displayName={user.name} />
-          ) : isAccountView ? (
+        {/* The messenger runs edge to edge and owns its own scrolling. */}
+        <main className={isMessages ? "min-h-0 flex-1" : "px-4 py-6 md:px-6"}>
+          {isAccountView ? (
             <div className="mx-auto max-w-5xl">
               <AccountTab />
             </div>
-          ) : buyerSection === "notifications" ? (
-            <div className="mx-auto max-w-2xl">
-              <NotificationsTab lastViewedAt={lastViewedAt} purchasedProductIds={purchasedProductIds} />
-            </div>
+          ) : isMessages ? (
+            <MessagesTab onBrowseCourses={() => navigate("/")} />
           ) : buyerSection === "schedule" ? (
             <ScheduleTab />
           ) : buyerSection === "materials" ? (
@@ -237,6 +256,17 @@ const Dashboard = () => {
           )}
         </main>
       </div>
+
+      <NotificationsDialog
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        mobileNav={<BuyerMobileNav onNavigate={closeOverlays} />}
+      >
+        <NotificationsTab lastViewedAt={lastViewedAt} purchasedProductIds={purchasedProductIds} />
+      </NotificationsDialog>
+
+      {/* Shown once for each product the buyer gets access to. */}
+      <MaterialsProtectionNotice productIds={accessibleProductIds} />
     </BuyerAppShell>
   );
 };

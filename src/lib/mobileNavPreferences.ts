@@ -5,6 +5,7 @@ import {
   type BuyerSectionKey,
   type SellerSectionKey,
 } from "./navigation";
+import { mergeNavOrder } from "./navOrder";
 
 export const MOBILE_NAV_EVENT = "mobile-nav-order-changed";
 export const MAX_MOBILE_NAV_ITEMS = 4;
@@ -16,14 +17,7 @@ export function getBuyerNavOrder(): BuyerSectionKey[] {
   const allKeys = BUYER_MOBILE_NAV_ITEMS.map((i) => i.key);
   try {
     const raw = localStorage.getItem(BUYER_NAV_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const valid = parsed.filter((k: any) => allKeys.includes(k));
-        const missing = allKeys.filter((k) => !valid.includes(k));
-        return [...valid, ...missing];
-      }
-    }
+    if (raw) return mergeNavOrder(JSON.parse(raw), allKeys);
   } catch {}
   return allKeys;
 }
@@ -39,14 +33,7 @@ export function getCreatorNavOrder(): SellerSectionKey[] {
   const allKeys: SellerSectionKey[] = ["products", "announcements", "materials", "schedule", "users"];
   try {
     const raw = localStorage.getItem(CREATOR_NAV_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const valid = parsed.filter((k: any) => allKeys.includes(k));
-        const missing = allKeys.filter((k) => !valid.includes(k));
-        return [...valid, ...missing];
-      }
-    }
+    if (raw) return mergeNavOrder(JSON.parse(raw), allKeys);
   } catch {}
   return allKeys;
 }
