@@ -16,6 +16,7 @@ import AccountTab from "@/components/dashboard/AccountTab";
 import MaterialsTab from "@/components/dashboard/MaterialsTab";
 import ScheduleTab from "@/components/dashboard/ScheduleTab";
 import MaterialsProtectionNotice from "@/components/materials/MaterialsProtectionNotice";
+import MaterialsScreenGuard from "@/components/materials/MaterialsScreenGuard";
 import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
 import { useRealtimeStudentNotifications } from "@/hooks/useRealtimeStudentNotifications";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
@@ -250,7 +251,9 @@ const Dashboard = () => {
           ) : buyerSection === "schedule" ? (
             <ScheduleTab />
           ) : buyerSection === "materials" ? (
-            <MaterialsTab />
+            <MaterialsScreenGuard>
+              <MaterialsTab />
+            </MaterialsScreenGuard>
           ) : (
             <HomeTab onBrowseCourses={() => navigate("/")} />
           )}
