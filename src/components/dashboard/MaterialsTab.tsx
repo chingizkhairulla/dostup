@@ -345,6 +345,14 @@ const MaterialsTab = () => {
     const isFolder = material.type === "folder";
     const isFolderExpanded = expandedFolders.has(material.id);
     const children = isFolder ? getChildren(material.id) : [];
+    const coverUrl = material.cover_url
+      ? isS3Path(material.cover_url)
+        ? buildS3RedirectUrl(material.cover_url, "student", user?.id)
+        : (() => {
+            const path = parseStoragePath(material.cover_url || "");
+            return path ? buildStorageRedirectUrl(path) : null;
+          })()
+      : null;
 
     // Format available_at date for display
     const formatAvailableDate = (dateStr: string) => {
@@ -370,7 +378,7 @@ const MaterialsTab = () => {
       return (
         <div key={material.id} className="animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
           <Card
-            className={`cursor-pointer transition-colors hover:bg-accent/50 ${isChild ? 'ml-6' : ''}`}
+            className={`cursor-pointer transition-colors hover:bg-muted/70 ${isChild ? 'ml-6' : ''}`}
             onClick={() => toggleFolder(material.id)}
           >
             <CardContent className="p-4">
@@ -402,13 +410,17 @@ const MaterialsTab = () => {
     return (
       <Card 
         key={material.id} 
-        className={`animate-fade-in ${isChild ? 'ml-2' : ''}`}
+        className={`animate-fade-in transition-colors hover:bg-muted/70 ${isChild ? 'ml-2' : ''}`}
         style={{ animationDelay: `${index * 50}ms` }}
       >
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-              {getIcon(material.type)}
+            <div className="flex-shrink-0 w-10 h-10 overflow-hidden rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+              {coverUrl ? (
+                <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                getIcon(material.type)
+              )}
             </div>
             <div className="flex-1 min-w-0 overflow-hidden">
               <h3 className="font-medium text-foreground truncate" title={material.title}>{material.title}</h3>

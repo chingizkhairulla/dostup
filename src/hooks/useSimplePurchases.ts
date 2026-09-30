@@ -27,6 +27,7 @@ interface SimpleMaterial {
   type: string;
   content: string | null;
   file_url: string | null;
+  cover_url?: string | null;
   order_index: number;
   product_id: string;
   allow_view?: boolean;

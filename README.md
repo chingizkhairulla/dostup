@@ -31,3 +31,4 @@ npm run preview      # локальный просмотр собранной в
 - [MIGRATE.md](./MIGRATE.md) — подключение фронтенда и Supabase-проекта, деплой edge-функций
 - [CONNECTIONS_AUDIT.md](./CONNECTIONS_AUDIT.md) — сравнение подключений старой и новой версии проекта
 - [VERCEL_SETUP.md](./VERCEL_SETUP.md) — деплой на Vercel
+- [docs/material-storage-strategy.md](./docs/material-storage-strategy.md) — выбранное хранилище материалов и безопасный переход на S3

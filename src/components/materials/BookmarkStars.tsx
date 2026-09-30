@@ -46,7 +46,7 @@ export const BookmarkStars = ({
         type="button"
         size="icon"
         variant="ghost"
-        className={`${btnSize} min-h-0`}
+        className={`${btnSize} group min-h-0`}
         disabled={disabled}
         onClick={(e) => {
           e.stopPropagation();
@@ -59,7 +59,7 @@ export const BookmarkStars = ({
         }
       >
         <Star
-          className={`${iconSize} ${mine ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground"}`}
+          className={`${iconSize} transition-colors ${mine ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground group-hover:text-white group-active:text-white"}`}
         />
       </Button>
     </div>
