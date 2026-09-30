@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
@@ -9,22 +9,41 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useCatalogSearch } from "@/hooks/useCatalogSearch";
 
-const NewProductsPage = () => {
+interface NewProductsPageProps {
+  sort?: "newest" | "rating";
+}
+
+const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
   const { t } = useLanguage();
+  const location = useLocation();
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
-  const search = useCatalogSearch({ sort: "newest", onlyNew: true });
+  const searchParams = new URLSearchParams(location.search);
+  const querySort = searchParams.get("sort");
+
+  const effectiveSort: "newest" | "rating" =
+    propSort ??
+    (querySort === "rating"
+      ? "rating"
+      : location.pathname === "/top-rated"
+        ? "rating"
+        : "newest");
+
+  const isTopRated = effectiveSort === "rating";
+  const search = useCatalogSearch(
+    isTopRated ? { sort: "rating" } : { sort: "newest", onlyNew: true }
+  );
   const products = search.data ?? [];
 
   const page = (
     <div className="flex min-h-screen flex-col bg-background">
       <MarketplaceHeader />
       <main className="flex flex-1 flex-col pb-0 pt-0 md:pb-16">
-        <section className="w-full px-6 pb-16 pt-10">
+        <section className="w-full px-4 sm:px-6 pb-16 pt-10">
           <div className="mb-6 flex items-center justify-between gap-4">
-            <h1 className="text-[26px] font-bold tracking-tight text-[#1F2328]">
-              🆕 {t("newProductsHeading")}
+            <h1 className="text-[20px] sm:text-[26px] font-bold tracking-tight text-[#1F2328]">
+              {isTopRated ? `⭐ ${t("allTopRatedProductsTitle")}` : `🆕 ${t("allNewProductsTitle")}`}
             </h1>
             <Link
               to="/"

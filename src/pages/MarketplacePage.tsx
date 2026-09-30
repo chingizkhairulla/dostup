@@ -11,6 +11,7 @@ import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
 import PublicFooter from "@/components/layout/PublicFooter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
@@ -51,8 +52,12 @@ const MarketplaceContent = () => {
     },
     !isDefaultView,
   );
+  const isMobile = useIsMobile();
   const newProducts = useNewProducts(isDefaultView);
   const topRatedProducts = useTopRatedProducts(isDefaultView);
+
+  const visibleNewProducts = (newProducts.data ?? []).slice(0, isMobile ? 3 : 8);
+  const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, isMobile ? 3 : 8);
 
   const products = search.data ?? [];
   const loading = isDefaultView
@@ -125,7 +130,7 @@ const MarketplaceContent = () => {
         </PublicContainer>
 
         {isDefaultView ? (
-          <section className="mt-[140px] w-full px-6 pb-16 space-y-14">
+          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-14">
             {taxonomy.isLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -135,27 +140,44 @@ const MarketplaceContent = () => {
                 {(newProducts.data?.length ?? 0) > 0 && (
                   <div>
                     <div className="mb-6 flex items-center justify-between gap-4">
-                      <h2 className="text-[26px] font-bold tracking-tight text-[#1F2328]">
+                      <h2 className="text-[20px] sm:text-[22px] md:text-[26px] font-bold tracking-tight text-[#1F2328] whitespace-nowrap">
                         🆕 {t("newProductsHeading")}
                       </h2>
                       <Link
                         to="/new"
-                        className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline focus-ring rounded-md"
+                        aria-label={t("newProductsSeeAll")}
+                        className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] text-sm font-medium text-primary hover:underline focus-ring rounded-md"
                       >
-                        {t("newProductsSeeAll")}
-                        <ArrowRight className="h-4 w-4" />
+                        <span className="md:hidden">{t("seeAllMobile")}</span>
+                        <span className="hidden md:inline-flex md:items-center md:gap-1">
+                          {t("newProductsSeeAll")}
+                          <ArrowRight className="h-4 w-4" />
+                        </span>
                       </Link>
                     </div>
-                    <CatalogGrid products={newProducts.data ?? []} />
+                    <CatalogGrid products={visibleNewProducts} />
                   </div>
                 )}
 
                 {(topRatedProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <h2 className="mb-6 text-[26px] font-bold tracking-tight text-[#1F2328]">
-                      ⭐ {t("topRatedHeading")}
-                    </h2>
-                    <CatalogGrid products={topRatedProducts.data ?? []} />
+                    <div className="mb-6 flex items-center justify-between gap-4">
+                      <h2 className="text-[20px] sm:text-[22px] md:text-[26px] font-bold tracking-tight text-[#1F2328] whitespace-nowrap">
+                        ⭐ {t("topRatedHeading")}
+                      </h2>
+                      <Link
+                        to="/top-rated"
+                        aria-label={t("topRatedSeeAll")}
+                        className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] text-sm font-medium text-primary hover:underline focus-ring rounded-md"
+                      >
+                        <span className="md:hidden">{t("seeAllMobile")}</span>
+                        <span className="hidden md:inline-flex md:items-center md:gap-1">
+                          {t("topRatedSeeAll")}
+                          <ArrowRight className="h-4 w-4" />
+                        </span>
+                      </Link>
+                    </div>
+                    <CatalogGrid products={visibleTopRatedProducts} />
                   </div>
                 )}
 

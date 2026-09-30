@@ -88,7 +88,8 @@ function AppRoutes() {
 			>
 				<Routes location={underlayLocation}>
 					<Route path='/' element={<MarketplacePage />} />
-					<Route path='/new' element={<NewProductsPage />} />
+					<Route path='/new' element={<NewProductsPage sort="newest" />} />
+					<Route path='/top-rated' element={<NewProductsPage sort="rating" />} />
 					<Route path='/terms' element={<LegalPage docId='terms' />} />
 					<Route path='/privacy' element={<LegalPage docId='privacy' />} />
 					<Route path='/s/:handle' element={<StorefrontPage />} />
