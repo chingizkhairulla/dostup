@@ -12,6 +12,7 @@ import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
 import PublicFooter from "@/components/layout/PublicFooter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
@@ -58,10 +59,14 @@ const MarketplacePage = () => {
     },
     !isDefaultView,
   );
+  const isMobile = useIsMobile();
   const newProducts = useNewProducts(isDefaultView);
   const topRatedProducts = useTopRatedProducts(isDefaultView);
   // "Popular" and "Trending" rails (usePopularProducts / useTrendingProducts) come back once the
   // catalog is big enough for sales rankings to mean something — see docs/marketplace-roadmap.md.
+
+  const visibleNewProducts = (newProducts.data ?? []).slice(0, isMobile ? 3 : 8);
+  const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, isMobile ? 3 : 8);
 
   const products = search.data ?? [];
   const loading = isDefaultView
@@ -134,7 +139,7 @@ const MarketplacePage = () => {
         </PublicContainer>
 
         {isDefaultView ? (
-          <section className="mt-[140px] w-full px-6 pb-16 space-y-14">
+          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-14">
             {taxonomy.isLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -144,26 +149,44 @@ const MarketplacePage = () => {
                 {(newProducts.data?.length ?? 0) > 0 && (
                   <div>
                     <CatalogSectionHeader
-                      title={<>🆕 {t("newProductsHeading")}</>}
+                      title={<span className="whitespace-nowrap">🆕 {t("newProductsHeading")}</span>}
                       action={
                         <Link
                           to="/new"
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+                          aria-label={t("newProductsSeeAll")}
+                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
                         >
-                          {t("newProductsSeeAll")}
-                          <ArrowRight className="h-4 w-4" />
+                          <span className="md:hidden">{t("seeAllMobile")}</span>
+                          <span className="hidden md:inline-flex md:items-center md:gap-1">
+                            {t("newProductsSeeAll")}
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
                         </Link>
                       }
                     />
-                    <CatalogGrid products={newProducts.data ?? []} />
+                    <CatalogGrid products={visibleNewProducts} />
                   </div>
                 )}
 
-
                 {(topRatedProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <CatalogSectionHeader title={<>⭐ {t("topRatedHeading")}</>} />
-                    <CatalogGrid products={topRatedProducts.data ?? []} />
+                    <CatalogSectionHeader
+                      title={<span className="whitespace-nowrap">⭐ {t("topRatedHeading")}</span>}
+                      action={
+                        <Link
+                          to="/top-rated"
+                          aria-label={t("topRatedSeeAll")}
+                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+                        >
+                          <span className="md:hidden">{t("seeAllMobile")}</span>
+                          <span className="hidden md:inline-flex md:items-center md:gap-1">
+                            {t("topRatedSeeAll")}
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        </Link>
+                      }
+                    />
+                    <CatalogGrid products={visibleTopRatedProducts} />
                   </div>
                 )}
 

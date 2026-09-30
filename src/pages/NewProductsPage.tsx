@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import CatalogSectionHeader from "@/components/marketplace/CatalogSectionHeader";
@@ -10,12 +10,31 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useCatalogSearch } from "@/hooks/useCatalogSearch";
 
-const NewProductsPage = () => {
+interface NewProductsPageProps {
+  sort?: "newest" | "rating";
+}
+
+const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
   const { t } = useLanguage();
+  const location = useLocation();
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
-  const search = useCatalogSearch({ sort: "newest", onlyNew: true });
+  const searchParams = new URLSearchParams(location.search);
+  const querySort = searchParams.get("sort");
+
+  const effectiveSort: "newest" | "rating" =
+    propSort ??
+    (querySort === "rating"
+      ? "rating"
+      : location.pathname === "/top-rated"
+        ? "rating"
+        : "newest");
+
+  const isTopRated = effectiveSort === "rating";
+  const search = useCatalogSearch(
+    isTopRated ? { sort: "rating" } : { sort: "newest", onlyNew: true }
+  );
   const products = search.data ?? [];
 
   const page = (
@@ -25,7 +44,7 @@ const NewProductsPage = () => {
         <section className="w-full px-6 pb-16 pt-10">
           <CatalogSectionHeader
             as="h1"
-            title={<>🆕 {t("newProductsHeading")}</>}
+            title={isTopRated ? <>⭐ {t("allTopRatedProductsTitle")}</> : <>🆕 {t("allNewProductsTitle")}</>}
             action={
               <Link
                 to="/"
