@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ShareProductButton from "@/components/share/ShareProductButton";
 import { ReportProductDialog } from "@/components/marketplace/ReportProductDialog";
+import BackButton from "@/components/marketplace/BackButton";
 import { isUuid } from "@/lib/productShare";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import ProductCover from "@/components/marketplace/ProductCover";
@@ -33,7 +34,7 @@ import { PRODUCT_TITLE_CLASS, productTitleSize } from "@/lib/productTitle";
 import { invokeApi } from "@/lib/sessionApi";
 import { rememberAuthNext } from "@/lib/creatorAuth";
 import { loginPath, loginState } from "@/lib/loginModal";
-import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Folder, ImageIcon, Loader2, Play, Star } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
@@ -167,7 +168,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
   const { productId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const { user, profileType, profiles, switchProfile } = useSimpleAuth();
   const { data: fetchedProduct, isLoading: fetchedLoading } = useProduct(isPreview ? undefined : productId);
   const product = isPreview ? previewProduct : fetchedProduct;
@@ -392,17 +393,8 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
   if (!product) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        {!isPreview && <MarketplaceHeader />}
+        {!isPreview && <MarketplaceHeader below={<BackButton />} />}
         <PublicContainer className="flex-1 py-6">
-          {!isPreview && (
-            <Link
-              to="/"
-              className="mb-8 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>{t("back")}</span>
-            </Link>
-          )}
           <p className="public-body text-[#6B7280]">
             {isPreview ? t("previewEmpty") : t("productNotFound")}
           </p>
@@ -437,20 +429,11 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
   const pausedMessage: string =
     (product.paused_message && String(product.paused_message).trim()) || t("productPausedDefault");
   const sellerName = product.author_name || t("author");
-  const isEffectiveSubscription = activeOption
-    ? activeOption.payment_type === "recurring"
-    : (product.category_slug === "subscriptions" || product.payment_type === "recurring");
-  const effectiveAccessLabel = isEffectiveSubscription
-    ? t("subscriptionAccessNote")
-    : (activeOption?.access_duration_days || product.access_duration_days)
-      ? t("accessDays", { days: activeOption?.access_duration_days || product.access_duration_days })
-      : t("accessLifetime");
-  const firstChargeDate = new Intl.DateTimeFormat(language === "kk" ? "kk-KZ" : "ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
   const priceLabel = formatPriceTenge(effectivePrice);
+  // Editor preview of an unfilled product: placeholder labels are shown muted.
+  const placeheld = new Set(isPreview ? product.preview_placeholders ?? [] : []);
+  const placeholderClass = (field: "title" | "headline" | "description", normal: string) =>
+    placeheld.has(field) ? "text-muted-foreground" : normal;
 
   const sellerIdentity = (
     <>
@@ -460,12 +443,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
         )}
         <AvatarFallback>{sellerInitial(sellerName)}</AvatarFallback>
       </Avatar>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{sellerName}</span>
-        {product.seller_handle && (
-          <span className="public-meta">/s/{product.seller_handle}</span>
-        )}
-      </span>
+      <span className="min-w-0 text-sm font-medium text-foreground">{sellerName}</span>
     </>
   );
 
@@ -525,12 +503,6 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
       <p className="text-3xl font-bold tracking-tight text-foreground">
         {priceLabel}
       </p>
-      {isEffectiveSubscription && (
-        <p className="public-meta mt-2">
-          {t("subscriptionFirstCharge")}: {firstChargeDate}
-        </p>
-      )}
-      <p className="public-meta mt-2">{effectiveAccessLabel}</p>
       <div className="mt-6 border-t border-border pt-6">{sellerBlock}</div>
       <div className="mt-6">
         {effectiveHasTrial && effectiveTrialDays && (
@@ -563,17 +535,9 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {!isPreview && <MarketplaceHeader />}
+      {/* The back button rides in the sticky header bar, so it stays in view. */}
+      {!isPreview && <MarketplaceHeader below={<BackButton />} />}
       <PublicContainer className="flex-1 pb-28 pt-4 lg:pb-16 lg:pt-6">
-        {!isPreview && (
-          <Link
-            to="/"
-            className="mb-4 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>{t("back")}</span>
-          </Link>
-        )}
 
         <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
           <div>
@@ -583,7 +547,16 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                 onTouchStart={productMedia.length > 1 ? handleMediaTouchStart : undefined}
                 onTouchEnd={productMedia.length > 1 ? handleMediaTouchEnd : undefined}
               >
-                {productMedia.length === 0 ? (
+                {productMedia.length === 0 && isPreview && !product.image_url ? (
+                  // Editor preview of a product with no cover yet: an image icon
+                  // marks where the cover will go.
+                  <div
+                    data-testid="preview-cover-placeholder"
+                    className="flex h-full w-full items-center justify-center bg-muted"
+                  >
+                    <ImageIcon className="h-16 w-16 text-muted-foreground/60" aria-hidden />
+                  </div>
+                ) : productMedia.length === 0 ? (
                   <ProductCover
                     productId={product.id}
                     title={product.title}
@@ -657,7 +630,8 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
               <h1
                 className={cn(
                   PRODUCT_TITLE_CLASS[productTitleSize(product.title)],
-                  "text-foreground text-balance min-w-0 whitespace-pre-wrap break-words",
+                  "text-balance min-w-0 whitespace-pre-wrap break-words",
+                  placeholderClass("title", "text-foreground"),
                 )}
               >
                 {renderSafeFormattedContent(product.title)}
@@ -672,23 +646,17 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                   size="sm"
                   className="shrink-0"
                 />
-                <ReportProductDialog
-                  productId={product.id}
-                  productTitle={product.title}
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                />
               </div>
             </div>
             {product.headline && (
-              <div className="public-body mt-3 text-foreground whitespace-pre-wrap break-words">
+              <div className={cn("public-body mt-3 whitespace-pre-wrap break-words", placeholderClass("headline", "text-foreground"))}>
                 {renderSafeFormattedContent(product.headline)}
               </div>
             )}
             {product.description && (
               <div
-                className="prose prose-sm sm:prose-base max-w-none text-foreground/90 break-words mt-4
+                data-placeholder={placeheld.has("description") || undefined}
+                className="prose prose-sm sm:prose-base max-w-none text-foreground/90 break-words mt-4 data-[placeholder]:text-muted-foreground
                   [&_strong]:text-foreground [&_strong]:font-bold
                   [&_h1]:text-foreground [&_h1]:font-bold [&_h1]:text-2xl [&_h1]:mt-6 [&_h1]:mb-3
                   [&_h2]:text-foreground [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mt-5 [&_h2]:mb-2.5
@@ -845,11 +813,23 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
             <div className="mt-8 lg:hidden">{sellerBlock}</div>
           </div>
 
-          <aside className="hidden lg:block">
-            <div className="sticky top-24 rounded-2xl border border-border bg-card p-6">
+          <aside
+            data-testid="purchase-aside"
+            className="hidden lg:sticky lg:top-[var(--public-sticky-offset,6rem)] lg:block"
+          >
+            <div className="rounded-2xl border border-border bg-card p-6">
               {purchaseBody}
             </div>
           </aside>
+        </div>
+
+        <div className="mt-12 flex justify-center">
+          <ReportProductDialog
+            productId={product.id}
+            productTitle={product.title}
+            variant="outline"
+            size="sm"
+          />
         </div>
       </PublicContainer>
 

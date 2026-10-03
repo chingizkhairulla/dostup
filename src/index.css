@@ -171,22 +171,25 @@
     }
   }
 
+  /* Product title scale. Round 3: stepped down at the customer's request, but
+     every size stays above the page's section headings (text-lg, 18px), so the
+     title still reads as the title. Guarded by productTitle.test.ts. */
   .public-display {
     font-weight: 700;
     letter-spacing: -0.02em;
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1.15;
   }
 
   @media (min-width: 768px) {
     .public-display {
-      font-size: 40px;
+      font-size: 32px;
     }
   }
 
   @media (min-width: 1024px) {
     .public-display {
-      font-size: 56px;
+      font-size: 40px;
     }
   }
 
@@ -196,34 +199,34 @@
   .public-display-long {
     font-weight: 700;
     letter-spacing: -0.02em;
-    font-size: 26px;
+    font-size: 24px;
     line-height: 1.2;
   }
 
   .public-display-xlong {
     font-weight: 700;
     letter-spacing: -0.015em;
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1.25;
   }
 
   @media (min-width: 768px) {
+    .public-display-long {
+      font-size: 28px;
+    }
+
+    .public-display-xlong {
+      font-size: 24px;
+    }
+  }
+
+  @media (min-width: 1024px) {
     .public-display-long {
       font-size: 32px;
     }
 
     .public-display-xlong {
       font-size: 26px;
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .public-display-long {
-      font-size: 40px;
-    }
-
-    .public-display-xlong {
-      font-size: 32px;
     }
   }
 

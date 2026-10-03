@@ -18,7 +18,6 @@ const product = { id: "preview", title: "SAT Preparation" } as unknown as Produc
 
 function renderLayout(
   props: Partial<{
-    previewHidden: boolean;
     title: React.ReactNode;
     footer: React.ReactNode;
     headerRight: React.ReactNode;
@@ -56,12 +55,12 @@ describe("ProductEditorLayout on desktop", () => {
     expect(container.querySelector("iframe")).not.toBeNull();
   });
 
-  // The customer asked for sections on 30 % and the preview on 70 %.
-  it("splits the window into a 30/70 grid", () => {
+  // Round 3: the customer asked for sections on 40 % and the preview on 60 %.
+  it("splits the window into a 40/60 grid", () => {
     const { container } = renderLayout();
 
     expect(root(container).className).toMatch(/\bgrid\b/);
-    expect(root(container).className).toMatch(/grid-cols-\[minmax\(0,3fr\)_minmax\(0,7fr\)\]/);
+    expect(root(container).className).toMatch(/grid-cols-\[minmax\(0,2fr\)_minmax\(0,3fr\)\]/);
   });
 
   it("offers no editor/preview tabs, because both are already visible", () => {
@@ -196,39 +195,16 @@ describe("ProductEditorLayout on a small screen", () => {
   });
 });
 
-describe("while the cover cropper is open", () => {
-  it("drops the preview, the title bar and the footer, leaving the cropper the window", () => {
-    const { container } = renderLayout({ previewHidden: true });
-
-    expect(screen.getByTestId("product-form")).toBeInTheDocument();
-    expect(container.querySelector("iframe")).toBeNull();
-    expect(screen.queryByText("Создать продукт")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
-  });
-
-  it("offers no tabs either", () => {
-    isDesktop.mockReturnValue(false);
-    renderLayout({ previewHidden: true });
-
-    expect(screen.queryByRole("button", { name: "Редактор" })).not.toBeInTheDocument();
-  });
-});
-
-// Regression: picking a cover photo flips `previewHidden`, and returning a
-// differently shaped tree per mode made React remount the form and wipe the
-// picked file — the photo vanished the instant it was chosen.
+// Regression (round 1): returning a differently shaped tree per mode made React
+// remount the form and wipe its local state — a picked cover photo vanished.
+// The cropper is now its own window (round 3), so the remaining mode change is
+// the screen size flipping between the phone and desktop layouts.
 describe("the form survives every layout change", () => {
-  const StatefulForm = ({ onPick }: { onPick: () => void }) => {
+  const StatefulForm = () => {
     const [pickedFile, setPickedFile] = useState<string | null>(null);
     return (
       <form>
-        <button
-          type="button"
-          onClick={() => {
-            setPickedFile("cover.jpg");
-            onPick();
-          }}
-        >
+        <button type="button" onClick={() => setPickedFile("cover.jpg")}>
           pick photo
         </button>
         <output data-testid="picked">{pickedFile ?? "none"}</output>
@@ -237,40 +213,18 @@ describe("the form survives every layout change", () => {
   };
 
   function Harness() {
-    const [cropping, setCropping] = useState(false);
     return (
       <LanguageProvider>
         <ProductEditorLayout
           previewProduct={product}
-          previewHidden={cropping}
-          title={<span>Создать продукт</span>}
-          footer={<button type="button">Сохранить</button>}
+          title={<span>Создание продукта</span>}
+          footer={<button type="button">Создать</button>}
         >
-          <StatefulForm onPick={() => setCropping(true)} />
+          <StatefulForm />
         </ProductEditorLayout>
       </LanguageProvider>
     );
   }
-
-  it("keeps a picked photo when the cropper opens on desktop", async () => {
-    isDesktop.mockReturnValue(true);
-    const user = userEvent.setup();
-    render(<Harness />);
-
-    await user.click(screen.getByRole("button", { name: "pick photo" }));
-
-    expect(screen.getByTestId("picked")).toHaveTextContent("cover.jpg");
-  });
-
-  it("keeps a picked photo when the cropper opens on a small screen", async () => {
-    isDesktop.mockReturnValue(false);
-    const user = userEvent.setup();
-    render(<Harness />);
-
-    await user.click(screen.getByRole("button", { name: "pick photo" }));
-
-    expect(screen.getByTestId("picked")).toHaveTextContent("cover.jpg");
-  });
 
   it("keeps form state when the screen is detected as desktop only after first render", async () => {
     isDesktop.mockReturnValue(false);
@@ -279,6 +233,18 @@ describe("the form survives every layout change", () => {
 
     await user.click(screen.getByRole("button", { name: "pick photo" }));
     isDesktop.mockReturnValue(true);
+    rerender(<Harness />);
+
+    expect(screen.getByTestId("picked")).toHaveTextContent("cover.jpg");
+  });
+
+  it("keeps form state when a desktop window shrinks to the phone layout", async () => {
+    isDesktop.mockReturnValue(true);
+    const user = userEvent.setup();
+    const { rerender } = render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "pick photo" }));
+    isDesktop.mockReturnValue(false);
     rerender(<Harness />);
 
     expect(screen.getByTestId("picked")).toHaveTextContent("cover.jpg");

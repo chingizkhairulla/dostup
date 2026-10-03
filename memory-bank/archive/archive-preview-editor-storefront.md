@@ -3,9 +3,10 @@
 ## METADATA
 - **Source spec:** `.claude/dostup_claude_code_prompt.md`
 - **Complexity:** Level 4
-- **Started:** 2026-09-17 · **Archived:** 2026-09-22
+- **Started:** 2026-09-17 · **First archived:** 2026-09-22 · **Closed:** 2026-09-29
 - **Branch:** `предпросмотер` (round 2 design rework happened on top of the same branch/work)
-- **Status: DEVELOPMENT COMPLETE, DEPLOYMENT AND CUSTOMER REVIEW PENDING** — see "Outstanding" below. This is not a "verified working in production" close; it is closed as active development so a fresh task can start on the same repo without two tasks sharing one `tasks.md`.
+- **Status: CLOSED 2026-09-29** — development complete, shown to the customer, customer feedback received and routed to a **new task** (start with `/van`). Deployment is still pending — see "Outstanding" below.
+- Earlier status (2026-09-22): development complete, deployment and customer review pending. This is not a "verified working in production" close; it is closed as active development so a fresh task can start on the same repo without two tasks sharing one `tasks.md`.
 
 ## SUMMARY
 Rebuilt the product Preview to be a genuinely isolated, chrome-less view (fixing a bug where the seller could navigate the whole platform from inside "Preview"); added Phone/Desktop preview modes; moved Preview into the Product Editor as a live pane driven by unsaved form state; made new products private by default; built out the public Seller Storefront with real rating/sales/joined-year metrics and a seller description field; and, after the initial build, went through three rounds of on-device bug fixes and a full customer-driven redesign of the editor window (round 2: 30/70 split, enlarged scrollable preview, pinned Save button, centred collapsed sections, compact cover-cropping window).
@@ -44,12 +45,19 @@ Verification relied on three methods, used deliberately for different classes of
 - **A proportion derived in one context can be wrong in another** — a "half the pane" preview-scale rule, correct on a wide desktop pane, rendered the card at half life size in a narrow phone pane.
 
 ## OUTSTANDING (why this is not a "verified in production" close)
-1. **The customer has not reviewed the round-2 editor window.** The user checked it; the customer has not.
+1. ~~The customer has not reviewed the round-2 editor window.~~ **Resolved 2026-09-29:** the user showed it to the customer, who sent a list of changes. Those changes are a **new task**, not a reopening of this one.
 2. **Nothing is deployed.** `supabase/migrations/20260917120000_private_products_and_seller_metrics.sql` is unapplied; edge functions `manage-products` and `manage-profile` (plus shared `_shared/profiles.ts`) are not redeployed. Until both happen, private-by-default and the storefront metrics are not live.
 3. **The real `ProductForm`** was never rendered inside the new two-pane window in a browser — verification used a stand-in with the same section structure, because the real form lives behind a seller login inside the 3,300-line `CreatorProductsTab.tsx`.
 4. **Cross position is ambiguous**: the customer's words say top right, their reference photo shows top left. Built to the words; a one-class change either way.
 5. **Phase 10 (fake-product cleanup)** was never started — report-only, gated on the literal confirmation "Да, удаляй fake products", against production data.
 6. **`CreatorProductsTab.tsx` is still ~3,300 lines**, holding the form, the card and every dialog — the direct reason #3 above is true.
+
+## CLOSING NOTE (2026-09-29)
+The task is closed so the customer's feedback can go through its own `/van` → `/plan` → `/build` cycle. Carry-over items for whoever picks up the follow-up work:
+- Items 2–6 in OUTSTANDING above are still open. The migration and edge-function redeploys (item 2) must happen before private-by-default and the storefront metrics go live, whatever the new task changes.
+- Round 1 on-device fixes (phone-preview `fitScale`, cover-photo remount, long product titles) and round 2's phone preview sizing were never re-checked on an actual phone.
+- Code for rounds 1 and 2 is committed on branch `предпросмотер` (`949f4b8`, `70d5069`), not merged into `main` and not pushed.
+- If the customer's feedback touches the editor window, re-read `creative/creative-editor-window-round2.md` first: it records why the Save button coexists with autosave and why sections centre via auto margins.
 
 ## REFERENCES
 - Reflections: `memory-bank/reflection/reflection-preview-editor-storefront.md` (two rounds)

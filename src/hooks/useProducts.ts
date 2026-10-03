@@ -28,6 +28,8 @@ export interface Product {
   author_name?: string | null;
   seller_handle?: string | null;
   seller_avatar_url?: string | null;
+  /** Editor preview only: fields showing a placeholder label instead of real text. Never stored. */
+  preview_placeholders?: Array<"title" | "headline" | "description">;
   seller_type?: string | null;
   category_id?: string;
   subcategory_id?: string;

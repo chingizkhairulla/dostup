@@ -56,15 +56,15 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useCoverCrop, type CoverCropResult } from "@/hooks/useCoverCrop";
 import CoverCropEditor from "./CoverCropEditor";
+import { EDITOR_HEADING_CLASS } from "./editorHeading";
+import EditorCloseButton, { useConfirmClose } from "./EditorCloseButton";
 import ProductVideoPlayer, { videoBlobCache } from "@/components/media/ProductVideoPlayer";
 import ProductEditorLayout from "./ProductEditorLayout";
 import ProductVisibilityMenu, { visibilityState, type VisibilityState } from "./ProductVisibilityMenu";
 import { draftToPreviewProduct } from "@/lib/productDraftPreview";
 import { createDefaultPricingOption, type PricingOptionFormItem } from "@/lib/pricingOptions";
 import { saveKey, validateProductForm } from "@/lib/productPayload";
-import AutoSaveIndicator from "./AutoSaveIndicator";
 import { persistProduct, type PersistDeps } from "@/lib/persistProduct";
-import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 
 export { createDefaultPricingOption };
@@ -164,18 +164,12 @@ export type ProductDraftFormData = FormData;
 export const PRODUCT_FORM_ID = "product-editor-form";
 
 /**
- * The editor window: two panes reaching the window's edges, with a definite
- * height so the panes' scroll areas have real space to divide.
+ * The editor window fills the whole screen at every size, so there is no area
+ * outside it to click by accident. The panes inside get a definite height to
+ * divide between their scroll areas.
  */
 export const EDITOR_DIALOG_CLASS =
-  "flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden min-w-0 h-[85vh] gap-0 p-0 sm:w-full lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]";
-
-/**
- * Cover cropping takes the window back to its former compact size: the cropper
- * is only 384px wide, and the full two-pane window dwarfed it.
- */
-export const CROP_DIALOG_CLASS =
-  "flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-y-auto overflow-x-hidden min-w-0 max-h-[90vh] sm:w-full";
+  "left-0 top-0 flex h-[100dvh] w-screen max-w-none min-w-0 translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0";
 
 interface ProductFormProps {
   onSubmit: (e: React.FormEvent) => void;
@@ -191,7 +185,6 @@ interface ProductFormProps {
   setPendingImageFile?: (f: File | null) => void;
   setPendingVideoFile?: (f: File | null) => void;
   taxonomyCategories?: CatalogCategory[];
-  onCroppingChange?: (isCropping: boolean) => void;
 }
 
 function categorySlugById(categories: CatalogCategory[], categoryId: string) {
@@ -222,14 +215,14 @@ const ProductForm = ({
   setPendingImageFile,
   setPendingVideoFile,
   taxonomyCategories = [],
-  onCroppingChange,
 }: ProductFormProps) => {
   const { language } = useLanguage();
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [removeImageOpen, setRemoveImageOpen] = useState(false);
   const [removeVideoOpen, setRemoveVideoOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // A new product starts with its first section open, ready to fill in.
+  const [detailsOpen, setDetailsOpen] = useState(!isEdit);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [activeFaqIndex, setActiveFaqIndex] = useState(0);
@@ -656,9 +649,10 @@ const ProductForm = ({
   const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [cropSaving, setCropSaving] = useState(false);
 
-  useEffect(() => {
-    onCroppingChange?.(Boolean(coverCrop.source));
-  }, [coverCrop.source, onCroppingChange]);
+  const cancelCrop = () => {
+    coverCrop.resetCrop();
+    setCropQueue([]);
+  };
 
   const startCoverCropProcess = async (files: File[]) => {
     const imagesToCrop: File[] = [];
@@ -1132,26 +1126,36 @@ const ProductForm = ({
 
   return (
     <form id={formId} onSubmit={handleFormSubmit} noValidate className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden">
-      {Boolean(coverCrop.source) ? (
-        <div className="space-y-4 py-1 animate-in fade-in-50 duration-200">
-          <CoverCropEditor
-            source={coverCrop.source!}
-            mediaType={coverCrop.mediaType}
-            previewStyle={coverCrop.previewStyle}
-            zoom={coverCrop.zoom}
-            onZoom={coverCrop.setZoom}
-            onPointerDown={coverCrop.onPointerDown}
-            onPointerMove={coverCrop.onPointerMove}
-            onPointerUp={coverCrop.onPointerUp}
-            saving={cropSaving}
-            onCancel={() => {
-              coverCrop.resetCrop();
-              setCropQueue([]);
-            }}
-            onSave={() => void handleSaveCrop()}
-          />
-        </div>
-      ) : (
+      {/* The cover cropper is its own window on top of the editor. It is rendered
+          from inside the form so the picked photo and the form's state stay put;
+          a click outside it or Escape only drops the photo being cropped. */}
+      <Dialog
+        open={Boolean(coverCrop.source)}
+        onOpenChange={(open) => {
+          if (!open && !cropSaving) cancelCrop();
+        }}
+      >
+        <DialogContent hideCloseButton className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Настройка обложки</DialogTitle>
+          </DialogHeader>
+          {coverCrop.source ? (
+            <CoverCropEditor
+              source={coverCrop.source}
+              mediaType={coverCrop.mediaType}
+              previewStyle={coverCrop.previewStyle}
+              zoom={coverCrop.zoom}
+              onZoom={coverCrop.setZoom}
+              onPointerDown={coverCrop.onPointerDown}
+              onPointerMove={coverCrop.onPointerMove}
+              onPointerUp={coverCrop.onPointerUp}
+              saving={cropSaving}
+              onSave={() => void handleSaveCrop()}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
         <div className="space-y-4 w-full min-w-0 max-w-full">
           {/* ============ ДЕТАЛИ ============ */}
     <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -2353,7 +2357,6 @@ const ProductForm = ({
     </Collapsible>
 
         </div>
-      )}
   </form>
   );
 };
@@ -2415,7 +2418,6 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   const deleteProduct = useDeleteProduct();
   
   const [isCreating, setIsCreating] = useState(false);
-  const [isCroppingMedia, setIsCroppingMedia] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
@@ -2473,8 +2475,13 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
           avatarUrl: activeProfile?.avatarUrl ?? null,
         },
         editingProduct,
+        {
+          title: t("previewPlaceholderTitle"),
+          headline: t("previewPlaceholderHeadline"),
+          description: t("previewPlaceholderDescription"),
+        },
       ),
-    [debouncedForm, taxonomyCategories, creatorName, sellerHandle, activeProfile?.avatarUrl, editingProduct],
+    [debouncedForm, taxonomyCategories, creatorName, sellerHandle, activeProfile?.avatarUrl, editingProduct, t],
   );
 
   const resetForm = () => {
@@ -2514,11 +2521,13 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
   // copyLink function removed - now using ShareLinkDialog for all link copying
 
-  // ---- Editor window: saved as you go, no Create / Save / Cancel buttons -------------
-  // A brand-new product is created (private) once its required fields are filled,
-  // and every later change is written to that same product.
+  // ---- Editor window: nothing is written until «Создать» / «Сохранить» ----------------
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const sessionRef = useRef(0);
+  // Set once a new product exists, so retrying after a failed media upload
+  // updates that product instead of creating a second one.
   const createdProductRef = useRef<Product | null>(null);
 
   const persistDeps: PersistDeps = {
@@ -2558,84 +2567,82 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     },
   };
 
-  const saveEditor = async ({ form, product }: { form: FormData; product: Product | null }) => {
-    const productId = product?.id ?? createdProductRef.current?.id ?? null;
-    try {
-      const result = await persistProduct(
-        { form, categories: taxonomyCategories, productId },
-        persistDeps,
-      );
-      if (result.status !== "saved") return;
+  // "Unsaved" means the form differs from what the window opened with.
+  const formSaveKey = useMemo(() => saveKey(formData, taxonomyCategories), [formData, taxonomyCategories]);
+  const [baselineKey, setBaselineKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (dialogOpen && baselineKey === null) setBaselineKey(formSaveKey);
+  }, [dialogOpen, baselineKey, formSaveKey]);
+  const dirty = dialogOpen && baselineKey !== null && formSaveKey !== baselineKey;
 
-      if (Object.keys(result.uploaded).length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          media: (prev.media || []).map((m) =>
-            result.uploaded[m.id]
-              ? { ...m, url: result.uploaded[m.id], previewUrl: m.previewUrl ?? m.url }
-              : m,
-          ),
-        }));
-      }
-      if (result.created && createdProductRef.current) {
-        setEditingProduct(createdProductRef.current);
-        toast(t("productCreatedPrivate"));
-      }
-    } catch (error: any) {
-      console.error("Autosave failed:", error);
-      toast.error(error?.message || t("autosaveError"));
-      throw error;
-    }
+  const closeEditor = () => {
+    sessionRef.current += 1;
+    setDialogOpen(false);
+    setIsCreating(false);
+    setEditingProduct(null);
+    resetForm();
+    createdProductRef.current = null;
+    setBaselineKey(null);
   };
 
-  const formSaveKey = useMemo(() => saveKey(formData, taxonomyCategories), [formData, taxonomyCategories]);
-
-  const autoSave = useAutoSave({
-    value: { form: formData, product: editingProduct },
-    saveKey: formSaveKey,
-    enabled: isCreating || !!editingProduct,
-    canSave: validateProductForm(formData) === null,
-    save: saveEditor,
-  });
+  const exit = useConfirmClose({ dirty, onClose: closeEditor });
+  const { disarm: disarmExit } = exit;
+  // Going back to editing means the seller decided to stay.
+  useEffect(() => {
+    disarmExit();
+  }, [formSaveKey, disarmExit]);
 
   const openCreate = () => {
     sessionRef.current += 1;
     createdProductRef.current = null;
     resetForm();
     setEditingProduct(null);
-    setIsCroppingMedia(false);
+    setBaselineKey(null);
     setIsCreating(true);
     setDialogOpen(true);
   };
 
-  const closeEditor = async () => {
+  // Runs after the form's own check, which opens and highlights the first
+  // missing field. A failed save keeps the window open with everything typed.
+  const submitEditor = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     const session = sessionRef.current;
-    setDialogOpen(false);
+    try {
+      const result = await persistProduct(
+        {
+          form: formData,
+          categories: taxonomyCategories,
+          productId: editingProduct?.id ?? createdProductRef.current?.id ?? null,
+        },
+        persistDeps,
+      );
+      if (result.status !== "saved" || sessionRef.current !== session) return;
 
-    const hadUnsaved = autoSave.hasUnsaved();
-    await autoSave.flush();
-    // Closing must never silently throw typed-in work away.
-    if (hadUnsaved && autoSave.hasUnsaved()) {
-      const reason = validateProductForm(formData);
-      if (reason) toast.warning(t("autosaveIncomplete"), { description: reason });
+      if (Object.keys(result.uploaded).length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          media: (prev.media || []).map((m) =>
+            result.uploaded[m.id]
+              ? { ...m, url: result.uploaded[m.id], previewUrl: m.previewUrl ?? m.url, file: undefined }
+              : m,
+          ),
+        }));
+      }
+      // A media upload failed and was reported; stay open so it can be retried.
+      if (result.failedMediaIds.length > 0) return;
+
+      if (result.created) toast(t("productCreatedPrivate"));
+      else toast.success(t("productSaved"));
+      closeEditor();
+    } catch (error: any) {
+      console.error("Save product error:", error);
+      toast.error(error?.message || t("productSaveError"));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-
-    // A different window may have been opened while this one was still saving.
-    if (sessionRef.current !== session) return;
-    setIsCreating(false);
-    setEditingProduct(null);
-    resetForm();
-    setIsCroppingMedia(false);
-    createdProductRef.current = null;
-  };
-
-  // The pinned Save button submits the form, so the form's own check runs first
-  // and highlights the first missing field. A save that fails keeps the window
-  // open rather than closing on work that was never stored.
-  const finishEditing = async () => {
-    await autoSave.flush();
-    if (autoSave.hasUnsaved()) return;
-    await closeEditor();
   };
 
   const handleVisibilityChange = (product: Product, next: VisibilityState) => {
@@ -2662,8 +2669,8 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
   const handleEdit = (product: Product) => {
     sessionRef.current += 1;
     createdProductRef.current = null;
+    setBaselineKey(null);
     setIsCreating(false);
-    setIsCroppingMedia(false);
     setDialogOpen(true);
     setEditingProduct(product);
     const eventLocal =
@@ -2844,45 +2851,43 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       </div>
 
       {/* Create / edit window: sections on the left, live preview on the right. */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) void closeEditor(); }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) exit.request(); }}>
         <DialogContent
-          alwaysShowCloseButton
-          className={isCroppingMedia ? CROP_DIALOG_CLASS : EDITOR_DIALOG_CLASS}
+          hideCloseButton
+          className={EDITOR_DIALOG_CLASS}
+          // Escape goes through the same two-step close as the cross.
+          onEscapeKeyDown={(event) => {
+            event.preventDefault();
+            exit.request();
+          }}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDownCapture={(event) => {
+            if (!(event.target as HTMLElement).closest("[data-editor-close]")) exit.disarm();
+          }}
         >
-          {isCroppingMedia ? (
-            <DialogHeader>
-              <DialogTitle>Настройка обложки</DialogTitle>
-            </DialogHeader>
-          ) : null}
+          {/* Pinned to the window's corner, so it is reachable in every mode,
+              including the phone's editor tab where the preview bar is hidden. */}
+          <div className="absolute right-3 top-2.5 z-30">
+            <EditorCloseButton armed={exit.armed} onClick={exit.request} />
+          </div>
           <ProductEditorLayout
             previewProduct={draftPreview}
-            previewHidden={isCroppingMedia}
             title={
-              isCroppingMedia ? undefined : (
-                <>
-                  <DialogTitle className="text-base">
-                    {isCreating ? "Создать продукт" : `${t("edit")} продукт`}
-                  </DialogTitle>
-                  <AutoSaveIndicator status={autoSave.status} />
-                </>
-              )
+              <DialogTitle className={EDITOR_HEADING_CLASS}>
+                {isCreating ? t("editorTitleCreate") : t("editorTitleEdit")}
+              </DialogTitle>
             }
             footer={
-              <Button
-                type="submit"
-                form={PRODUCT_FORM_ID}
-                disabled={autoSave.status === "saving"}
-              >
-                {autoSave.status === "saving" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {t("save")}
+              <Button type="submit" form={PRODUCT_FORM_ID} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isCreating ? t("create") : t("save")}
               </Button>
             }
           >
             <ProductForm
               formId={PRODUCT_FORM_ID}
-              onSubmit={() => void finishEditing()}
+              onSubmit={() => void submitEditor()}
               isEdit={!!editingProduct}
               formData={formData}
               setFormData={setFormData}
@@ -2893,7 +2898,6 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
               setPendingImageFile={setPendingImageFile}
               setPendingVideoFile={setPendingVideoFile}
               editingProductId={editingProduct?.id || null}
-              onCroppingChange={setIsCroppingMedia}
             />
           </ProductEditorLayout>
         </DialogContent>

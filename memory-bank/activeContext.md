@@ -1,21 +1,19 @@
 # Active Context
 
-## NEW focus (2026-09-21, after `/van`): Dark theme "Подсветка" + English + settings renames + white-on-orange
-Level 4, VAN done, next is `/plan` (then `/creative` for the dark palette and the i18n migration strategy). Details, audit and open questions live in the top block of `memory-bank/tasks.md`. Hard rule from the user: **build a dark-theme prototype and show it to them BEFORE any platform-wide theme work** — rollout is gated on their approval. English must cover the whole platform (≈800 `language === "ru" ? … : …` ternaries in 42 files would show Kazakh to English users, so they need a 3-way helper). The product/storefront task below is still open (Phase 8, Phase 10, deploy handoff).
+## Current focus (2026-09-29)
+Customer feedback round 3 on the product editor, product page and seller storefront. Level 3. VAN, PLAN, CREATIVE and BUILD (P0–P6, P8) done, 345 tests green. Deploy handed to the user; reflection done; next `/archive`. User answers, plan and phases: `memory-bank/tasks.md`. Deployment of the migration and the two functions is authorised; ask first only for large changes to tables unrelated to this work.
 
-## Previous focus (still open)
-Implementing `.claude/dostup_claude_code_prompt.md` (Product Preview isolation, Phone/Desktop + in-editor live preview, private-by-default products, Seller Storefront with real metrics, seller description settings, fake-product cleanup prep). This spec is the source of truth for every subsequent stage — always re-check it. Complexity: Level 4. Audit, plan, creative and the main build are complete (`memory-bank/tasks.md`, `memory-bank/creative/`). Phases 0-7 and 9 are implemented; build is green and typecheck is clean against the recorded baseline. Outstanding: Phase 8 (acceptance pass on authenticated surfaces, needs seller credentials) and Phase 10 (fake-product cleanup, gated on explicit confirmation). Nothing was deployed and nothing was committed, per the spec.
+- Reference photos arrived only as 128x80 thumbnails; build to the text.
+- Decided: autosave removed in both modes (Создать / Сохранить buttons); crop becomes a nested dialog; back button stays top-left but sticky via an `AppHeader` `below` slot. See `creative/creative-round3-editor-exit-and-back-button.md`.
+- Most storefront items already exist in code but are **not deployed**. Deployment, not code, is the blocker there.
+- Cover-crop bug: the crop UI is a mode of the editor dialog, so an outside click closes the whole editor.
 
-Key decision to carry into build: Preview stays **iframe-based** (pointed at a new chrome-less `/preview/product` route, drafts sent via `postMessage`). Rendering `ProductPage` inline was explicitly evaluated and rejected — its `fixed` mobile buy bar and viewport-scoped `lg:` breakpoints would make the phone preview show the desktop layout.
+The previous task (Product Preview / Editor / Storefront) was closed on 2026-09-29.
 
-Test infrastructure (vitest + jsdom + testing-library) was added after the fact at the user's explicit request — 310 tests now cover the acceptance criteria. One real bug was found via on-device testing after the build was declared done: the editor dialog had no definite height below the `lg` (1024px) breakpoint, and the preview frame only scaled by width, so on a real phone the live preview rendered as a short scrollable strip instead of the whole card. Fixed (`PREVIEW_VIEWPORT_HEIGHT` + a `fitScale` helper that fits both axes, `h-[85vh]` on the dialogs below `lg`) — **needs re-verification on an actual phone**, not just component tests, since jsdom has no real layout engine and cannot catch this class of bug.
-
-A second on-device bug followed: a picked cover photo vanished instantly. Cause was my own `ProductEditorLayout` returning a differently shaped tree per mode, so React remounted `ProductForm` (whose cropper state is local) the moment cropping began. Fixed by rendering one fixed three-slot structure in every mode, with 3 regression tests written first and confirmed failing. Unlike the layout bug, this one (React reconciliation) IS catchable in jsdom. Known and deliberately unfixed: between 768–1023px the editor shows no preview and no tabs (JS switches at 768px, CSS `lg:` at 1024px).
-
-A third on-device report: long product titles broke the layout (the title shared a `flex-1` row with the Share/Report buttons, so on a phone it was squeezed to ~55px and chopped into syllables; on desktop a long title was set at 56px in 5 lines). Fixed with the title on its own row, a length-based size step-down (`productTitleSize`), and `grid-cols-1` on the page grid. This time verified in real headless Chrome before/after, which also caught an overflow my first fix introduced. The Share/Report buttons now sit below the title on desktop too — a visible design change to flag. All three on-device fixes still need re-checking on an actual phone.
-
-The customer then sent design requirements (simpler UI; pale-orange hover on secondary buttons; white text on solid orange; no Cancel/Save in new windows, self-saving, cross on phone only, click outside closes on desktop). Implemented: shared `Button` hovers and the `Dialog` cross (app-wide), the two product dialogs merged into one that autosaves (a new product is created private once its required fields are complete), icon-only save indicator, visibility menu reduced to labels. Duplicated create/update payload code extracted into `lib/productPayload.ts` / `persistProduct.ts` / `hooks/useAutoSave.ts`. 310 tests, including a real component test of the editor's autosave wiring. Not verified on a device or against the real backend. Other dialogs were not audited against the "no bottom buttons" rule.
-
-## Recent repo activity
-- Calendar/schedule UI work in progress (15-min slot grid, Google Calendar alignment, drag-to-select, wizard header/bottom bar fixes)
-- Homepage New/Top-rated rails and product reviews added
+## Context the next task should know
+- Branch `предпросмотер` holds rounds 1 and 2 of the editor/preview work (`949f4b8`, `70d5069`). It is not merged into `main` and not pushed.
+- Archive: `memory-bank/archive/archive-preview-editor-storefront.md`. Design rationale for the current editor window: `memory-bank/creative/creative-editor-window-round2.md`.
+- Deployment is still pending (migration + edge functions). Private-by-default and storefront metrics are not live until it happens.
+- Layout changes must be verified in real headless Chrome and ideally on a real phone, not only in jsdom. Every layout bug in the previous task was invisible to component tests.
+- Tests are required for every phase (vitest + jsdom + testing-library, `npm test`, 338 tests as of round 2).
+- The English-language task lives on branch `английский-язык`. The dark theme was cancelled.

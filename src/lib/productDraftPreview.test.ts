@@ -288,3 +288,55 @@ describe("draftToPreviewProduct", () => {
     expect(result.pricing_options).toEqual([]);
   });
 });
+
+// Round 3: an empty new product shows labels in place of blanks, so the seller
+// sees the shape of the page before filling it in.
+describe("placeholders for an empty draft", () => {
+  const placeholders = {
+    title: "Название продукта",
+    headline: "Короткое описание продукта",
+    description: "Здесь будет подробное описание продукта",
+  };
+
+  it("fills every empty text field with its placeholder and records which ones", () => {
+    const result = draftToPreviewProduct(
+      form({ title: "", headline: "", description: "" }),
+      categories,
+      seller,
+      null,
+      placeholders,
+    );
+
+    expect(result.title).toBe("Название продукта");
+    expect(result.headline).toBe("Короткое описание продукта");
+    expect(result.description).toBe("Здесь будет подробное описание продукта");
+    expect(result.preview_placeholders).toEqual(["title", "headline", "description"]);
+  });
+
+  it("replaces a placeholder as soon as the field has real text", () => {
+    const result = draftToPreviewProduct(
+      form({ title: "SAT", headline: "", description: "" }),
+      categories,
+      seller,
+      null,
+      placeholders,
+    );
+
+    expect(result.title).toBe("SAT");
+    expect(result.preview_placeholders).toEqual(["headline", "description"]);
+  });
+
+  it("treats whitespace-only text as empty", () => {
+    const result = draftToPreviewProduct(form({ title: "   " }), categories, seller, null, placeholders);
+
+    expect(result.title).toBe("Название продукта");
+  });
+
+  it("leaves fields blank and marks nothing when no placeholders are given", () => {
+    const result = draftToPreviewProduct(form({ title: "", headline: "" }), categories, seller);
+
+    expect(result.title).toBe("");
+    expect(result.headline).toBeNull();
+    expect(result.preview_placeholders).toEqual([]);
+  });
+});

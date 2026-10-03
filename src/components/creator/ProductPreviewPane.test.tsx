@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import ProductPreviewPane from "@/components/creator/ProductPreviewPane";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { PREVIEW_ROUTE, PREVIEW_VIEWPORT } from "@/lib/productPreview";
+import { EDITOR_HEADING_CLASS } from "@/components/creator/editorHeading";
 import type { Product } from "@/hooks/useProducts";
 
 const product = { id: "preview", title: "SAT Preparation" } as unknown as Product;
@@ -33,6 +34,41 @@ describe("ProductPreviewPane", () => {
     renderPane();
 
     expect(screen.getByText("Предпросмотр")).toBeInTheDocument();
+  });
+
+  // Round 3: the heading matches the window title in size (both use one class).
+  it("sets the heading in the same size as the editor window's title", () => {
+    renderPane();
+
+    const heading = screen.getByText("Предпросмотр");
+    for (const cls of EDITOR_HEADING_CLASS.split(" ")) {
+      expect(heading).toHaveClass(cls);
+    }
+    // Larger than the former text-base title / text-sm label, as asked.
+    expect(EDITOR_HEADING_CLASS).toMatch(/\btext-xl\b/);
+  });
+
+  // Round 3: the switch was centred between the heading and the close control,
+  // so it drifted by their width difference. A 1fr/auto/1fr bar centres it on
+  // the pane itself.
+  it("centres the viewport switch on the pane, independent of the items beside it", () => {
+    renderPane({ headerRight: <button type="button">Закрыть</button> });
+
+    const bar = screen.getByText("Предпросмотр").parentElement as HTMLElement;
+    expect(bar.className).toMatch(/grid-cols-\[1fr_auto_1fr\]/);
+    const [left, middle, right] = Array.from(bar.children) as HTMLElement[];
+    expect(left).toHaveTextContent("Предпросмотр");
+    expect(middle).toContainElement(screen.getByRole("button", { name: "Телефон" }));
+    expect(middle).toHaveClass("justify-self-center");
+    expect(right).toContainElement(screen.getByRole("button", { name: "Закрыть" }));
+  });
+
+  it("keeps the side columns when there is no viewport switch, so the bar does not collapse", () => {
+    renderPane({ phoneOnly: true, headerRight: <button type="button">Закрыть</button> });
+
+    const bar = screen.getByText("Предпросмотр").parentElement as HTMLElement;
+    expect(bar.children).toHaveLength(3);
+    expect(bar.lastElementChild).toContainElement(screen.getByRole("button", { name: "Закрыть" }));
   });
 
   it("puts the window's close control in the same top bar", () => {

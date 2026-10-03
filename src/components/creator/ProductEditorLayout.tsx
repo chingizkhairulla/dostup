@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils";
 
 type ProductEditorLayoutProps = {
   previewProduct: Product | null;
-  /** Cropping takes over the whole window, so both panes step aside. */
-  previewHidden?: boolean;
   /** Left pane's top bar: the window title and the save indicator. */
   title?: ReactNode;
   /** Left pane's pinned bottom bar: the save button. */
@@ -33,7 +31,6 @@ type ProductEditorLayoutProps = {
  */
 const ProductEditorLayout = ({
   previewProduct,
-  previewHidden = false,
   title,
   footer,
   headerRight,
@@ -43,17 +40,17 @@ const ProductEditorLayout = ({
   const { t } = useLanguage();
   const [tab, setTab] = useState<"editor" | "preview">("editor");
 
-  const splitView = isDesktop && !previewHidden;
-  const showTabs = !isDesktop && !previewHidden;
+  const splitView = isDesktop;
+  const showTabs = !isDesktop;
   const previewTabActive = showTabs && tab === "preview";
-  const showPreview = !previewHidden && (isDesktop || previewTabActive);
+  const showPreview = isDesktop || previewTabActive;
 
   return (
     <div
       className={cn(
         "min-h-0 flex-1",
         splitView
-          ? "grid lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]"
+          ? "grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
           : "flex flex-col",
       )}
     >
@@ -88,22 +85,19 @@ const ProductEditorLayout = ({
           previewTabActive && "hidden",
         )}
       >
-        {title && !previewHidden ? (
+        {title ? (
           <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
             {title}
           </div>
         ) : null}
 
         <div
-          className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-y-auto",
-            previewHidden ? "min-w-0" : "px-4 py-4",
-          )}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4"
         >
           <div className="my-auto w-full min-w-0">{children}</div>
         </div>
 
-        {footer && !previewHidden ? (
+        {footer ? (
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-3">
             {footer}
           </div>

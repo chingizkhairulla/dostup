@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
 import {
@@ -19,6 +20,8 @@ type MarketplaceHeaderProps = {
   notificationCount?: number;
   notificationsActive?: boolean;
   onNotificationsClick?: () => void;
+  /** Passed to the header's sticky `below` bar (e.g. a back button). */
+  below?: ReactNode;
 };
 
 const MarketplaceHeader = ({
@@ -28,6 +31,7 @@ const MarketplaceHeader = ({
   notificationCount = 0,
   notificationsActive,
   onNotificationsClick,
+  below,
 }: MarketplaceHeaderProps) => {
   const { t } = useLanguage();
   const location = useLocation();
@@ -46,7 +50,7 @@ const MarketplaceHeader = ({
   };
 
   return (
-    <AppHeader>
+    <AppHeader below={below}>
       {status === "loading" ? null : signedIn ? (
         <>
           <HeaderChatsButton

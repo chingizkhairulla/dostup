@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  CROP_DIALOG_CLASS,
-  EDITOR_DIALOG_CLASS,
-} from "@/components/creator/CreatorProductsTab";
+import { EDITOR_DIALOG_CLASS } from "@/components/creator/CreatorProductsTab";
 
 // These guard the parts of the change that cannot be executed here: SQL and
 // edge functions run against Supabase, not in this test environment. They
@@ -142,19 +139,21 @@ describe("editor window sizing", () => {
 
   it("gives the two-pane window a definite height at every size, not just a cap", () => {
     expect(hasDefiniteHeight(EDITOR_DIALOG_CLASS)).toBe(true);
-    expect(tokens(EDITOR_DIALOG_CLASS).some((t) => /^lg:h-\[\d/.test(t))).toBe(true);
+    // One height for every breakpoint: no `lg:`/`sm:` override may shrink it.
+    expect(tokens(EDITOR_DIALOG_CLASS).some((t) => /^\w+:h-/.test(t))).toBe(false);
   });
 
   it("lets the two panes reach the window edges", () => {
     expect(tokens(EDITOR_DIALOG_CLASS)).toContain("p-0");
   });
 
-  // Cover cropping goes back to the former compact window: the cropper is only
-  // 384px wide and was dwarfed by the full two-pane window.
-  it("shrinks back to the former compact window while cropping", () => {
-    expect(tokens(CROP_DIALOG_CLASS)).toContain("max-w-lg");
-    expect(tokens(CROP_DIALOG_CLASS)).toContain("max-h-[90vh]");
-    expect(tokens(CROP_DIALOG_CLASS)).not.toContain("lg:w-[96vw]");
-    expect(hasDefiniteHeight(CROP_DIALOG_CLASS)).toBe(false);
+  // Round 3: the window covers the whole screen, so there is no outside to
+  // click by accident, and the dialog's own centring transform is cancelled.
+  it("covers the whole screen at every size", () => {
+    const t = tokens(EDITOR_DIALOG_CLASS);
+    for (const token of ["left-0", "top-0", "h-[100dvh]", "w-screen", "max-w-none", "translate-x-0", "translate-y-0", "rounded-none", "sm:rounded-none"]) {
+      expect(t).toContain(token);
+    }
+    expect(t.some((token) => /^\w+:max-w-/.test(token))).toBe(false);
   });
 });

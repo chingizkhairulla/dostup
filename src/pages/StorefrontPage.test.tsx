@@ -55,6 +55,22 @@ function renderStorefront(data: SellerStorefront | null, isLoading = false) {
   );
 }
 
+// Round 3: the storefront can be left with the same back button as a product.
+describe("StorefrontPage back button", () => {
+  it("offers the back button in the sticky header bar", () => {
+    renderStorefront(seller());
+
+    const back = screen.getByRole("button", { name: "Назад" });
+    expect(screen.getByTestId("header-below")).toContainElement(back);
+  });
+
+  it("offers it on the not-found page too, so the user is never stuck", () => {
+    renderStorefront(null);
+
+    expect(screen.getByRole("button", { name: "Назад" })).toBeInTheDocument();
+  });
+});
+
 describe("StorefrontPage", () => {
   it("shows the seller name and public description", () => {
     renderStorefront(seller());
@@ -89,18 +105,33 @@ describe("StorefrontPage", () => {
     expect(screen.getByText("152 продажи")).toBeInTheDocument();
   });
 
-  // AC 27: "Нет отзывов" rather than a misleading 0.0.
-  it("says there are no reviews instead of showing a zero rating", () => {
+  // Round 3: the overall rating is always shown, with empty stars and
+  // "нет отзывов" when there are none — never a misleading 0.0.
+  it("always shows the overall rating, even with no reviews", () => {
     renderStorefront(seller({ avg_rating: 0, review_count: 0 }));
 
-    expect(screen.getByText("Нет отзывов")).toBeInTheDocument();
+    const rating = screen.getByTestId("seller-rating");
+    expect(rating).toHaveTextContent("Общая оценка");
+    expect(rating).toHaveTextContent("нет отзывов");
+    expect(rating.querySelectorAll("svg")).toHaveLength(5);
+    expect(rating.querySelectorAll("[data-filled]")).toHaveLength(0);
     expect(screen.queryByText("0.0")).not.toBeInTheDocument();
   });
 
-  it("hides the sales line for a seller with no sales yet", () => {
+  it("fills the stars to the average rating across all the seller's products", () => {
+    renderStorefront(seller({ avg_rating: 4.3, review_count: 12 }));
+
+    const rating = screen.getByTestId("seller-rating");
+    expect(rating).toHaveTextContent("Общая оценка");
+    expect(rating).toHaveTextContent("4.3");
+    expect(rating.querySelectorAll("[data-filled]")).toHaveLength(4);
+  });
+
+  // Round 3: "если нету писать 0 продаж".
+  it("shows 0 sales for a seller with no sales yet", () => {
     renderStorefront(seller({ sales_count: 0 }));
 
-    expect(screen.queryByText(/продаж/)).not.toBeInTheDocument();
+    expect(screen.getByText("0 продаж")).toBeInTheDocument();
   });
 
   it("omits the joined line when the date is missing", () => {

@@ -58,6 +58,11 @@ export type DraftPreviewBase = {
   paused_message?: string | null;
 };
 
+export type PreviewPlaceholderField = "title" | "headline" | "description";
+
+/** Label shown in place of an empty field, so an empty draft still shows the page's shape. */
+export type DraftPreviewPlaceholders = Record<PreviewPlaceholderField, string>;
+
 /**
  * Maps unsaved editor state onto the product shape the product page renders, so
  * the live preview never needs the draft to be written to the database.
@@ -67,7 +72,21 @@ export function draftToPreviewProduct(
   categories: CatalogCategory[],
   seller: DraftPreviewSeller,
   base?: DraftPreviewBase | null,
+  placeholders?: DraftPreviewPlaceholders,
 ): Product {
+  // Placeholders live only on this preview object. The saved payload is built
+  // from the form itself (lib/productPayload), so they can never be stored.
+  const placeheld: PreviewPlaceholderField[] = [];
+  const text = (field: PreviewPlaceholderField, value: string | undefined) => {
+    if ((value || "").trim()) return value as string;
+    if (!placeholders) return null;
+    placeheld.push(field);
+    return placeholders[field];
+  };
+  const title = text("title", form.title);
+  const headline = text("headline", form.headline);
+  const description = text("description", form.description);
+
   const options =
     form.pricingOptions && form.pricingOptions.length > 0 ? form.pricingOptions : [];
   const primary = options[0];
@@ -88,9 +107,9 @@ export function draftToPreviewProduct(
   return {
     id: base?.id || "preview",
     creator_id: "preview",
-    title: form.title || "",
-    headline: form.headline || null,
-    description: form.description || null,
+    title: title || "",
+    headline,
+    description,
     price: paid ? Number(primary.price) || 0 : 0,
     image_url: firstImage?.url || form.imageUrl || null,
     video_url: firstVideo?.url || form.videoUrl || null,
@@ -129,5 +148,6 @@ export function draftToPreviewProduct(
     has_free_trial: paid ? primary.hasFreeTrial : false,
     trial_days: paid ? trialDays(primary) : null,
     pricing_options: paid ? options.map(toPricingOption) : [],
+    preview_placeholders: placeheld,
   };
 }

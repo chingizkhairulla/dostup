@@ -13,6 +13,7 @@ import {
   type PreviewViewport,
 } from "@/lib/productPreview";
 import { cn } from "@/lib/utils";
+import { EDITOR_HEADING_CLASS } from "@/components/creator/editorHeading";
 
 type ProductPreviewPaneProps = {
   product: Product | null;
@@ -87,30 +88,34 @@ const ProductPreviewPane = ({
 
   return (
     <div className={cn("flex min-h-0 min-w-0 flex-col", className)}>
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <span className="text-sm font-semibold text-foreground">{t("previewTab")}</span>
-        {!phoneOnly && (
-          <div className="mx-auto inline-flex rounded-full border border-border bg-muted/40 p-1">
-            {options.map(({ value, label, Icon }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setViewport(value)}
-                aria-pressed={viewport === value}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-ring",
-                  viewport === value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        {headerRight ? <div className="ml-auto flex items-center">{headerRight}</div> : null}
+      {/* Three columns so the viewport switch sits at the pane's true centre,
+          whatever the widths of the heading and the close control beside it. */}
+      <div className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border px-4">
+        <span className={cn(EDITOR_HEADING_CLASS, "justify-self-start")}>{t("previewTab")}</span>
+        <div className="justify-self-center">
+          {!phoneOnly && (
+            <div className="inline-flex rounded-full border border-border bg-muted/40 p-1">
+              {options.map(({ value, label, Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setViewport(value)}
+                  aria-pressed={viewport === value}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-ring",
+                    viewport === value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-self-end">{headerRight}</div>
       </div>
       <div ref={stageRef} className="relative min-h-0 flex-1 overflow-hidden bg-muted/30">
         <div

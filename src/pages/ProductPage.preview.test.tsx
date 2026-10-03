@@ -152,6 +152,16 @@ describe("ProductPage in normal mode", () => {
     expect(within(header as HTMLElement).getAllByRole("button").length).toBeGreaterThan(0);
   });
 
+  // Round 3: the back control rides in the sticky header bar, so it stays in
+  // view while the page scrolls, and it is a history-aware button, not a link.
+  it("puts the back control in the sticky header bar", () => {
+    renderPage(<ProductPage />, "/p/sat-prep");
+
+    const back = screen.getByRole("button", { name: "Назад" });
+    expect(screen.getByTestId("header-below")).toContainElement(back);
+    expect(screen.queryByRole("link", { name: "Назад" })).not.toBeInTheDocument();
+  });
+
   it("renders the back control and the seller storefront link", () => {
     renderPage(<ProductPage />, "/p/sat-prep");
 
@@ -176,13 +186,14 @@ describe("ProductPage title layout", () => {
     return { heading, container };
   }
 
-  it("puts the share and report actions after the title, not beside it", () => {
+  it("puts the share action after the title, not beside it", () => {
     const { heading } = titleAndActions("Программирование");
     const actions = heading.nextElementSibling as HTMLElement;
 
     expect(actions).not.toBeNull();
     expect(actions).toHaveTextContent("Поделиться");
-    expect(actions).toHaveTextContent("Пожаловаться");
+    // Round 3: Report moved to the bottom of the page.
+    expect(actions).not.toHaveTextContent("Пожаловаться");
   });
 
   it("does not put the title in a flex row alongside the actions", () => {
@@ -234,5 +245,123 @@ describe("ProductPage column can shrink to the viewport", () => {
 
     expect(grid).not.toBeNull();
     expect(grid.className).toMatch(/(^|\s)grid-cols-1(\s|$)/);
+  });
+});
+
+describe("an empty draft in the editor preview", () => {
+  const empty = {
+    ...product,
+    title: "Название продукта",
+    headline: "Короткое описание продукта",
+    description: "Здесь будет подробное описание продукта",
+    preview_placeholders: ["title", "headline", "description"],
+  } as unknown as Product;
+
+  it("shows the placeholder labels, muted so they do not read as real content", () => {
+    renderPage(<ProductPage isPreview previewProduct={empty} />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Название продукта" })).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(screen.getByText("Короткое описание продукта").closest(".public-body")).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(
+      screen.getByText("Здесь будет подробное описание продукта").closest("[data-placeholder]"),
+    ).not.toBeNull();
+  });
+
+  it("shows real text in the normal colour", () => {
+    renderPage(<ProductPage isPreview previewProduct={product} />);
+
+    const title = screen.getByRole("heading", { level: 1, name: "SAT Preparation" });
+    expect(title).toHaveClass("text-foreground");
+    expect(title).not.toHaveClass("text-muted-foreground");
+  });
+
+  it("marks the missing cover with a centred image icon", () => {
+    renderPage(<ProductPage isPreview previewProduct={empty} />);
+
+    const cover = screen.getByTestId("preview-cover-placeholder");
+    expect(cover).toHaveClass("items-center", "justify-center");
+    expect(cover.querySelector("svg")).not.toBeNull();
+  });
+
+  it("never shows the placeholder cover on the public page", () => {
+    renderPage(<ProductPage />, "/p/product-1");
+
+    expect(screen.queryByTestId("preview-cover-placeholder")).not.toBeInTheDocument();
+  });
+
+  it("ignores placeholder markers outside the preview", () => {
+    // Defence in depth: the field is preview-only, but even if it leaked into
+    // a real product the public page must not style anything from it.
+    const leaked = { ...product, preview_placeholders: ["title"] } as unknown as Product;
+    renderPage(<ProductPage previewProduct={leaked} />, "/p/product-1");
+
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveClass("text-muted-foreground");
+  });
+});
+
+
+// ---- Round 3: customer feedback on the product page -----------------------------------
+describe("the purchase card", () => {
+  const subscription = {
+    ...product,
+    payment_type: "recurring",
+    recurring_interval: "1m",
+    category_slug: "subscriptions",
+    access_duration_days: 30,
+  } as unknown as Product;
+  const timeLimited = { ...product, access_duration_days: 30 } as unknown as Product;
+
+  const card = (container: HTMLElement) =>
+    container.querySelector("[data-testid='purchase-aside']") as HTMLElement;
+
+  it("shows the seller by name only, without the storefront address", () => {
+    const { container } = renderPage(<ProductPage />, "/p/product-1");
+
+    expect(card(container)).toHaveTextContent("SAT Academy");
+    expect(card(container)).not.toHaveTextContent("/s/sat-academy");
+  });
+
+  it("drops the first-payment date and the subscription access note", () => {
+    const { container } = renderPage(<ProductPage isPreview previewProduct={subscription} />);
+
+    expect(card(container)).not.toHaveTextContent("Первый платёж");
+    expect(card(container)).not.toHaveTextContent("Доступ продолжается");
+  });
+
+  it("drops the access-length line for every product type", () => {
+    for (const p of [product, timeLimited]) {
+      const { container, unmount } = renderPage(<ProductPage isPreview previewProduct={p} />);
+      expect(card(container)).not.toHaveTextContent(/Доступ|доступ/);
+      unmount();
+    }
+  });
+
+  // The card sat inside an aside exactly as tall as the card (items-start), so
+  // `sticky` had no room to move. The aside itself now sticks, within the grid.
+  it("stays in place while scrolling: the aside is sticky, not the card inside it", () => {
+    const { container } = renderPage(<ProductPage />, "/p/product-1");
+    const aside = card(container);
+
+    expect(aside.className).toMatch(/(^|\s)lg:sticky(\s|$)/);
+    expect(aside.className).toMatch(/lg:top-\[var\(--public-sticky-offset/);
+    expect(aside.querySelector(".sticky")).toBeNull();
+  });
+});
+
+describe("the report button", () => {
+  it("sits at the very bottom of the product, centred, after the purchase card", () => {
+    const { container } = renderPage(<ProductPage />, "/p/product-1");
+
+    const report = screen.getByRole("button", { name: /Пожаловаться/ });
+    const row = report.parentElement as HTMLElement;
+    expect(row).toHaveClass("flex", "justify-center");
+
+    const grid = container.querySelector("[data-testid='purchase-aside']")!.parentElement as HTMLElement;
+    expect(grid.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(grid.contains(row)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,7 +65,15 @@ const BioSettingsCard = () => {
         <CardTitle className="text-lg">{t("sellerDescriptionLabel")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-xs text-muted-foreground">{t("sellerDescriptionHint")}</p>
+        {/* Round 3: the customer asked for a clear note, at the top, that all of
+            this is public — the earlier small grey hint went unnoticed. */}
+        <p
+          data-testid="bio-public-note"
+          className="flex items-start gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-foreground"
+        >
+          <Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <span>{t("sellerDescriptionHint")}</span>
+        </p>
         <Textarea
           value={value}
           onChange={(event) => setValue(event.target.value.slice(0, BIO_MAX_LENGTH))}

@@ -37,12 +37,15 @@ beforeEach(() => {
 
 describe("BioSettingsCard", () => {
   // AC 32: the seller must be told the description is public.
-  it("says the description will be visible to buyers", async () => {
+  // Round 3: the note must be noticeable and sit at the top, above the field.
+  it("says, at the top and clearly, that everything here is visible to buyers", async () => {
     renderCard();
 
-    expect(
-      screen.getByText("Это описание будет видно покупателям на вашей публичной странице."),
-    ).toBeInTheDocument();
+    const note = screen.getByTestId("bio-public-note");
+    expect(note).toHaveTextContent("Всё, что вы напишете здесь, увидят покупатели на вашей витрине.");
+    expect(note).toHaveClass("text-sm");
+    expect(note).not.toHaveClass("text-xs");
+    expect(note.compareDocumentPosition(screen.getByRole("textbox")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("loads the saved description", async () => {

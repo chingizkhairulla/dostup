@@ -13,7 +13,6 @@ type CoverCropEditorProps = {
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: () => void;
   saving?: boolean;
-  onCancel: () => void;
   onSave: () => void;
 };
 
@@ -27,7 +26,6 @@ const CoverCropEditor = ({
   onPointerMove,
   onPointerUp,
   saving = false,
-  onCancel,
   onSave,
 }: CoverCropEditorProps) => {
   const handleWheel = (e: React.WheelEvent) => {
@@ -117,17 +115,8 @@ const CoverCropEditor = ({
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          disabled={saving}
-          className="rounded-xl"
-        >
-          Отмена
-        </Button>
+      {/* Only Save: a click outside the window or Escape is the way back. */}
+      <div className="flex justify-end pt-2">
         <Button
           type="button"
           onClick={onSave}

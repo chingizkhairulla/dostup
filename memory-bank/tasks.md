@@ -1,283 +1,236 @@
 # Tasks
 
-## NEW TASK (VAN'd 2026-09-21) — Dark theme ("Подсветка") + English language + settings renames + white-on-orange
-Source: the user's `/van` message (verbatim requirements below). The task below this block ("Previous task") is still open (Phase 8 acceptance + Phase 10 cleanup, plus deploy handoff) and is NOT superseded.
+## Active task — Customer feedback round 3: product editor, product page, storefront
+VAN'd 2026-09-29. Source: the customer's feedback on the round 2 editor window, relayed by the user in `/van` (Russian, verbatim in the conversation). Builds on the archived task `archive/archive-preview-editor-storefront.md` — read its OUTSTANDING and CLOSING NOTE first, and `creative/creative-editor-window-round2.md` before touching the editor window.
 
-### Requirements (verbatim intent, in the user's order)
-1. **Dark theme**, selectable by *any* user (buyer or seller) in Settings, in a **separate section named "Подсветка"** with a **sun / moon icon**. Main colour **black**, text **white**.
-2. **Prototype first, mandatory.** Build a trial section / sample and **show the user before anything else**. Only after the user approves the look do we (a) write the theme rules and (b) roll it out to the whole platform. → Rollout is GATED on user sign-off.
-3. **Rename settings sections**: "Приложение" (`appSettings`, the download/install section) → **"Скачать приложение"**; "Настройки уведомлений" (`notificationSettings`) → **"Уведомления"**. (KK/EN equivalents needed.)
-4. **English language**: add EN to Settings → language section **after Kazakh**; the **entire platform** must be translatable to English (not just the settings screen), alongside RU and KK.
-5. **Logged-out header toggle** (`PublicLocaleToggle`, currently `RU / KK` top-right): add **`EN`** that switches to English.
-6. **White text on orange**: everywhere a button (and other elements) has an orange background, text must be white, black looks bad on orange. Applies in **every theme**. (The user's sentence is garbled — "когда пользователи начнут оставаться"; interpreted as "once the rest is done / as a final sweep". Confirm if that's wrong.)
+The customer says "фото прикрепил" twice (a filled-in preview reference; the product page's back button). **No photos reached the conversation** — ask the user for them in `/plan`.
 
-### Complexity: **Level 4**
-Not a bug fix. Three cross-cutting concerns, each touching dozens of files, plus a gated design-review step.
+### Requirements (numbered for the plan)
+**A. Editor window (`CreatorProductsTab.tsx`, `ProductEditorLayout.tsx`, `ProductPreviewPane.tsx`)**
+1. "Предпросмотр" and the window title larger, and the **same size** as each other. Now: title `text-base` (`CreatorProductsTab.tsx:2863`), preview label `text-sm` (`ProductPreviewPane.tsx:98`).
+2. Split **40% sections / 60% preview**. Now `3fr/7fr` (`ProductEditorLayout.tsx:55`).
+3. The Телефон/Компьютер toggle must be centred **on the preview pane**. Now `mx-auto` between the label and the close cross, so it is off-centre by their width difference.
+4. Desktop preview must scroll too. Verify in a real browser whether it scrolls today.
+5. Rename: title "Создать продукт" → **"Создание продукта"**; the Save button → **"Создать"** (create mode). Edit mode is not mentioned, so it keeps "Редактировать продукт" / "Сохранить" unless told otherwise.
+6. The "Детали" section starts **expanded** when creating a product. Now `useState(false)` at `CreatorProductsTab.tsx:232`.
+7. **Placeholder preview.** While a new product is empty, the preview shows field labels instead of blanks ("Название продукта", description, price, …), so the seller sees the shape of the page. The cover area shows a **centred image icon**. Mapping lives in `lib/productDraftPreview.ts`.
+8. **Cover-crop flow (bug + redesign).** Today picking a photo turns the whole editor into a compact crop window (`CROP_DIALOG_CLASS`, `isCroppingMedia`). Clicking outside it closes the entire editor, and the customer reports lost changes. Required:
+   - The crop window opens **on top of** the editor. The editor stays open behind it.
+   - Save, or a click outside the crop window, returns to the editor with the editor still open. The crop window has **no Cancel button and no top-right cross**.
+   - The editor itself becomes **full-screen**, so there is nowhere outside it to click.
+   - The editor's cross: the first click shows a **red hint under the cross**, "Вы точно хотите выйти? Изменения не сохранятся.", and a second click closes the window.
+   - Note: `ProductForm` owns the cropper state and must not remount (round 1's vanished-cover bug). Keep the three-slot invariant in `ProductEditorLayout`.
 
-### Audit findings (from VAN exploration)
-**Theme**
-- Tailwind is `darkMode: ["class"]`; `src/index.css` already defines a complete `.dark` token block — but its base is navy (`220 20% 8%`), NOT black, and **nothing ever toggles the `dark` class**. `next-themes ^0.3.0` is installed and `ui/sonner.tsx` calls `useTheme()`, yet there is **no `ThemeProvider`** mounted (so sonner always sees the default).
-- Only ~10 files carry `dark:` variants. **131 hardcoded colour usages across 31 files** (`bg-white`, `text-[#1F2328]`, `text-[#6B7280]`, `bg-[#F6F7F8]`, `border-[#…]`, `text-gray-*`…) will NOT respond to the token swap — e.g. `CategoryMenu`, `CatalogFilterRow`, `LoginModal`, `AddSellerProfileDialog`, `PublicLocaleToggle`. These are what make a naive "just add the class" dark mode look broken. Full rollout = convert them to semantic tokens.
-- Brand orange is used both as tokens (`bg-primary`, `bg-accent`, `--primary-foreground: 0 0% 100%` → already white) and as raw `#FF6B00` in ~10 places (`AuthEntryScreen`, `PasswordLoginScreen`, `InstallBanner`, nav rail markers…). Two spots use `bg-accent text-white` explicitly. `GoogleSignInButton` is intentionally white (brand rules) — must stay exempt.
-- Prior edits already made `Button` variants use `text-primary-foreground` (white). The white-on-orange sweep is therefore mostly about *non-Button* orange surfaces and raw-hex classes — needs a grep-driven audit, not a rewrite.
-- Settings shell: `src/components/account/AccountSettingsView.tsx` builds its section list in one `useMemo` (`profile`, `language`, `notifications`, `app`) with icons from lucide → adding a `theme` section (Sun/Moon) is a small, well-localised change. `ModeratorSettingsDialog.tsx` has a parallel list and also uses `notificationSettings`.
+**B. Product page (`src/pages/ProductPage.tsx`)**
+9. The Report button ("Пожаловаться") moves to the **very bottom of the page, centred**. Now it sits next to Share under the title (`:675`).
+10. Product title font **smaller**, but still **larger than the "Часто задаваемые вопросы" heading**. Scale is `PRODUCT_TITLE_CLASS` / `productTitleSize` in `lib/productTitle.ts`. It is the same component as the preview, so it applies to both.
+11. Back button: **returns to wherever the user came from** (marketplace, a product, a storefront…). Now it is a hard `<Link to="/">` (`:568`, `:397`). It sits in the **left white gutter** on desktop and **stays in place while scrolling**, like the header.
+12. The desktop purchase card on the right also **stays in place while scrolling**. It is already `sticky top-24` (`:849`), yet the customer says it doesn't stick. Find out why in a real browser (likely an ancestor with `overflow`).
+13. In that card, remove the seller's `/s/{handle}` line (`:465-467`). Show the name only.
+14. Remove "Первый платёж: …" (`:528-531`) and "Доступ продолжается, пока вы оплачиваете подписку." (`subscriptionAccessNote`, `:444`).
 
-**i18n (the big one)**
-- `Language = "ru" | "kk"` (`src/lib/translations.ts:1`); `translations` has two ~600-line objects; `t()` in `LanguageContext` falls back `translations[lang][key] → translations.ru[key] → key`. `TranslationKey = keyof translations.ru`. Adding `en` to the type is cheap and typed — **but**:
-- **~800 inline binary ternaries** `language === "ru" ? <RU> : <KK>` across **42 files** (heaviest: `CreatorScheduleTab` 151, `TeacherScheduleTab` 149, `CreatorMaterialsTab` 94, `TeacherMaterialsManager` 60, notification hooks…). With a third language every one of these silently renders **Kazakh for English users**. They must be migrated to a 3-way helper or moved into `translations`.
-- **77 files contain Cyrillic literals** outside `translations.ts` (biggest: `aiCategory.ts` 277, `CreatorProductsTab` 194, `ModeratorDashboard` 163, `taxonomyData.ts` 116, `SlotCreationWizard` 72, `normalizeTopic.ts` 21…). Some are RU-only strings never translated to KK either.
-- Hard-typed `"ru" | "kk"` in ~12 places (`catalog.ts` label helpers, `SlotCreationWizard`, both schedule tabs, `ErrorBoundary`) — will fail typecheck or mis-narrow once `Language` widens.
-- **Data-driven content**: categories carry `name_ru` / `name_kk` (`catalog.ts categoryLabel`) — no `name_en` column exists → needs a DB migration (or an EN fallback strategy). Billing-period and event-date formatters take `"ru"|"kk"`; 18 `toLocaleDateString / Intl` call sites hard-code locales.
-- **Server-side text**: edge functions (push / notify-* / emails) compose user-facing strings; EN users would get RU/KK notifications unless language is passed/stored. Scope decision needed.
-- `PublicLocaleToggle` and `LanguageSwitcher` are hand-written two-button components; `ErrorBoundary` reads `localStorage.language` directly and casts.
-- `localStorage.language` is trusted without validation — an unknown/legacy value must not crash `translations[language]`.
+**C. Seller storefront (`src/pages/StorefrontPage.tsx`, `/s/:handle`)**
+15. A back button that behaves exactly like the product page's (same component, same history-aware logic, same placement).
+16. Show: "На платформе с 2026 года" (exists); the description (exists); sales, **always shown, "0 продаж" when none** (now hidden when 0); and the **overall rating** = average over all the seller's products' reviews, **always shown, even with no reviews** (now replaced by "Нет отзывов").
+17. Seller settings: the description field exists (`BioSettingsCard.tsx`). Add a visible note at its top saying everything here is **visible to buyers**. Check it is reachable in both creator and school settings.
 
-**Settings renames** — trivial: two translation keys × RU/KK/EN. `notificationSettings` is shared with `ModeratorSettingsDialog`, so that dialog's label changes too (acceptable; noted). Check `translations.test.ts` for assertions on the old strings.
+### Audit findings
+- **Most of C is already built** (round 1, Phases 5–6) but **not deployed**: migration `20260917120000_private_products_and_seller_metrics.sql` is unapplied, and `manage-profile` / `manage-products` are not redeployed. If the customer looked at an environment without them, they saw no year, bio, sales or rating. Work out which environment the customer used. The code changes for C are small; deployment is the real blocker.
+- The cover-crop bug (A8) is structural. The crop UI is a *mode* of the single editor dialog, and that dialog's `onOpenChange(false)` → `closeEditor()` fires on an outside click in crop mode.
+- The back button and the sticky card (B11, B12) need real-browser verification. jsdom cannot judge sticky/scroll behaviour (see progress.md's tooling note).
 
-### Decisions the user must make (surface in `/plan`, do NOT guess)
-1. **Prototype form** for the dark theme — recommended: a temporary preview inside the new "Подсветка" section (toggle applies `dark` live) + screenshots of 3–4 representative screens (catalog, product page, settings, seller dashboard) via headless Chrome/tunnel, WITHOUT committing to platform-wide token conversion yet.
-2. **"Black" = pure `#000`/near-black `0 0% 4%` (OLED style) vs. the existing navy-black**. User said "черный" → default to near-black neutral greys, no blue tint. Confirm at prototype review.
-3. **Theme options**: Light / Dark only (user asked sun/moon) vs. also "System". Recommended: Light / Dark, default Light, persisted in `localStorage` (+ optionally on profile for cross-device).
-4. **English scope**: (a) UI strings only, (b) + category names (needs migration), (c) + server push/email text. Recommended phasing: (a) first, (b)/(c) as follow-ups — confirm.
-5. **Untranslated RU-only strings**: do we machine-translate to EN + KK now, or ship EN with RU fallback for the long tail (schedule/materials/moderator screens) first?
+### Complexity: **Level 3**
+About 17 changes over three screens. Most are small UI edits. Two carry real design decisions: the crop-window/close-confirm interaction (A8), which conflicts with autosave, and the history-aware sticky back button in the gutter (B11, B15). No new data model; C mostly needs deploy plus two display rules.
+→ `/plan`, then a short `/creative` for A8 and B11.
 
-### Delivery order (proposed — refine in `/plan`)
-- **Stage A – quick wins (Level 1-sized, can land first):** rename the two settings labels; white-on-orange audit for raw-hex orange surfaces.
-- **Stage B – Theme prototype (GATE):** mount `ThemeProvider`, add "Подсветка" section (Sun/Moon), tune `.dark` tokens to black, prototype a few screens, **show the user, stop and wait for approval.** Nothing platform-wide before this.
-- **Stage C – Theme rollout (after approval):** codify theme rules (token table + "no raw hex colours" rule), convert the 31 files of hardcoded colours, dark-mode pass on every screen.
-- **Stage D – English:** widen `Language`, `pick(lang, {ru,kk,en})` helper + migrate the ternaries file-by-file (start with the most visible: catalog, product, auth, checkout, settings; schedule/materials/moderator last), EN in Settings language section (after KK) and in `PublicLocaleToggle` (RU / KK / EN), validate stored language.
-- **Stage E – verification:** tests for each stage per project rule (see below), build + `tsc --noEmit`, headless-Chrome checks in light and dark, contrast check (WCAG) for white-on-orange and dark surfaces.
+### User answers (2026-09-29, in `/plan`)
+1. **Photos.** Three screenshots were attached but reached the session only as 128×80 thumbnails, so no detail is readable. What they show: (a) the editor with sections on the left, and a preview with a grey cover and a large "Название"-style placeholder title, plus an orange button bottom right; (b) the storefront: avatar and name top left, a products grid; (c) the product page: media on the left, title below, a card on the right with an orange buy button, and a back link at the top left. Build to the text. Ask for full-size images only if a detail can't be decided from the text.
+2. **Autosave: removed in both modes** (updated in `/creative`: "пусть при редактировании тоже будет через кнопку сохранить а не авто, чтобы не путать пользователя"). Create → "Создать", edit → "Сохранить". Nothing is written before the button is pressed. This reverses round 1's "self-saving" and round 2's "Save coexists with autosave".
+3. **Access line: remove entirely.** Drop "Первый платёж", "Доступ продолжается…" **and** "Доступ на N дней" / "Доступ навсегда" from the purchase card, for every product type.
+4. **Rating with no reviews:** "Общая оценка" + empty stars + "нет отзывов". Accepted.
+5. **Edit mode: the changes apply to both modes.** Title: create "Создание продукта", edit "Редактирование продукта" (same noun form). Button: create "Создать", edit "Сохранить". "Создать" makes no sense for an existing product. The red two-click exit hint appears in both modes (see creative A8).
+7. **Back button position** (screenshot, `/creative`): top left, **where it is today** — the white strip under the header, aligned with the content's left edge. Not the side gutter.
+6. **Deployment: authorised.** Apply the migration and deploy the functions. **Standing rule for this task:** ask first only when something is large *and* changes tables unrelated to the preview/storefront work. Anything additive, or scoped to this work, goes ahead.
 
-### Constraints carried from project rules / memory
-- **Tests are required** for every stage (vitest + jsdom + testing-library are already set up; ~310 tests exist). E.g. theme persistence + `dark` class toggling, settings section renders Sun/Moon and switches, `t()` fallback + completeness (every RU key has KK and EN), `pick()` helper, `PublicLocaleToggle` three-way, renamed labels, no-Cyrillic-fallback-for-EN guard. jsdom cannot judge visual result → visual checks need real headless Chrome, and phone-width checks (a prior layout bug shipped exactly because only jsdom was used).
-- No deploy / push / commit unless asked. Migrations (e.g. `name_en`) are written but applied only by the user.
-- Design: keep "white text on solid orange", pale-orange hovers on secondary buttons, no bottom Cancel/Save in new windows (from the earlier customer requirements).
+### Constraints
+- Tests for every phase (vitest + jsdom + testing-library, `npm test`, 338 tests baseline); regression tests written first for bugs (A8).
+- Anything layout- or scroll-related (A2–A4, A8 full-screen, B9–B12, C15) verified in real headless Chrome at desktop and phone widths, not only jsdom.
+- No commit / push / deploy unless the user asks. Migrations are applied only by the user.
+- Keep: white text on solid orange, pale-orange hovers on secondary buttons, the Save button coexisting with autosave (round 2 decision; revisit only via question 2).
 
-### Status
-VAN complete → **routing to `/plan`** (Level 4; `/creative` will be needed for: dark palette + prototype review flow, and the i18n migration strategy).
-
----
-
-## Previous task (still open) — Product Preview / Storefront
-Source spec: `.claude/dostup_claude_code_prompt.md` — **always the reference for every stage of this task** (audit → plan → creative → build → reflect → archive).
-
-Scope: fix Product Preview isolation, add Phone/Desktop preview, move Preview into the Product Editor as a live pane, remove Preview from the product management card, enforce private-by-default on new products, build out the Seller Storefront (ratings/sales/joined-year/description), add seller description to settings, keep it all N+1-safe, and (as a separate, confirmation-gated step) prepare fake-product cleanup. No deploy, no git push/commit, no destructive DB actions without explicit sign-off.
-
-## Complexity
-**Level 4** (complex, multi-area: frontend architecture change + new DB/RPC surface + cross-cutting UX behavior + security-sensitive public data exposure + perf constraint). Routing to `/plan`.
-
-## Audit Findings (answers to the 13 audit questions from the spec, §14)
-
-1. **Current Preview impl**: `src/components/creator/CreatorProductsTab.tsx` — button at ~L3143-3151 (Eye icon, opens `previewProduct` state), Dialog at ~L3224-3257. It renders an `<iframe src="/p/:slug">` (or `/p/:id`) at a fixed `min(390px, 100%)` width inside a `Dialog`. No desktop mode, no isolation — it's literally the live production route in an iframe.
-2. **Product Page components used inside Preview**: none directly — the iframe loads the *entire* live `ProductPage` route (`src/pages/ProductPage.tsx`, 889 lines), not a purpose-built preview component.
-3. **Why global nav is reachable in Preview**: because the iframe points at the real `/p/:slug` URL, and `ProductPage.tsx` always renders `<MarketplaceHeader />` (L368/380/544) plus its own "← Назад" link to `/` (L546-552). `MarketplaceHeader` (`src/components/marketplace/MarketplaceHeader.tsx`) renders `HeaderChatsButton` (Messages), `HeaderNotificationsButton`, `HeaderAccountControl` for signed-in users — all fully functional inside the iframe, so the seller can navigate the whole app without leaving "Preview".
-4. **Product Editor location**: same file, `ProductForm` component (`CreatorProductsTab.tsx` ~L237-2440), opened in a `Dialog` (`max-w-lg`, single column, no split layout) for both create (`handleCreate`) and edit (`handleEdit`/`handleUpdate`). Already has 3 collapsible sections via a `SectionHeader` helper: **Детали** (L1183), **Классификация** (L1578, = category), **Оплата** (L1974) — matches the spec's Details/Category/Payment grouping exactly.
-5. **Product Card location**: two distinct cards, do not conflate them:
-   - Creator's own management card — inline JSX in `CreatorProductsTab.tsx` (~L3078-3200). Buttons today: Share, **Предпросмотр** (Eye), Edit, Pause/Resume (`is_paused`), Delete.
-   - Public marketplace card — `src/components/marketplace/ProductCard.tsx` (buyer-facing, used in `CatalogGrid`/Marketplace/Storefront). Has a seller avatar+name row (L190-198) that is **not yet clickable**.
-6. **How publication currently works**: `products.is_active boolean NOT NULL DEFAULT true` (base schema, `20260112075323_...sql:40`). Both the edge function `manage-products` (`create` action: `is_active: product.is_active ?? true`) **and** the frontend `handleCreate` (`CreatorProductsTab.tsx:2642`, explicitly sends `is_active: true`) force every new product public immediately. There is **no UI toggle for `is_active` anywhere** — only the unrelated `is_paused` ("Приостановить", temporary link disable) is exposed. Private-by-default is **not implemented**, this is a real gap, not something to just verify.
-7. **Seller/creator profile storage**: unified `public.profiles` (rebuilt in `20260818162000_profiles_multi_identity.sql`, extended in `20260822154500_marketplace_catalog.sql`): `id, auth_user_id, type ('buyer'|'creator'|'school'), display_name, handle, avatar_url, bio, created_at`. Sellers additionally have a row in `creator_accounts` (`account_type: 'course_creator'|'online_school'`) linked via `profile_id`.
-8. **Do description/avatar/created_at already exist**: yes, all three columns exist on `profiles` (`bio`, `avatar_url`, `created_at`). But: (a) **no settings UI writes `bio` anywhere** — it's only ever read (`StorefrontPage.tsx`, `catalog.ts` types) — needs to be built from scratch; (b) the existing "member since" display in creator settings (`CreatorAccountTab.tsx` L19-28) is **fake** — it reads/writes a client-only `localStorage['creator_created_at']` timestamp instead of the real `profiles.created_at`. Fix this as part of the work so Settings and the new Storefront show the same real date.
-9. **Reviews location**: `public.product_reviews` + `product_reviews_public` view (`20260914120000_product_reviews.sql`). Per-product `avg_rating`/`review_count` are already folded into the `public_products` view → `search_catalog` → `get_seller_storefront`'s per-product JSON. There is **no seller-level aggregate** yet (average across all of a seller's individual reviews, not average-of-averages) — the storefront RPC needs to compute this.
-10. **How a "successful purchase" is determined**: `public.purchases.status`, default `'completed'` (base schema L85). Canonical helper already lives in `supabase/functions/_shared/purchase.ts` and is reused by `unlock-materials`, `checkout`, `manage-schedules`, etc. — reuse this definition for the seller's sales count rather than inventing a second one.
-11. **Creator ↔ products**: `products.creator_account_id → creator_accounts.id`, `creator_accounts.profile_id → profiles.id`.
-12. **Online School ↔ products**: **identical mechanism** — `creator_accounts.account_type = 'online_school'` uses the same `creator_account_id` FK on products as individual creators. `profiles.type` is just derived from `account_type`. No separate school-product table exists and none should be added — storefront/settings code should be one path for both, not two.
-13. **What needs to change**:
-    - Frontend: `CreatorProductsTab.tsx` (Preview dialog, `ProductForm`, card buttons, create/update payload), `StorefrontPage.tsx` + `useSellerStorefront.ts` (rating/reviews/sales/joined-year), `ProductPage.tsx` (preview-isolation support), `ProductCard.tsx` (clickable seller row), creator + school account settings (bio textarea, real `created_at`). Likely need a new shared preview-chrome/phone-desktop-toggle component, and to reuse `ProductPage` itself for preview rather than forking it, so the live editor preview and the real `/p/:slug` route don't diverge into two maintained versions (explicit requirement, §2.2/§3).
-    - Backend: `get_seller_storefront` RPC (add seller-level `avg_rating`, `review_count`, `sales_count`, `joined_year` — stay at one query), `manage-profile` edge function (new `set_bio` action, mirrors existing `set_display_name`), `manage-products`/frontend defaults (`is_active` → default `false` on create), new Supabase migration for the above.
-    - Routing: `/s/:handle` (`StorefrontPage`) already exists and should be reused as-is — no new seller route needed.
-
-### Architecture decision to flag before/in `/plan`
-Preview isolation can be done two ways: (a) keep the iframe-of-live-route but suppress chrome via a query flag the route reads, or (b) extract `ProductPage`'s content into a reusable, chrome-less component driven by data (fetched product OR editor draft state), rendered directly (no iframe) inside both the Preview dialog/pane and the Editor's live-preview pane, with the real `/p/:slug` route wrapping that same component with `MarketplaceHeader`. Recommend (b): it satisfies "don't keep two maintained Product Page versions" (§2.2) and "live preview must reflect form state without saving to DB" (§3.1) more directly than iframes (which can't easily preview unsaved draft data without excessive `postMessage` plumbing). Surface this in `/plan`.
-
-## Production data note
-`supabase/config.toml` site_url = `https://trydostup.online` and `.env.example` points at a live project ref — **this is production**, not local/dev. Fake-product cleanup (spec §6/§16) must stay strictly read-only/report-only until the user explicitly says "Да, удаляй fake products." Do this step separately, after the main feature work, per the spec's own ordering.
-
-## Audit corrections found during planning
-- **AC #19 is already satisfied**: the seller name/avatar block on the product page is already a `Link` to `/s/:handle` (`src/pages/ProductPage.tsx:436-451`). Only the *marketplace* `ProductCard` seller row still needs to become clickable. Verify, don't rebuild.
-- **Unpublishing is safe for existing buyers**: `unlock-materials` and `supabase/functions/_shared/purchase.ts` contain no `is_active` filter, and `manage-products`'s `list` action doesn't filter it either — so a private product still appears in the seller's dashboard and existing buyers keep material access. This de-risks the private-by-default change (AC #36).
-- **`npm run build` does not typecheck** (`"build": "vite build"`, no `tsc -b`). There is no `typecheck` or `test` script. TypeScript errors must be caught with a separate `npx tsc --noEmit`.
-
----
-
-# Implementation Plan (Level 4)
+# Implementation Plan (Level 3)
 
 ## Technology validation
-No new dependencies. Everything needed is already in the stack: React 18 + Vite, Tailwind, shadcn/ui (`Dialog`, `Tabs`/`ToggleGroup`, `Card`, `Textarea`, `Avatar`), lucide icons, TanStack Query, Supabase JS. Changes are confined to existing patterns. DB changes go into one new timestamped migration file; edge-function and migration *deployment* stays with the user (spec: no deploy).
+No new dependencies. Stack in place: React + Vite + Tailwind + Radix Dialog (shadcn), react-router, vitest/jsdom/testing-library, headless Chrome for layout checks. Radix supports nested dialogs: a second `Dialog` opened from inside the first stacks on top, and its outside-click is handled by its own `onPointerDownOutside`. That is the basis for A8.
+Deploy tooling: **the Supabase CLI is not installed**. Use `npx supabase@latest` (project ref `mebomnqdtuqmjjefvgkx` in `supabase/config.toml`). It needs a login (the user runs `! npx supabase login`) and the DB password for `link`/`db push`.
 
-## Ordering and dependencies
-Phase 1 → Phase 2 (the editor embeds the preview component built in Phase 1) → Phase 3 (card cleanup only makes sense once preview lives in the editor). Phase 4 pairs with Phase 3 (the freed button slot becomes visibility). Phases 5-7 are independent of 1-4 and of each other. Phase 8-9 are verification. Phase 10 is separate and gated on explicit user confirmation.
+## Audit additions made during planning
+- **Why the purchase card doesn't stick (B12):** `sticky top-24` is on the card `div` *inside* `<aside>`. The grid uses `items-start`, so the `<aside>` is only as tall as the card, and a sticky element cannot move outside its parent. Fix: make the `<aside>` stretch (`self-stretch`) or put `sticky` on the `<aside>` itself. Confirm in headless Chrome before and after.
+- The site header (`AppHeader`) is `sticky top-0`, 64px tall. The sticky back button and card offsets must clear it; `InstallBanner` can add height.
+- Title scale: `.public-display` 32/40/56px (mobile/md/lg), `-long` 26px, `-xlong` smaller. The FAQ heading is `text-lg` (18px). B10: step the whole scale down (e.g. 28/32/40), with `xlong` staying above 18px.
+- Migration `20260917120000_…` scope check (rule 6): `products.is_active` default (in scope), `profiles.bio` ≤500 CHECK (in scope), two **additive** indexes on `purchases(product_id)` / `products(creator_account_id)`, and a replaced `get_seller_storefront` RPC (in scope). **No unrelated table is modified**, so it goes ahead. Pre-check: the CHECK fails if any existing `bio` is over 500 chars.
+- `_shared/profiles.ts` (adds `bio` to `PROFILE_COLUMNS`) is imported by 7 functions; only `manage-profile` and `manage-products` are redeployed. The other 5 keep their old bundle. That is harmless: the change is additive and the column already exists.
+- `английский-язык` carries the same `supabase/` diff, so deploying from this branch doesn't overwrite anything from it. It does touch `translations.ts`, so new strings added here will conflict at merge. Keep new keys grouped.
 
-## Phase 0 — Baseline
-Run `npm run build` and `npx tsc --noEmit` *before* touching anything, so any pre-existing failure isn't misattributed to this work.
+## Components and dependencies
+| # | Component | Files | Depends on |
+|---|---|---|---|
+| P0 | Baseline | — | — |
+| P1 | Editor chrome: A1, A2, A3, A4, A5, A6 | `ProductEditorLayout.tsx`, `ProductPreviewPane.tsx`, `CreatorProductsTab.tsx`, `translations.ts` | P0 |
+| P2 | Placeholder preview: A7 | `lib/productDraftPreview.ts`, `ProductPage.tsx` (preview-only placeholders + cover icon) | P0 |
+| P3 | Crop window, full-screen editor, exit confirm, create without autosave: A8 | `CreatorProductsTab.tsx`, `CoverCropEditor.tsx`, `hooks/useAutoSave.ts` usage, new `EditorCloseButton` | **creative A8**, P1 (layout slots) |
+| P4 | Product page: B9, B10, B12, B13, B14 | `ProductPage.tsx`, `lib/productTitle.ts`, `index.css`, `ReportProductDialog.tsx` (trigger placement) | P0 |
+| P5 | History-aware sticky back button: B11, C15 | new `components/marketplace/BackButton.tsx`, `ProductPage.tsx`, `StorefrontPage.tsx`, possibly a small nav-tracking hook | **creative B11** |
+| P6 | Storefront metrics + settings note: C16, C17 | `StorefrontPage.tsx`, `lib/catalog.ts` labels, `BioSettingsCard.tsx`, `translations.ts` | P7 for live data (code does not wait on it) |
+| P7 | Deploy | migration + `manage-profile`, `manage-products` | P6 code ready; user login |
+| P8 | Verification | tests, typecheck, build, headless Chrome desktop 1440 + phone 390 | all |
 
-## Phase 1 — Preview isolation + Phone/Desktop (spec §1, §2 | AC 1-9)
-**Approach — REVISED in `/creative`** (see `memory-bank/creative/creative-preview-architecture.md`). The plan originally proposed dropping the iframe and rendering `ProductPage` inline. **That is wrong** and was reversed: `ProductPage.tsx:829` renders the mobile buy bar as `position: fixed` (it would escape a 390px inline container), and the page's `lg:` breakpoints resolve against the *browser* window, so an inline 390px "phone" preview on a desktop would render the **desktop** layout — violating §2.1's demand for the real responsive mobile version. Keep the iframe; the bug was never the iframe, it was pointing it at the fully-chromed public route.
+P1, P2, P4 and P6 are independent and can go in any order. P3 goes after P1, because it changes the same dialog. P5 goes after P4, because both edit the top of `ProductPage`.
 
-- New route `/preview/product` (public, outside `RequireProfile`, deliberately not under `/p/` so it bypasses the `middleware.ts` matcher). Renders `ProductPage` in preview mode. Verified viable: no `X-Frame-Options`/CSP anywhere.
-- `src/pages/ProductPage.tsx` gains `isPreview?` / `previewProduct?`: skip `MarketplaceHeader` (L368/380/544), the "← Назад" link (L546-552) and `PublicFooter` (L827); gate every query with `enabled: !isPreview`; skip `touchRecentProduct`; keep buy/trial/review/report controls visible but inert.
-- Draft data reaches the iframe via `postMessage` (ready-handshake + debounced updates, origin-checked both ways). Blob URLs from unsaved media work because the iframe is same-origin.
-- New `src/components/creator/ProductPreviewPane.tsx`: iframe + `[📱 Телефон] [🖥 Компьютер]` toggle. Phone = iframe at 390px; Desktop = iframe at 1280px CSS-`transform: scale()`d to fit. **Always defaults to phone**, no device sniffing.
-- `CreatorProductsTab.tsx`: remove the old preview Dialog (L3224-3257) and its `previewLoading` state.
-- Explicit "Закрыть предпросмотр" / X returning to the origin.
+## Phase details and success criteria (each needs passing tests before it is marked done)
+**P0 — Baseline.** `npm test` (expect 338 passing), `npm run typecheck` (22 baseline errors), `npm run build`. Record the numbers.
 
-## Phase 2 — Live preview inside the editor (spec §3 | AC 10-14)
-- Widen the create and edit `Dialog`s (currently `max-w-lg`, L3027 and the create dialog above it) into a desktop two-column layout: `ProductForm` left (its existing Детали / Классификация / Оплата sections untouched), sticky `ProductPreviewPane` right.
-- New pure mapper `draftToPreviewProduct(formData, seller, categories)` → the product shape `ProductPage` expects (`title`, `headline`, `description`, `media`, `price`, `pricing_options`, `category_slug`, `author_name`, `seller_handle`, `seller_avatar_url`, …). No DB write for preview, ever.
-- Light debounce (~200ms) on the draft→preview mapping so typing doesn't thrash re-renders.
-- Mobile: no side-by-side. Preview becomes a toggle/sheet (exact pattern → `/creative`).
-- Preview defaults to phone here too.
+**P1 — Editor chrome.**
+- A1: title and "Предпросмотр" both `text-lg font-semibold`, from one shared class constant.
+- A2: grid `minmax(0,2fr)_minmax(0,3fr)` (40/60).
+- A3: preview top bar as a 3-column grid (`1fr auto 1fr`): label left, toggle in the centre, close right. The toggle is centred on the pane regardless of side widths.
+- A4: check in the browser that the desktop viewport scrolls inside the iframe. Fix only if it doesn't.
+- A5: titles and buttons per answer 5, via translation keys (RU + KK).
+- A6: `detailsOpen` initialised to `true` when creating (edit keeps its current default).
+- Tests: title and label share the class; the toggle is in the centre column; titles/buttons per mode; Details open on create.
 
-## Phase 3 — Remove Preview from the product card (spec §4 | AC 15)
-- Remove the Eye/"Предпросмотр" button (`CreatorProductsTab.tsx:3143-3151`).
-- That slot becomes the visibility control (Phase 4). Keep Share/Edit/Delete. The existing Pause/Resume (`is_paused`) is a *different* concept from publish/unpublish (`is_active`) — UI copy must distinguish them so we don't ship two competing visibility systems (§4).
+**P2 — Placeholder preview.** When a draft field is empty, `productDraftPreview` fills the preview with placeholder text: "Название продукта", "Короткое описание", "Описание продукта", price "0 ₸", author = seller name. The page renders placeholders in muted colour so they don't look like real content. Empty cover shows a centred `ImageIcon` on a grey block. **Placeholders exist only in preview (`isPreview`)** and never reach the saved product or the public page. Tests: an empty draft renders every placeholder; a filled field replaces its placeholder; the saved payload never contains placeholder text.
 
-## Phase 4 — Private by default (spec §5 | AC 16-17, 36)
-- `CreatorProductsTab.tsx:2642`: `is_active: true` → `false`.
-- `supabase/functions/manage-products/index.ts:77`: `product.is_active ?? true` → `?? false`.
-- Migration: `ALTER TABLE public.products ALTER COLUMN is_active SET DEFAULT false;` (new products only — existing rows untouched).
-- Add a "Видимость" toggle on the card calling the existing update path with `is_active`.
-- Post-create hint: product is private, publish when ready.
-- Regression watch: existing buyers must keep access (verified safe above) and private products must stay visible in the seller's own dashboard.
+**P3 — Crop / close flow (after creative A8).** The regression test comes first: "picking a cover, then clicking outside the crop window, leaves the editor open with the form data intact". It must fail on the current code. Then:
+- The crop becomes a **nested Dialog** on top of the editor. Only a Save button: no Cancel, no cross. An outside click = cancel the crop and return to the editor.
+- The editor is full-screen (`inset-0`, no margins) in both breakpoints, so there's no outside to click.
+- The two-click exit on the cross, with the red hint under it.
+- Create mode without autosave: no draft product is written until "Создать".
+- Remove `CROP_DIALOG_CLASS` and the `previewHidden` crop mode if they become unused.
+- The `ProductForm` no-remount invariant stays covered by the existing tests.
 
-## Phase 5 — Seller Storefront metrics (spec §7-§9, §11, §12 | AC 18, 21-30, 38)
-- New migration redefining `get_seller_storefront` to additionally return `created_at` (year derived in UI, not stored separately — §9.3), `avg_rating`, `review_count`, `sales_count`. All of it in **one** query via LATERAL subqueries over the seller's products — no N+1 (§12).
-- Rating = `avg(rating)` over **all individual `product_reviews` rows** of the seller's products, never average-of-averages (§9.6).
-- Sales = `count(*)` over `purchases` where `status = 'completed'` — the canonical definition already used by `_shared/purchase.ts` (§9.5).
-- Stays `SECURITY DEFINER` and returns only public columns — no email/phone/auth id (§11, AC 30).
-- Update `SellerStorefront` type in `src/lib/catalog.ts`, `useSellerStorefront.ts`, and `StorefrontPage.tsx` UI (joined year, `★ 4.8 · 243 отзыва`, "Нет отзывов" instead of `0.0`, sales count).
-- Product listing already filters through `public_products`, so private products are excluded for free (AC 29) — verify, don't re-implement.
-- **Open decision for `/creative`:** do metrics aggregate over *all* the seller's products or only currently-public ones? Recommendation: aggregate reviews/sales over all products (real history), list only public ones.
+**P4 — Product page.**
+- B9: Share stays under the title; Report moves to the page bottom, centred, above the footer. Hidden in preview, as it is today.
+- B10: new title scale; test that every size class is larger than the FAQ heading, as a CSS-value assertion on the scale constants.
+- B12: sticky fix.
+- B13: drop the `/s/handle` line.
+- B14: remove the first-charge line and every access line (answer 3). Delete the translation keys if they are unused elsewhere.
+- Tests per item, plus headless-Chrome proof for B12: the card's `getBoundingClientRect().top` is constant after scrolling 1000px.
 
-## Phase 6 — Seller description in settings (spec §10 | AC 31-33)
-- `manage-profile`: new `set_bio` action mirroring the existing `set_display_name` (L175-211) — trim, validate, 500-char cap.
-- Migration: `CHECK (char_length(bio) <= 500)` on `profiles.bio`.
-- New `src/components/account/BioSettingsCard.tsx` modeled on `HandleSettingsCard.tsx`: `Textarea`, live `0 / 500` counter, helper text "Это описание будет видно покупателям на вашей публичной странице."
-- Wire into `AccountSettingsView` for seller roles. Because `CreatorAccountTab` **and** `SchoolDashboard` both already render `AccountSettingsView`, one implementation covers creator *and* online school with no duplication (AC 33).
-- Replace the fake `localStorage['creator_created_at']` date in `CreatorAccountTab.tsx:19-28` with the real profile `created_at`.
+**P5 — Back button (after creative B11).** One `BackButton` used by the product page and the storefront. It returns to the previous in-app page if the user came from inside the app, otherwise to the marketplace `/`. Desktop: in the left gutter, sticky under the header. Phone: in the flow at the top, as today. Tests: `navigate(-1)` when there is in-app history; `/` on a direct visit; it renders on both pages; it is hidden in preview.
 
-## Phase 7 — Seller link on marketplace cards (spec §8 | AC 19-20)
-- `ProductPage` seller block: already a link — verify only.
-- `ProductCard.tsx`: make **only** the seller row navigate to `/s/:handle`, not the whole card (§8.2). **Constraint:** the entire card is already wrapped in an outer `<Link>` (L56-58), and nesting an `<a>` inside an `<a>` is invalid HTML and breaks routing. Needs a restructure (overlay-link pattern, or `onClick` + `stopPropagation` + `navigate`) → `/creative`.
+**P6 — Storefront.**
+- C16: always show `sellerSalesLabel(n)`, including "0 продаж"; always show "Общая оценка" + stars (filled per `avg_rating`, empty at 0) + "нет отзывов" / the review count.
+- C17: `BioSettingsCard` gets a note at the top, "Всё, что вы напишете здесь, увидят покупатели на вашей витрине". Check that it's mounted for both creator and school settings.
+- Tests: 0 sales and 0 reviews render the labels; plural forms; the settings note is present.
 
-## Phase 8 — Responsive + acceptance pass (spec Этап 10, §15)
-Walk all 39 acceptance criteria on desktop and mobile widths. Preview isolation is the highest-risk area (AC 1-5) — verify Notifications/Messages/Account/back are genuinely unreachable.
+**P7 — Deploy (authorised).**
+1. `npx supabase@latest login` (user, interactive) → `link --project-ref mebomnqdtuqmjjefvgkx`.
+2. `npx supabase migration list`. **If any migration other than `20260917120000` is pending on the remote → stop and ask** (it could touch unrelated tables).
+3. Pre-check: `select count(*) from profiles where char_length(bio) > 500` must be 0.
+4. `npx supabase db push` (only that migration pending).
+5. `npx supabase functions deploy manage-profile` and `… manage-products`.
+6. Smoke test: call `get_seller_storefront` for a real handle; it returns `created_at` / `avg_rating` / `sales_count`.
+7. Record the result in `progress.md`.
 
-## Phase 9 — Build & typecheck (spec Этап 11 | AC 34)
-`npm run build`, `npx tsc --noEmit`, `npm run lint`. Fix only errors caused by these changes. (No `typecheck`/`test` scripts exist.)
+**P8 — Verification.** Full `npm test`, typecheck diff against the baseline, build, lint on changed files. Headless-Chrome screenshots at 1440 and 390 of: the editor (create, empty → placeholders; crop window on top), the product page (scrolled: card and back button stay), the storefront (0 sales/0 reviews and filled). Temp harness files outside `public/`, removed afterwards.
 
-## Phase 10 — Fake product cleanup (spec §6, §16 | AC 39) — SEPARATE, GATED
-Production DB (`trydostup.online`). Report-only: counts of products and every FK-related table (purchases, payments, materials, schedules, bookings, reviews, product_teachers, media/storage). Produce safe SQL, then **stop** and wait for the literal confirmation "Да, удаляй fake products." No automatic DELETE.
-
-## Creative phase — COMPLETE
-All five flagged decisions are settled. Full rationale in `memory-bank/creative/`.
-
-| # | Decision | Outcome | Doc |
-| --- | --- | --- | --- |
-| 1 | Preview isolation | **Keep the iframe**, point it at a new chrome-less `/preview/product` route, feed drafts via `postMessage`. Reverses the plan's inline-rendering proposal — inline breaks responsive fidelity (`fixed` buy bar + viewport-scoped `lg:` breakpoints). | `creative-preview-architecture.md` |
-| 2 | Editor layout | Widen the existing Dialog to near-full-screen two-column (`w-[96vw] max-w-[1600px] h-[92vh]`); mobile gets a **[Редактор] [Предпросмотр]** segmented toggle. Keeps existing dialog lifecycle wiring. | `creative-editor-layout.md` |
-| 3 | ProductCard seller link | **Overlay-link pattern**: card root becomes a `div`, title link stretches via `after:absolute after:inset-0`, seller link sits at `relative z-10`. Valid HTML, two tab stops, and it removes the existing `preventDefault` hacks on the carousel controls. | `creative-productcard-seller-link.md` |
-| 4 | Visibility vs Pause | **One "Видимость" dropdown with three states** (Приватный / Опубликован / Приостановлен) over the existing two flags. Verified the flags are genuinely distinct: private kills the link, paused keeps it alive with the author's message. No new column. | `creative-visibility-control.md` |
-| 5 | Metrics scope | **Aggregate over all the seller's products** (matches §9.6's "по ВСЕМ продуктам" and closes a rating-gaming hole), while listing only public products. | `creative-storefront-metrics.md` |
+## Creative phases required
+- **A8 — Crop window and editor exit flow.**
+  - How the nested crop dialog looks without Cancel/cross.
+  - How the red hint is shown under the cross: where it sits, when it resets (timeout? any other click?), and what it looks like on a phone.
+  - Keeping it truthful in edit mode with autosave: either flush pending changes and close without a hint when nothing is unsaved, or always show the hint as the customer asked.
+  - What "Создать" does when required fields are missing.
+- **B11 — Back button.**
+  - Detecting "came from inside the app" (`location.key !== "default"` vs. an explicit tracked stack).
+  - Gutter placement at widths where the gutter is narrow (1024–1280px).
+  - Sticky offset under the header plus the install banner.
+- (A7's placeholder list is small and is decided in P2 unless the customer's full-size photo is needed.)
 
 ## Risks
 | Risk | Mitigation |
-| --- | --- |
-| `ProductPage` is 889 lines with interleaved auth/purchase/trial logic; preview mode could break the live page | Additive optional props, default behavior unchanged; gate queries via `enabled`; verify the real `/p/:slug` route after every change |
-| `CreatorProductsTab.tsx` is a 3329-line monolith holding form + card + dialogs | Touch only the identified line ranges; no opportunistic refactor |
-| Private-by-default could hide existing products or break buyer access | Change default for *new* rows only; verified no `is_active` gate in materials/purchase paths |
-| Storefront RPC change could regress the marketplace | `public_products`/`search_catalog` stay untouched; only `get_seller_storefront` is redefined |
-| Migration + edge function need deployment | I only write files; user deploys. Call this out at handoff |
+|---|---|
+| The nested dialog remounts `ProductForm` and loses the picked photo (round 1 bug) | The crop state stays inside `ProductForm`, and the nested Dialog renders from inside it. The existing no-remount tests plus the new regression test. |
+| Turning off create-mode autosave loses work on an accidental close | The two-click confirm on the cross is exactly the guard. The full-screen editor removes outside clicks. Esc must go through the same confirm. |
+| `db push` pushes other pending migrations | Step 2 of P7 stops and asks. |
+| The bio CHECK fails on existing data | Pre-check in P7 step 3. |
+| Sticky/gutter layout only looks right in jsdom | Headless-Chrome geometry checks at 1440/1280/1024/390. |
+| Merge conflicts with `английский-язык` in `translations.ts` | New keys grouped in one block and listed in the build log. |
+
+## Creative decisions (2026-09-29) — `creative/creative-round3-editor-exit-and-back-button.md`
+**A8 (overrides the P3 notes above where they differ):**
+- The crop is a **nested Radix Dialog rendered inside `ProductForm`**. The form body is no longer swapped out, and the crop state stays where it is. `CROP_DIALOG_CLASS`, `isCroppingMedia`, `onCroppingChange` and the crop use of `previewHidden` are removed.
+- The crop window has a title and one "Сохранить" button: no Cancel, no cross. An outside click or Esc = cancel the crop, and the editor and its data stay.
+- **Autosave removed completely**: `useAutoSave`, `AutoSaveIndicator` and `createdProductRef` go away; delete the files only if unused elsewhere. The footer button ("Создать" / "Сохранить") validates → persists → closes. On error the window stays open.
+- Dirty = `saveKey(form)` ≠ the baseline captured at open or after save, or a pending media file.
+- New `EditorCloseButton` (in the `headerRight` slot, with the Radix close hidden). The **first click shows the red hint only if dirty**, and a clean window closes at once; switching to "always" is a one-line change — **flag to the user**. The hint disarms after 4 s, on a form change, or on a click elsewhere. Esc goes through the same logic. Outside interaction is blocked.
+- The editor is full-screen at every breakpoint (`inset-0`, `100dvh`, no radius).
+
+**B11/C15:**
+- `BackButton`: `location.key !== "default"` → `navigate(-1)`, else `/`.
+- Placed where it is today (answer 7), but kept in place while scrolling: `AppHeader` gets an optional `below` slot rendered inside its existing sticky wrapper, so the header and the back bar form one sticky stack with no measured offsets. `MarketplaceHeader` passes it through. The product page (both states) and the storefront use it, and the in-flow `<Link to="/">` links are removed.
+- The purchase card's sticky `top` must clear header + bar. Measure it in Chrome and set it once.
+
+# Build Log (2026-09-29)
+
+## P0 — Baseline
+`npx vitest run` → 27 files / **338 passed**. `npm run typecheck` → **18** pre-existing errors (saved sorted, without line numbers, to diff against). `npm run build` → green.
+
+## Phase results
+- [x] **P1 Editor chrome.** A shared `EDITOR_HEADING_CLASS` in `creator/editorHeading.ts` is used by the window title and the "Предпросмотр" label. It is **`text-xl`**, raised from the planned text-lg after a browser check: 18px barely differed from the old 16px, and the customer asked for "больше". Grid `2fr/3fr` (measured 576/864 at 1440). The preview bar is a `grid-cols-[1fr_auto_1fr]`, and the toggle centre was measured within 1px of the pane centre at 1440/1280/1024. Titles: `editorTitleCreate`/`editorTitleEdit`; button `create`/`save`. `detailsOpen` = `useState(!isEdit)`. **A4:** desktop preview scroll verified already working (scrollY 0→500 inside the frame), so no change was needed.
+- [x] **P2 Placeholders.** `draftToPreviewProduct(…, placeholders)` fills empty title/headline/description and records `preview_placeholders`. This is a preview-only `Product` field; the saved payload comes from `productPayload`, never from this object. `ProductPage` renders them `text-muted-foreground` only when `isPreview`, and an empty preview cover shows a centred `ImageIcon`.
+- [x] **P3 Crop/close/no autosave.** The regression tests were written first and **failed on the old code** for the right reason: the editor was gone after an outside click in crop mode. The crop is now a nested Radix `Dialog` inside `ProductForm` (`hideCloseButton`, Save only). `CoverCropEditor` lost `onCancel`/Отмена. Deleted: `useAutoSave.ts`, `AutoSaveIndicator.tsx`, their tests, `CROP_DIALOG_CLASS`, `isCroppingMedia`, `onCroppingChange`, `ProductEditorLayout.previewHidden` and the 4 `autosave*` keys.
+  - New `EditorCloseButton` + `useConfirmClose`, with dirty = `saveKey` vs a baseline captured on open. `submitEditor` validates → persists → closes. On error the window stays open, and a failed media upload also keeps it open. Double submit is guarded by a ref.
+  - Esc goes through the same two-step close; outside interaction is prevented. The editor is full-screen via `EDITOR_DIALOG_CLASS`.
+  - The cross is **absolutely positioned in the dialog corner**, not in the preview bar's `headerRight`. Reason: on a phone the editor tab hides the preview pane, and the cross would vanish with it.
+  - The test file was renamed `CreatorProductsTab.autosave.test.tsx` → `CreatorProductsTab.editor.test.tsx`: 25 tests (crop window ×5, window ×5, create ×5, edit ×2, close ×8).
+  - jsdom note: while the crop dialog is open, Radix sets `aria-hidden` on the editor, which blanks its accessible name. The test therefore asserts on its content, not its name.
+- [x] **P4 Product page.** Report sits under the grid, `flex justify-center`. Title scale moved to 28/32/40, 24/28/32, 20/24/26; `productTitle.test.ts` reads `index.css` and asserts every size is >18px (the FAQ heading). **Sticky root cause confirmed and fixed:** `lg:sticky` is now on the `<aside>` itself, with top `var(--public-sticky-offset)`. The `/s/handle` line is gone, and so are the first-charge line and every access line; keys `accessDays`, `accessLifetime`, `subscriptionAccessNote`, `subscriptionFirstCharge` were removed. This also removed 2 pre-existing TS errors (`access_duration_days` on `ProductPricingOption`), so typecheck went 18 → **16**.
+- [x] **P5 Back button.** `marketplace/BackButton.tsx` (`location.key !== "default"` → `navigate(-1)`, else `/`). `AppHeader` gains an optional `below` slot inside its sticky wrapper, and publishes `--public-sticky-offset` (height + 24px) via `ResizeObserver`, removed on unmount. `MarketplaceHeader` passes `below` through. Used by `ProductPage` (both states) and `StorefrontPage` (incl. not-found); the in-flow `<Link to="/">` is gone.
+- [x] **P6 Storefront + settings.** "Общая оценка" + 5 stars (filled = rounded average) + value/"нет отзывов" are always shown, and sales are always shown ("0 продаж"). `BioSettingsCard` has a prominent note at the top (`bg-primary/10`, Eye icon, `text-sm`): "Всё, что вы напишете здесь, увидят покупатели на вашей витрине." It was already mounted for creator and school, covered by `AccountSettingsView.seller.test.tsx`.
+- [x] **P7 Deploy — handed to the user** (2026-09-29: "сам буду делать миграцию"). Apply `20260917120000_private_products_and_seller_metrics.sql`; deploy `manage-profile` and `manage-products` (`npx supabase functions deploy <name> --project-ref mebomnqdtuqmjjefvgkx`). Needs an Owner/Admin/Developer role in the org. If applied through the SQL Editor, the CLI migration history must later be marked with `supabase migration repair --status applied 20260917120000`. Not performed by Claude.
+- [x] **P8 Verification.** Final `npx vitest run` → **27 files / 345 passed**. Typecheck: no new errors (16, down from 18). Build green. ESLint on changed files: 0 new errors; `CreatorProductsTab.tsx` went 17 → 16, `ProductPage.tsx` 8 → 8, plus one react-refresh warning in `EditorCloseButton.tsx`.
+  - **Headless Chrome** via a temporary `harness.html` + `src/__harness__/main.tsx` (deleted afterwards and confirmed via `git status`). It rendered the real `ProductPage`/`StorefrontPage` with seeded react-query data, plus the real `ProductEditorLayout`/`EditorCloseButton`/`EDITOR_DIALOG_CLASS` around stand-in sections. Checked at 1440/1280/1024/390:
+    - The back button and the purchase card keep the same `top` at scroll 0/400/1500 (78px and 137px = header 65 + back bar 48 + gap 24).
+    - Report is centred; the title is 40px desktop / 28px phone vs FAQ 18px; no horizontal overflow anywhere.
+    - The editor rect equals the viewport; the red hint sits below the cross and inside the viewport, even at 390; the crop window stacks as a second dialog.
+  - Not verified in a browser: the real `ProductForm` inside the window (behind a seller login). It is covered by the jsdom tests above.
+
+## P7 preflight (2026-10-03): DEPLOY BLOCKED, do not apply or deploy from this branch
+The user added a Supabase personal access token (`SUPABASE_PRIVATE_TOKEN` in the gitignored `.env`, prefix `sbp_`). Read-only checks through the Management API, run before any write, found that **production has moved past this branch**:
+1. **Migration version collision.** Production already records `20260917120000` as `product_marketplace_visibility`, from `origin/main`. Our file uses the same version, so the CLI would treat it as applied and skip it.
+2. **Production replaced the "private by default" model.** `origin/main` added `products.is_published` (default false). In that model `is_active` means "the product exists", and production `is_active` still defaults to true. Our migration (`is_active` default false) and our `manage-products` (`is_active ?? false`) would **disable new products** under that model.
+3. **`public.purchases` does not exist in production**; only `simple_purchases` does (status `completed`). Our migration indexes and counts `public.purchases`, so it would fail outright.
+4. **Edge functions are far ahead in production.** `origin/feature/search-sections` has `manage-products` +350/−16 lines (payment methods) and a different `manage-profile`; neither has `set_bio`. Deploying our versions would overwrite them.
+5. Production also has migrations from `feature/manual-payments` / `feature/search-sections` (2026-09-24…29: `payment_methods`, `drop_legacy_kaspi_columns`, `direct_messages`, …) that are not on this branch.
+
+Safe facts: no profile `bio` exceeds 500 characters, and production `get_seller_storefront` still returns only `handle, display_name, avatar_url, type, bio, products`. Nothing was written to production. Further production reads were then **denied by the auto-mode permission classifier**; none were retried.
+
+**Required before any deploy (a new integration task, the user decides):** merge `origin/main` and the deployed feature branches into this work. Then:
+- rewrite the storefront-metrics migration under a new timestamp, on `simple_purchases`, without the `is_active` default;
+- drop our `is_active` private-by-default in favour of `is_published`;
+- port `set_bio` and `bio` in `PROFILE_COLUMNS` onto the latest `manage-profile`;
+- deploy only after that.
+
+## Commands run
+`npx vitest run` (per phase and full), `npm run typecheck` (diffed against the baseline), `npm run build`, `npx eslint <changed files>` (before/after counts via `git show HEAD:<file> | eslint --stdin`), Vite dev server with dummy `VITE_SUPABASE_*`, `node cdp.mjs` / `cdp2.mjs` (headless Chrome over CDP, in the scratchpad).
+
+## Status
+- [x] VAN
+- [x] PLAN (2026-09-29)
+- [x] CREATIVE — A8, B11 (2026-09-29)
+- [x] BUILD — P0–P6, P8 (2026-09-29)
+- [x] P7 DEPLOY — handed to the user
+- [x] REFLECT (2026-09-29) → `reflection/reflection-round3-editor-storefront-feedback.md`
+- [ ] ARCHIVE
+
+Next: **`/archive`**. Deployment is done by the user outside this workflow.
 
 ---
 
-# Build Log
+## Tasks on other branches
+- **English language (RU/KK/EN) + settings renames + white-on-orange**: tracked in `memory-bank/tasks.md` on branch `английский-язык`. The dark theme ("Подсветка") was **cancelled by the user** and must not be built unless asked again.
 
-## Testing
-
-**Superseded correction.** An earlier version of this log recorded that the `/build` TDD gate could not be honored because the repo had no test infrastructure, and substituted a typecheck/build/lint gate. The user rejected that decision and asked for the infrastructure to be built and the tests to be run. It has been, and they were.
-
-That earlier audit was also **wrong on the facts**: the repo did contain three test files — `src/lib/authErrors.test.ts`, `src/lib/profileOrder.test.ts`, `src/lib/translations.test.ts` — written against `node:test`. They were missed because the audit checked `package.json` for test dependencies but never globbed for `*.test.ts`. Since there was no `test` script, nothing ever ran them; they were dead weight in the repo.
-
-**Infrastructure added:** vitest 2 + jsdom + @testing-library/react + jest-dom + user-event. Config in `vitest.config.ts` (kept separate from `vite.config.ts` so tests don't pull in the PWA plugin), setup in `src/test/setup.ts` (jest-dom matchers, cleanup, `matchMedia` and `ResizeObserver` stubs). Scripts added: `test`, `test:watch`, and `typecheck`.
-
-The three legacy `node:test` files were converted to vitest so a single `npm test` runs everything, with their assertions preserved one-for-one. One needed a real fix: they used `new URL(..., import.meta.url)` with `readFileSync`, which throws under jsdom because `import.meta.url` is an http url there — now resolved from the repo root.
-
-**Suite: 110 tests across 12 files, all passing.**
-| File | Covers |
-| --- | --- |
-| `lib/productDraftPreview.test.ts` (24) | draft → preview mapping: trial presets, recurring intervals → access days/billing period, blob-url media, faq filtering, free products, editing an existing product |
-| `lib/catalog.test.ts` (25) | Russian plural agreement for review and sales counts, including the teens exception |
-| `lib/productPreview.test.ts` (5) | postMessage contract, origin rejection, preview route kept outside `/p/` |
-| `components/creator/ProductVisibilityMenu.test.ts` (5) | the two flags → three visibility states, including private winning over paused |
-| `components/marketplace/ProductCard.test.tsx` (7) | AC 20: seller links to the storefront, **no anchor nested in an anchor**, card root is not a link, handle encoding, fallbacks |
-| `pages/ProductPage.preview.test.tsx` (9) | **AC 1-5**: zero links, no header, no footer, no back control, seller not linked, no network calls — plus a contrast case proving the same component still renders all of that chrome in normal mode |
-| `pages/ProductPreviewRoute.test.tsx` (5) | ready handshake, draft rendering on message, cross-origin rejection, internal link clicks swallowed, external links left alone |
-| `pages/StorefrontPage.test.tsx` (9) | AC 23/25/26/27: joined year from `created_at`, rating with pluralised review count, sales count, "Нет отзывов" instead of `0.0`, empty states |
-| `test/backendContracts.test.ts` (14) | the SQL and edge-function changes that cannot execute here: private-by-default in all three places, completed-purchase sales definition, average over individual reviews, public-view product listing, two lateral joins, no private columns exposed, `set_bio` with its 500-char cap |
-| `lib/{authErrors,profileOrder,translations}.test.ts` (7) | pre-existing suites, revived |
-
-**The tests were verified to actually catch regressions.** Removing the `!isPreview` guard on `MarketplaceHeader` fails exactly two preview-isolation tests; restoring it makes them pass. The backend-contract suite also caught a genuinely over-broad assertion of mine (it forbade `is_active: true` anywhere in the file, which would have banned the legitimate publish transition) — narrowed to the create call, with a separate test for publishing.
-
-**Other gates:** `npm run build` passes; `npx tsc -p tsconfig.app.json --noEmit` diffs clean against the recorded baseline of 22 pre-existing errors; lint is clean on all new files. Note `npx tsc --noEmit` alone fails on this repo's project-references setup — use `-p tsconfig.app.json`, which is what the new `typecheck` script does.
-
-### Second pass — remaining gaps closed
-The gaps listed above were filled in a follow-up round, bringing the suite to **151 tests across 19 files**:
-
-| File | Covers |
-| --- | --- |
-| `components/creator/ProductPreviewPane.test.tsx` (5) | AC 6-8: frame points at the isolated route not `/p/`, opens on the 390px phone viewport, switches to a real 1280px desktop viewport and back, switch hidden in phone-only mode |
-| `components/creator/ProductEditorLayout.test.tsx` (8) | AC 10-14: desktop shows form and preview together with no tabs; mobile shows the form first behind tabs, keeps the form mounted while previewing so edits survive, offers no desktop viewport on a phone; preview steps aside for the cover cropper |
-| `components/creator/ProductVisibilityMenu.interaction.test.tsx` (7) | AC 15-17: three states in one menu, each transition fires correctly, re-selecting the current state fires nothing, private explains itself |
-| `components/account/BioSettingsCard.test.tsx` (7) | AC 31-32: public-visibility hint, load, 500-char cap enforced on paste, save via `set_bio`, button disabled until changed, failure surfaced |
-| `components/account/AccountSettingsView.seller.test.tsx` (4) | AC 33: the description card is offered to creator **and** school, and to neither buyer nor teacher |
-| `components/creator/CreatorAccountTab.test.tsx` (4) | the join date now comes from the profile record, writes no fabricated `localStorage` value, degrades gracefully |
-| `hooks/useSellerStorefront.test.tsx` (6) | single RPC call, numeric coercion of Postgres string numerics, zero defaults instead of NaN, null for unknown handle, no query without a handle |
-
-Radix required `hasPointerCapture`/`scrollIntoView` stubs in `src/test/setup.ts`, which jsdom does not implement.
-
-**Still not covered by tests:** anything requiring a live database. The migration SQL has never been executed — it is guarded only by contract tests asserting on its text.
-
-## Phase status
-- [x] **Phase 0 — Baseline.** Build passed; 22 pre-existing type errors recorded (incl. 2 in `ProductPage.tsx`); no test infra.
-- [x] **Phase 1 — Preview isolation + Phone/Desktop.** New `/preview/product` route (`ProductPreviewRoute.tsx`) rendering `ProductPage` with new `isPreview`/`previewProduct` props; chrome (header/back link/footer) suppressed; queries gated with `enabled: !isPreview`; buy/trial/review handlers inert; seller block rendered as non-link in preview (it was a live escape hatch to the storefront); capture-phase click interceptor as defence in depth. `ProductPreviewPane.tsx` provides the iframe + phone/desktop toggle, always defaulting to phone. Transport contract in `lib/productPreview.ts` (origin-checked both ways).
-- [x] **Phase 2 — Live preview in the editor.** `ProductEditorLayout.tsx` (desktop two-pane, mobile [Редактор]/[Предпросмотр] tabs); both create and edit dialogs widened to `lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]`; `lib/productDraftPreview.ts` maps unsaved form state to the product shape; 200ms debounce; no DB write.
-- [x] **Phase 3 — Preview removed from the product card.** Old iframe dialog and its `previewLoading` state deleted; Eye/PauseCircle/PlayCircle imports cleaned up.
-- [x] **Phase 4 — Private by default.** Frontend `is_active: false` on create; `manage-products` create default flipped to `?? false`; migration sets the column default; status badge on the card; post-create toast explains the product is private.
-- [x] **Phase 5 — Seller storefront metrics.** Migration extends `get_seller_storefront` with `created_at`, `avg_rating`, `review_count`, `sales_count` via LATERAL subqueries (one query). `SellerStorefront` type, hook mapper and `StorefrontPage` UI updated, with Russian plural helpers and a "Нет отзывов" empty state.
-- [x] **Phase 6 — Seller description + real joined date.** New `set_bio` action in `manage-profile` (500-char cap); `bio` added to `PROFILE_COLUMNS`/`ProfileRow`; `get_handle` now also returns `bio` and `createdAt`; new `BioSettingsCard.tsx` wired into `AccountSettingsView` behind `isSeller`, so creator **and** school share one implementation; the fake `localStorage['creator_created_at']` date in `CreatorAccountTab` replaced with the real profile `created_at`.
-- [x] **Phase 7 — Seller link on marketplace cards.** `ProductCard` converted to the overlay-link pattern; the pre-existing `preventDefault` hacks on the carousel controls were left in place (they still work above the overlay). Product page seller link verified as already present.
-- [x] **Phase 9 — Build & typecheck.** Build passes; typecheck diff clean; no new lint errors in changed files.
-- [ ] **Phase 8 — Full responsive/acceptance pass.** Partially done (see below) — blocked on credentials for the authenticated surfaces.
-- [ ] **Phase 10 — Fake product cleanup.** Not started; gated on explicit confirmation and requires DB access.
-
-## Browser verification (dev server with dummy Supabase credentials)
-The app cannot boot without `VITE_SUPABASE_*`, and no `.env` exists, so the server ran with dummy values. That allows verifying the preview route (which renders from postMessage, not the DB) but **not** any data-backed surface.
-
-Verified on `/preview/product`, rendered inside a real 390px same-origin iframe with the live handshake:
-- `handshakeReceived: true`, draft rendered (`h1` = "SAT Preparation") — live draft preview works with no DB write.
-- `anchors: 0`, `header: 0`, `footer: 0` — **AC 1-5 hold structurally**: there is no link, header or back control to click at all.
-- At iframe width 388px: mobile buy bar `display: block`, desktop aside hidden. At viewport 1631px the same bar is `display: none` and `position: fixed`.
-- No console errors.
-
-That last point is hard evidence for the creative-phase reversal: the buy bar really is `position: fixed` (would have escaped an inline 390px container) and really is gated on the **viewport** via `lg:`, so an inline preview would have shown the desktop layout inside a phone frame.
-
-**Not verified in a browser** (needs real credentials + seller login): the two-pane editor, the visibility dropdown, the storefront metrics, and the marketplace card seller link. These typecheck and build, but have not been exercised at runtime.
-
-## Deployment handoff (not performed, per spec)
-- Migration `supabase/migrations/20260917120000_private_products_and_seller_metrics.sql` must be applied.
-- Edge functions `manage-products`, `manage-profile` and the shared `_shared/profiles.ts` must be redeployed.
-- Until both happen, private-by-default and the storefront metrics will not be live.
-
-## Reflection — COMPLETE, updated twice
-`memory-bank/reflection/reflection-preview-editor-storefront.md`. Headline points:
-- The audit prevented rebuilding three things that already existed (storefront route, product-page seller link, `bio` column).
-- The creative phase reversed a wrong architecture (inline rendering) before implementation, and the build phase confirmed the reversal with runtime measurements.
-- Two bugs were found that the spec never mentioned: the seller-link escape hatch out of Preview, and a fabricated `localStorage` "member since" date.
-- Test infrastructure was initially skipped (wrong call, reversed at the user's request) — vitest + jsdom + testing-library now give **310 passing tests**.
-- **On-device follow-up**: demoed through a Cloudflare tunnel, the user found the phone preview inside the editor rendered as a short scrollable strip on a real phone. Root cause: the dialog had no definite height below the `lg` breakpoint, and the preview frame only ever scaled by width. Fixed with a `fitScale` helper that fits both axes plus an explicit `h-[85vh]` on the dialogs below `lg`. Needs re-verification on an actual phone — jsdom cannot catch this class of layout bug, which is exactly why it shipped in the first place.
-- Largest open risk now: the migration and edge-function redeploys are still pending, and the phone-preview fix is unverified on a real device.
-
-## Next Step
-1. User re-checks the phone preview fix through the tunnel.
-2. `/archive`, once the migration is applied, the edge functions are redeployed, and Phase 8's acceptance pass has been run against the authenticated flows on a real device.
+## Completed tasks
+- [x] **Product Preview Isolation, Live Editor Preview & Seller Storefront** (Level 4, 2026-09-17 → closed 2026-09-29) → `archive/archive-preview-editor-storefront.md`
+  - Still pending outside development: apply migration `supabase/migrations/20260917120000_private_products_and_seller_metrics.sql`; redeploy edge functions `manage-products`, `manage-profile` (+ `_shared/profiles.ts`); Phase 10 fake-product cleanup (gated on the literal confirmation "Да, удаляй fake products"); on-device re-check on an actual phone.
