@@ -159,20 +159,80 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             <Row icon={Package} label={t("buyerProduct")}>
               {purchase.product.title}
             </Row>
-            <Row icon={Wallet} label={t("buyerPaid")}>
-              {formatPriceTenge(Number(purchase.amount))} · {fmt(paidAt)}
+            {/* Receipts open right under the payment they belong to. */}
+            <Row
+              icon={Wallet}
+              label={t("buyerPaid")}
+              aside={
+                purchase.receipts.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">{t("buyerNoReceipts")}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setReceiptsOpen((v) => !v)}
+                    aria-expanded={receiptsOpen}
+                    className="flex items-center gap-1.5 rounded-sm text-sm font-medium focus-ring"
+                  >
+                    <Receipt className="h-4 w-4 text-muted-foreground" />
+                    {t("buyerReceipts")}
+                    <span className="text-muted-foreground">{purchase.receipts.length}</span>
+                    <ChevronDown
+                      className={cn("h-4 w-4 text-muted-foreground transition-transform", receiptsOpen && "rotate-180")}
+                    />
+                  </button>
+                )
+              }
+              below={
+                receiptsOpen &&
+                purchase.receipts.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {purchase.receipts.map((receipt) => (
+                      <li key={receipt.id}>
+                        <button
+                          type="button"
+                          onClick={() => void openReceipt(receipt)}
+                          disabled={loadingReceipt === receipt.id}
+                          className="flex w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left transition-colors hover:bg-muted focus-ring"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            {loadingReceipt === receipt.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium">
+                              {format(new Date(receipt.created_at), "d MMMM yyyy, HH:mm", { locale })}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {receipt.detected_amount != null ? `${formatPriceTenge(Number(receipt.detected_amount))} · ` : ""}
+                              {t(`buyerReceiptStatus_${receipt.verification_status}` as "buyerReceiptStatus_confirmed")}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              }
+            >
+              {/* Wraps between the price and the date, never inside the date. */}
+              <span className="whitespace-nowrap">{formatPriceTenge(Number(purchase.amount))} ·</span>{" "}
+              <span className="whitespace-nowrap">{fmt(paidAt)}</span>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
-              <span className="flex flex-wrap items-center gap-2">
-                <span>
-                  {urgency === "closed"
-                    ? t("buyerAccessClosed")
-                    : urgency === "forever" || !end
-                      ? t("buyerAccessForever")
-                      : fmt(end)}
+              {/* "Forever" and "closed" are said once; a date gets its countdown badge. */}
+              {urgency === "closed" ? (
+                t("buyerAccessClosed")
+              ) : urgency === "forever" || !end ? (
+                t("buyerAccessForever")
+              ) : (
+                <span className="flex flex-wrap items-center gap-2">
+                  <span>{fmt(end)}</span>
+                  <UrgencyBadge purchase={purchase} />
                 </span>
-                <UrgencyBadge purchase={purchase} />
-              </span>
+              )}
             </Row>
           </dl>
 
@@ -216,62 +276,6 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             </div>
           )}
 
-          <div className="space-y-2">
-            {purchase.receipts.length === 0 ? (
-              <>
-                <p className="flex items-center gap-2 text-sm font-medium">
-                  <Receipt className="h-4 w-4 text-muted-foreground" />
-                  {t("buyerReceipts")}
-                </p>
-                <p className="text-sm text-muted-foreground">{t("buyerNoReceipts")}</p>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setReceiptsOpen((v) => !v)}
-                aria-expanded={receiptsOpen}
-                className="flex items-center gap-2 rounded-sm text-sm font-medium focus-ring"
-              >
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-                {t("buyerReceipts")}
-                <span className="text-muted-foreground">{purchase.receipts.length}</span>
-                <ChevronDown
-                  className={cn("h-4 w-4 text-muted-foreground transition-transform", receiptsOpen && "rotate-180")}
-                />
-              </button>
-            )}
-            {receiptsOpen && purchase.receipts.length > 0 && (
-              <ul className="space-y-1.5">
-                {purchase.receipts.map((receipt) => (
-                  <li key={receipt.id}>
-                    <button
-                      type="button"
-                      onClick={() => void openReceipt(receipt)}
-                      disabled={loadingReceipt === receipt.id}
-                      className="flex w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left transition-colors hover:bg-muted focus-ring"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        {loadingReceipt === receipt.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4" />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium">
-                          {format(new Date(receipt.created_at), "d MMMM yyyy, HH:mm", { locale })}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {receipt.detected_amount != null ? `${formatPriceTenge(Number(receipt.detected_amount))} · ` : ""}
-                          {t(`buyerReceiptStatus_${receipt.verification_status}` as "buyerReceiptStatus_confirmed")}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -314,17 +318,29 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
 const Row = ({
   icon: Icon,
   label,
+  aside,
+  below,
   children,
 }: {
   icon: typeof Package;
   label: string;
+  /** Shown on the right of the row, e.g. the receipts toggle. */
+  aside?: React.ReactNode;
+  /** Shown under the value, e.g. the opened receipts. */
+  below?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <div className="flex items-start gap-3">
     <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
     <div className="min-w-0 flex-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium text-foreground">{children}</dd>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="break-words font-medium text-foreground">{children}</dd>
+        </div>
+        {aside && <div className="shrink-0">{aside}</div>}
+      </div>
+      {below && <dd className="mt-2">{below}</dd>}
     </div>
   </div>
 );

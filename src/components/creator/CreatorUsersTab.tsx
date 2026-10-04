@@ -327,21 +327,21 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium text-foreground truncate">{purchase.simple_user.name}</h4>
-                  {/* Price on the left, access status on the right — one line keeps the card short. */}
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <p className="flex min-w-0 flex-1 text-xs text-muted-foreground">
-                      {showAll && (
-                        <>
-                          <span className="truncate">{purchase.product.title}</span>
-                          <span className="shrink-0">&nbsp;·&nbsp;</span>
-                        </>
-                      )}
-                      <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
-                    </p>
-                    <UrgencyBadge purchase={purchase} className="shrink-0" />
-                  </div>
+                  <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                    {showAll && (
+                      <>
+                        <span className="truncate">{purchase.product.title}</span>
+                        <span className="shrink-0">&nbsp;·&nbsp;</span>
+                      </>
+                    )}
+                    <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
+                  </p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {/* Access status sits in the middle of the card's height, next to the arrow. */}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <UrgencyBadge purchase={purchase} />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -62,5 +62,5 @@ export const URGENCY_CLASSES: Record<AccessUrgency, string> = {
   soon: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   very_soon: "bg-red-500/15 text-red-600 dark:text-red-400",
   expired: "bg-red-500/10 text-red-600/80 dark:text-red-400/80",
-  closed: "bg-muted text-muted-foreground line-through",
+  closed: "bg-muted text-muted-foreground",
 };
