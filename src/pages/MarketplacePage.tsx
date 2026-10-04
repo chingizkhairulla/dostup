@@ -13,6 +13,7 @@ import PublicFooter from "@/components/layout/PublicFooter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useHideScrollbar } from "@/hooks/useHideScrollbar";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 const MarketplacePage = () => {
   const { t, language } = useLanguage();
+  useHideScrollbar();
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
@@ -86,7 +88,7 @@ const MarketplacePage = () => {
   };
 
   const page = (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background no-scrollbar">
       <MarketplaceHeader />
       <main className="flex flex-1 flex-col pb-0 pt-0 md:pb-16">
         <PublicContainer>
@@ -139,7 +141,7 @@ const MarketplacePage = () => {
         </PublicContainer>
 
         {isDefaultView ? (
-          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-14">
+          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-[40px] md:space-y-14">
             {taxonomy.isLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

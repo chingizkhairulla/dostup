@@ -545,6 +545,12 @@ const ProductPage = () => {
       <PublicContainer className="flex-1 pb-28 pt-4 lg:pb-16 lg:pt-6">
         <Link
           to="/"
+          onClick={(e) => {
+            if (window.history.state && window.history.state.idx > 0) {
+              e.preventDefault();
+              window.history.back();
+            }
+          }}
           className="mb-4 inline-flex items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
         >
           <ArrowLeft className="h-4 w-4" />

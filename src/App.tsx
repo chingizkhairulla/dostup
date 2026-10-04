@@ -36,6 +36,7 @@ import WelcomePage from './pages/WelcomePage'
 import NotFound from './pages/NotFound'
 import LegalPage from './pages/LegalPage'
 import RequireProfile from '@/components/auth/RequireProfile'
+import ScrollManager from '@/components/layout/ScrollManager'
 import { MARKETPLACE_LOCATION, readLoginBackground } from '@/lib/loginModal'
 import { ONBOARDING_PATH } from '@/lib/creatorAuth'
 
@@ -209,6 +210,7 @@ const App = () => (
 								<Toaster />
 								<Sonner />
 								<BrowserRouter>
+									<ScrollManager />
 									<AppRoutes />
 								</BrowserRouter>
 							</TooltipProvider>
