@@ -140,13 +140,14 @@ export const kaspiSettingsFromStored = (
 /** Поля способа оплаты для сохранения в pricing_options. */
 export const serializeKaspiFields = (opt: PricingOptionFormItem) => {
   const m = new Set(opt.kaspiMethods);
-  const usesBank = m.has("phone") || m.has("card");
+  // Банк выбирается только вместе с картой; перевод по номеру без карты — Kaspi по умолчанию.
+  const usesCard = m.has("card");
   return {
     kaspi_link: m.has("link") ? (opt.kaspiLink.trim() || null) : null,
     kaspi_phone: m.has("phone") ? (opt.kaspiPhone.trim() || null) : null,
-    kaspi_card: m.has("card") ? (cardDigits(opt.kaspiCard) || null) : null,
-    bank: usesBank ? opt.bank : null,
-    bank_name: usesBank && opt.bank === "other" ? (opt.bankName.trim() || null) : null,
+    kaspi_card: usesCard ? (cardDigits(opt.kaspiCard) || null) : null,
+    bank: usesCard ? opt.bank : m.has("phone") ? DEFAULT_BANK : null,
+    bank_name: usesCard && opt.bank === "other" ? (opt.bankName.trim() || null) : null,
   };
 };
 
@@ -1213,84 +1214,69 @@ const ProductForm = ({
     scrollToField(id);
   };
 
+  /** Первая незаполненная настройка оплаты: id поля, вариант тарифа и (если нужно) свой текст ошибки. */
+  const findPaymentIssue = (): { id: string; optId?: string; message?: string } | null => {
+    if (!formData.isPaid) return null;
+    if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
+      return { id: "field-pricing-options" };
+    }
+    for (const opt of formData.pricingOptions) {
+      if (!opt.price || Number(opt.price) <= 0) {
+        return { id: `price-${opt.id}`, optId: opt.id };
+      }
+      if (opt.paymentType === "recurring" && !opt.recurringInterval) {
+        return { id: `recurring-interval-${opt.id}`, optId: opt.id };
+      }
+      const methods = new Set(opt.kaspiMethods);
+      if (methods.size === 0) {
+        return { id: `price-${opt.id}`, optId: opt.id, message: "Выберите хотя бы один способ оплаты" };
+      }
+      if (methods.has("link") && !opt.kaspiLink?.trim()) {
+        return { id: `kaspi-link-${opt.id}`, optId: opt.id };
+      }
+      if (methods.has("phone")) {
+        const digits = opt.kaspiPhone?.replace(/\D/g, "") || "";
+        if (!opt.kaspiPhone?.trim() || digits.length < 5) {
+          return { id: `kaspi-phone-${opt.id}`, optId: opt.id };
+        }
+      }
+      if (methods.has("card") && !isValidCardNumber(opt.kaspiCard)) {
+        return { id: `kaspi-card-${opt.id}`, optId: opt.id, message: "Номер карты должен содержать 16 цифр" };
+      }
+      if (methods.has("card") && opt.bank === "other" && !opt.bankName.trim()) {
+        return { id: `bank-name-${opt.id}`, optId: opt.id };
+      }
+    }
+    return null;
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 1. Details -> Title
-    if (!formData.title?.trim()) {
-      notifyMissingField("title", () => setDetailsOpen(true));
-      return;
-    }
+    const detailsIssue = !formData.title?.trim() ? "title" : null;
+    const categoryIssue = !formData.categoryId
+      ? "field-category"
+      : !formData.subcategoryId
+        ? "field-subcategory"
+        : null;
+    const paymentIssue = findPaymentIssue();
 
-    // 2. Category
-    if (!formData.categoryId) {
-      notifyMissingField("field-category", () => {
-        setCategoryOpen(true);
-      });
-      return;
-    }
-
-    // 3. Subcategory
-    if (!formData.subcategoryId) {
-      notifyMissingField("field-subcategory", () => {
-        setCategoryOpen(true);
-      });
-      return;
-    }
-
-    // 4. Payment options (if paid)
-    if (formData.isPaid) {
-      if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
-        notifyMissingField("field-pricing-options", () => setPaymentOpen(true));
-        return;
+    if (detailsIssue || categoryIssue || paymentIssue) {
+      // Раскрываем сразу все разделы, где что-то не заполнено, и ведём к первому полю.
+      if (detailsIssue) setDetailsOpen(true);
+      if (categoryIssue) setCategoryOpen(true);
+      if (paymentIssue) {
+        setPaymentOpen(true);
+        if (paymentIssue.optId) setExpandedOptionId(paymentIssue.optId);
       }
-      for (const opt of formData.pricingOptions) {
-        if (!opt.price || Number(opt.price) <= 0) {
-          notifyMissingField(`price-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
-          return;
-        }
-        if (opt.paymentType === "recurring" && !opt.recurringInterval) {
-          notifyMissingField(`recurring-interval-${opt.id}`, () => {
-            setPaymentOpen(true);
-            setExpandedOptionId(opt.id);
-          });
-          return;
-        }
-        const openOption = () => {
-          setPaymentOpen(true);
-          setExpandedOptionId(opt.id);
-        };
-        const methods = new Set(opt.kaspiMethods);
-        if (methods.size === 0) {
-          toast.error("Выберите хотя бы один способ оплаты");
-          openOption();
-          return;
-        }
-        if (methods.has("link") && !opt.kaspiLink?.trim()) {
-          notifyMissingField(`kaspi-link-${opt.id}`, openOption);
-          return;
-        }
-        if (methods.has("phone")) {
-          const digits = opt.kaspiPhone?.replace(/\D/g, "") || "";
-          if (!opt.kaspiPhone?.trim() || digits.length < 5) {
-            notifyMissingField(`kaspi-phone-${opt.id}`, openOption);
-            return;
-          }
-        }
-        if (methods.has("card") && !isValidCardNumber(opt.kaspiCard)) {
-          toast.error("Номер карты должен содержать 16 цифр");
-          scrollToField(`kaspi-card-${opt.id}`);
-          openOption();
-          return;
-        }
-        if ((methods.has("phone") || methods.has("card")) && opt.bank === "other" && !opt.bankName.trim()) {
-          notifyMissingField(`bank-name-${opt.id}`, openOption);
-          return;
-        }
+      const firstId = detailsIssue ?? categoryIssue ?? paymentIssue!.id;
+      if (!detailsIssue && !categoryIssue && paymentIssue?.message) {
+        toast.error(paymentIssue.message);
+        scrollToField(firstId);
+      } else {
+        notifyMissingField(firstId);
       }
+      return;
     }
 
     onSubmit(e);
@@ -1303,7 +1289,7 @@ const ProductForm = ({
   ];
 
   return (
-    <form onSubmit={handleFormSubmit} noValidate className="space-y-4 mt-4 w-full min-w-0 max-w-full overflow-x-hidden">
+    <form onSubmit={handleFormSubmit} noValidate className="space-y-4 mt-4 w-full min-w-0 max-w-full overflow-x-clip">
       {Boolean(coverCrop.source) ? (
         <div className="space-y-4 py-1 animate-in fade-in-50 duration-200">
           <CoverCropEditor
@@ -2098,7 +2084,9 @@ const ProductForm = ({
     <FormSection label="Оплата" open={paymentOpen} onOpenChange={setPaymentOpen}>
         {/* Choice between Free access and Paid access (Whop style) */}
         <div className="space-y-2">
-          <Label className="text-sm sm:text-base font-semibold text-foreground">Как люди получат доступ?</Label>
+          <Label className="text-sm sm:text-base font-semibold text-foreground flex items-center">
+            Как люди получат доступ? <ReqStar />
+          </Label>
           <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
             {/* Карточка 1: Бесплатно */}
             <div
@@ -2472,7 +2460,7 @@ const ProductForm = ({
                             {opt.kaspiMethods.includes("card") && (
                               <div className="space-y-1">
                                 <Label htmlFor={`kaspi-card-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Номер карты (16 цифр)
+                                  Номер карты
                                 </Label>
                                 <Input
                                   id={`kaspi-card-${opt.id}`}
@@ -2487,7 +2475,7 @@ const ProductForm = ({
                                 />
                               </div>
                             )}
-                            {(opt.kaspiMethods.includes("phone") || opt.kaspiMethods.includes("card")) && (
+                            {opt.kaspiMethods.includes("card") && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-muted-foreground">Банк для перевода</Label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -2499,8 +2487,11 @@ const ProductForm = ({
                                       variant={opt.bank === b.value ? "default" : "toggle"}
                                       aria-pressed={opt.bank === b.value}
                                       onClick={() => updateOption(opt.id, { bank: b.value })}
-                                      className="text-xs sm:text-sm h-9 px-1"
+                                      className="text-xs sm:text-sm h-9 px-1 gap-1.5"
                                     >
+                                      {b.logo && (
+                                        <img src={b.logo} alt="" className="h-4 w-4 shrink-0 rounded-sm object-contain" />
+                                      )}
                                       {b.label}
                                     </Button>
                                   ))}
@@ -3209,7 +3200,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
             </Button>
           </DialogTrigger>
           <DialogContent
-          className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -3237,7 +3228,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) { setEditingProduct(null); resetForm(); setIsCroppingMedia(false); } }}>
         <DialogContent
-          className="w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}

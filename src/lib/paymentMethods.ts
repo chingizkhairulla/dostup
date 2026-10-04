@@ -11,10 +11,10 @@ export const KASPI_METHOD_LABELS: Record<KaspiMethod, string> = {
   card: "💳 Карта",
 };
 
-export const BANK_OPTIONS: Array<{ value: PaymentBank; label: string }> = [
-  { value: "kaspi", label: "Kaspi" },
-  { value: "halyk", label: "Halyk" },
-  { value: "freedom", label: "Freedom" },
+export const BANK_OPTIONS: Array<{ value: PaymentBank; label: string; logo?: string }> = [
+  { value: "kaspi", label: "Kaspi", logo: "/banks/kaspi.png" },
+  { value: "halyk", label: "Halyk", logo: "/banks/halyk.png" },
+  { value: "freedom", label: "Freedom", logo: "/banks/freedom.png" },
   { value: "other", label: "Другой банк" },
 ];
 
