@@ -115,6 +115,14 @@ export async function compressVideoIfNeeded(
       return file;
     }
 
+    // Браузер не умеет перекодировать дорожку (например, звук AAC в старом Safari) — она бы молча
+    // пропала, и видео ушло бы без звука или без картинки. Лучше отправить оригинал.
+    const lost = conversion.discardedTracks.filter((t) => t.reason !== "discarded_by_user");
+    if (lost.length) {
+      console.warn("Сжатие потеряло бы дорожки, отправляем оригинал:", lost.map((t) => t.reason));
+      return file;
+    }
+
     if (onProgress) {
       conversion.onProgress = (p) => {
         if (signal?.aborted) return;

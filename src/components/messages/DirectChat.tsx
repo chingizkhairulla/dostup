@@ -74,6 +74,7 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
           }),
         }));
         setMessages(withStableLinks);
+        // The server has marked them read; refresh the list (the badge is already out, see below).
         queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
       } finally {
         if (!quiet) setLoading(false);
@@ -84,12 +85,16 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
 
   useEffect(() => {
     setMessages([]);
+    // Opening the chat reads it: the count beside it goes out at once, not after the round trip.
+    queryClient.setQueryData<DirectContact[]>(["direct-contacts", side], (list) =>
+      list?.map((c) => (c.peer_id === peerId && c.unread ? { ...c, unread: 0 } : c)),
+    );
     void load();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void load(true);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, queryClient, side, peerId]);
 
   const uploadFile = async (file: File, kind: ChatAttachmentKind, signal: AbortSignal): Promise<ChatAttachment> => {
     if (kind === "video") {

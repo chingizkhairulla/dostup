@@ -19,8 +19,6 @@ export interface ChatListItem {
   verified?: boolean;
   /** Keys of the category filters this chat shows under (see ChatCategory.filters). */
   filterKeys?: string[];
-  /** Shown under every filter — the support chat. */
-  pinned?: boolean;
 }
 
 export interface ChatCategory {
@@ -29,8 +27,8 @@ export interface ChatCategory {
   icon: LucideIcon;
   items: ChatListItem[];
   emptyText?: string;
-  /** Second row of chips inside the category; the first one is selected by default. */
-  filters?: { key: string; label: string }[];
+  /** Second row of chips inside the category; the first one is selected by default. `full` keeps the whole label. */
+  filters?: { key: string; label: string; full?: boolean }[];
 }
 
 interface Props {
@@ -103,7 +101,7 @@ const MessengerLayout = ({
   const items = useMemo(() => {
     const all = active?.items ?? [];
     const list = activeFilter
-      ? all.filter((item) => item.pinned || item.filterKeys?.includes(activeFilter.key))
+      ? all.filter((item) => item.filterKeys?.includes(activeFilter.key))
       : all;
     const q = query.trim().toLowerCase();
     if (!q) return list;
@@ -197,7 +195,8 @@ const MessengerLayout = ({
                     title={filter.label}
                     className={cn(
                       // About as wide as the word "Продукты"; longer product names are cut short.
-                      "max-w-[5.5rem] shrink-0 truncate rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      "shrink-0 truncate rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      !filter.full && "max-w-[5.5rem]",
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",

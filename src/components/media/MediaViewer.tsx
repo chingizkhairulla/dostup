@@ -18,14 +18,13 @@ interface Props {
   onIndexChange: (index: number | null) => void;
   /** Buttons placed before "Done" (e.g. a download button for receipts). */
   actions?: ReactNode;
-  /** White window instead of the dark one — for documents such as payment receipts. */
+  /** Light window instead of the dark one: light grey behind the picture, a white bar under it. */
   light?: boolean;
 }
 
 /**
- * Near-fullscreen window for a photo, video or PDF. The page behind is blurred and a strip
- * around the window stays free, so a tap anywhere outside it closes the viewer — as does
- * the single "Done" button in the bottom-right corner.
+ * Fullscreen window for a photo, video or PDF. A tap on the backdrop around the picture
+ * closes it, as does the single "Done" button in the bottom-right corner.
  */
 const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Props) => {
   const { t } = useLanguage();
@@ -55,17 +54,21 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed z-[60] flex flex-col overflow-hidden rounded-2xl shadow-2xl outline-none",
+            "fixed inset-0 z-[60] flex flex-col overflow-hidden outline-none",
             light ? "bg-white" : "bg-neutral-950",
-            // The margins are the tap-to-close area; the bottom one clears the phone's home bar.
-            "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
-            "sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           )}
         >
           <DialogPrimitive.Title className="sr-only">{item?.name || t("mediaViewerTitle")}</DialogPrimitive.Title>
 
-          <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          {/* Grey, so a white photo still stands out; a tap on the grey around it closes the viewer. */}
+          <div
+            className={cn(
+              "relative flex min-h-0 flex-1 items-center justify-center pt-[env(safe-area-inset-top)]",
+              light ? "bg-neutral-200" : "bg-neutral-950",
+            )}
+            onClick={(e) => e.target === e.currentTarget && onIndexChange(null)}
+          >
             {item?.kind === "image" && (
               <img src={item.url} alt={item.name ?? ""} className="max-h-full max-w-full object-contain" />
             )}
@@ -76,7 +79,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
                 controls
                 autoPlay
                 playsInline
-                className={cn("max-h-full max-w-full", light ? "bg-white" : "bg-black")}
+                className={cn("max-h-full max-w-full", !light && "bg-black")}
               />
             )}
             {item?.kind === "pdf" && (
@@ -107,7 +110,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
 
           <div
             className={cn(
-              "flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3",
+              "flex shrink-0 items-center justify-end gap-2 border-t px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
               light ? "border-neutral-200 bg-white" : "border-white/10 bg-neutral-950",
             )}
           >
