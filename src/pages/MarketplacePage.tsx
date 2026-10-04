@@ -141,7 +141,7 @@ const MarketplacePage = () => {
         </PublicContainer>
 
         {isDefaultView ? (
-          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-[40px] md:space-y-14">
+          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-[64px] md:space-y-14">
             {taxonomy.isLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

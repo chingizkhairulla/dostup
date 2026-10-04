@@ -66,12 +66,16 @@ const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
             as="h1"
             title={
               isTopRated ? (
-                <>⭐ {t("allTopRatedProductsTitle")}</>
+                <>
+                  ⭐{" "}
+                  <span className="md:hidden">{t("allTopRatedProductsTitleShort")}</span>
+                  <span className="hidden md:inline">{t("allTopRatedProductsTitle")}</span>
+                </>
               ) : (
                 <>🆕 {t("allNewProductsTitle")}</>
               )
             }
-            className="mb-0 items-start"
+            className="mb-0 items-center"
             titleClassName="text-[20px] md:text-[26px] font-bold tracking-tight text-[#1F2328] leading-snug"
             action={
               <Link
@@ -82,7 +86,7 @@ const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
                     window.history.back();
                   }
                 }}
-                className="inline-flex shrink-0 items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md pt-0.5"
+                className="inline-flex shrink-0 items-center gap-2 public-meta hover:text-foreground focus-ring rounded-md"
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span>{t("back")}</span>
