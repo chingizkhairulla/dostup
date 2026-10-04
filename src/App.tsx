@@ -36,6 +36,7 @@ import WelcomePage from './pages/WelcomePage'
 import NotFound from './pages/NotFound'
 import LegalPage from './pages/LegalPage'
 import RequireProfile from '@/components/auth/RequireProfile'
+import ScrollManager from '@/components/layout/ScrollManager'
 import { MARKETPLACE_LOCATION, readLoginBackground } from '@/lib/loginModal'
 import { ONBOARDING_PATH } from '@/lib/creatorAuth'
 
@@ -106,7 +107,8 @@ function AppRoutes() {
 			>
 				<Routes location={underlayLocation}>
 					<Route path='/' element={<MarketplacePage />} />
-					<Route path='/new' element={<NewProductsPage />} />
+					<Route path='/new' element={<NewProductsPage sort="newest" />} />
+					<Route path='/top-rated' element={<NewProductsPage sort="rating" />} />
 					<Route path='/terms' element={<LegalPage docId='terms' />} />
 					<Route path='/privacy' element={<LegalPage docId='privacy' />} />
 					<Route path='/s/:handle' element={<StorefrontPage />} />
@@ -208,6 +210,7 @@ const App = () => (
 								<Toaster />
 								<Sonner />
 								<BrowserRouter>
+									<ScrollManager />
 									<AppRoutes />
 								</BrowserRouter>
 							</TooltipProvider>

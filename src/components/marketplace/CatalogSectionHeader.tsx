@@ -7,6 +7,7 @@ type CatalogSectionHeaderProps = {
   action?: ReactNode;
   as?: "h1" | "h2";
   className?: string;
+  titleClassName?: string;
 };
 
 /**
@@ -14,9 +15,20 @@ type CatalogSectionHeaderProps = {
  * keeps the same left edge and size when navigating between them.
  * The font shrinks on narrow phones so the title stays on one line next to the action.
  */
-const CatalogSectionHeader = ({ title, action, as: Heading = "h2", className }: CatalogSectionHeaderProps) => (
+const CatalogSectionHeader = ({
+  title,
+  action,
+  as: Heading = "h2",
+  className,
+  titleClassName,
+}: CatalogSectionHeaderProps) => (
   <div className={cn("mb-6 flex items-center justify-between gap-4", className)}>
-    <Heading className="min-w-0 text-[clamp(20px,6vw,26px)] font-bold tracking-tight text-[#1F2328]">
+    <Heading
+      className={cn(
+        "min-w-0 font-bold tracking-tight text-[#1F2328]",
+        titleClassName || "text-[clamp(20px,6vw,26px)]"
+      )}
+    >
       {title}
     </Heading>
     {action}
