@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { kk, ru } from "date-fns/locale";
-import { CalendarClock, Download, FileText, Loader2, Package, Receipt, Users, Wallet } from "lucide-react";
+import { CalendarClock, ChevronDown, Download, FileText, Loader2, Package, Receipt, Users, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,20 +16,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import MediaViewer from "@/components/media/MediaViewer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge } from "@/lib/catalog";
 import { fetchCreatorReceiptBlob } from "@/lib/sessionApi";
 import { cn } from "@/lib/utils";
-import {
-  accessEnd,
-  accessUrgency,
-  presetEnd,
-  URGENCY_CLASSES,
-  type AccessPreset,
-  type AccessSource,
-} from "./buyerAccess";
+import { accessEnd, accessUrgency, URGENCY_CLASSES, type AccessSource } from "./buyerAccess";
 
 export interface BuyerReceipt {
   id: string;
@@ -53,7 +45,8 @@ export interface BuyerPurchase extends AccessSource {
 interface Props {
   purchase: BuyerPurchase | null;
   onOpenChange: (open: boolean) => void;
-  onSetAccess: (purchaseId: string, mode: "forever" | "until" | "revoke", until?: Date) => Promise<void>;
+  /** "forever" opens access again with no end date. */
+  onSetAccess: (purchaseId: string, mode: "revoke" | "forever") => Promise<void>;
   teachers: { id: string; name: string }[];
   teacherValue: string;
   onTeacherChange: (value: string) => void;
@@ -77,19 +70,19 @@ export const UrgencyBadge = ({ purchase, className }: { purchase: AccessSource; 
   );
 };
 
-/** Seller's card for one buyer: access period (editable), payment date, status and receipts. */
+/** Seller's card for one buyer: last payment, access status, receipts and a button to close or reopen access. */
 const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, teacherValue, onTeacherChange }: Props) => {
   const { t, language } = useLanguage();
   const locale = language === "kk" ? kk : ru;
   const [saving, setSaving] = useState(false);
-  const [customDate, setCustomDate] = useState("");
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [receiptsOpen, setReceiptsOpen] = useState(false);
   const [receiptView, setReceiptView] = useState<{ url: string; kind: "image" | "pdf"; name: string } | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
-    setCustomDate("");
     setConfirmRevoke(false);
+    setReceiptsOpen(false);
   }, [purchase?.id]);
 
   useEffect(() => () => {
@@ -104,28 +97,16 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
   const { urgency } = accessUrgency(purchase);
   const fmt = (d: Date) => format(d, "d MMMM yyyy", { locale });
 
-  const apply = async (mode: "forever" | "until" | "revoke", until?: Date) => {
+  const setAccess = async (mode: "revoke" | "forever") => {
     setSaving(true);
     try {
-      await onSetAccess(purchase.id, mode, until);
-      toast.success(t("buyerAccessSaved"));
+      await onSetAccess(purchase.id, mode);
+      toast.success(t(mode === "revoke" ? "buyerAccessClosed" : "buyerAccessOpened"));
     } catch {
       toast.error(t("buyerAccessSaveError"));
     } finally {
       setSaving(false);
     }
-  };
-
-  const onPreset = (value: string) => {
-    if (value === "revoke") {
-      setConfirmRevoke(true);
-      return;
-    }
-    if (value === "forever") {
-      void apply("forever");
-      return;
-    }
-    void apply("until", presetEnd(value as Exclude<AccessPreset, "forever">, paidAt));
   };
 
   const openReceipt = async (receipt: BuyerReceipt) => {
@@ -153,15 +134,20 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
     a.click();
   };
 
-  const presetLabel = (preset: Exclude<AccessPreset, "forever">) =>
-    `${t(`buyerPreset_${preset}` as "buyerPreset_1m")} · ${t("buyerUntil")} ${format(presetEnd(preset, paidAt), "dd.MM.yyyy")}`;
-
   return (
     <>
       <Dialog open={!!purchase} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl sm:rounded-2xl">
+        <DialogContent
+          hideCloseButton
+          className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl sm:rounded-2xl"
+        >
+          {/* On a computer the card closes by clicking outside or Esc; phones keep the cross. */}
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-ring md:hidden">
+            <X className="h-4 w-4" />
+            <span className="sr-only">{t("close")}</span>
+          </DialogClose>
           <DialogHeader className="text-left">
-            <DialogTitle className="flex items-center gap-3 pr-6">
+            <DialogTitle className="flex items-center gap-3 pr-6 md:pr-0">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                 {purchase.simple_user.name.charAt(0).toUpperCase()}
               </span>
@@ -173,61 +159,99 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             <Row icon={Package} label={t("buyerProduct")}>
               {purchase.product.title}
             </Row>
-            <Row icon={Wallet} label={t("buyerPaid")}>
-              {formatPriceTenge(Number(purchase.amount))} · {fmt(paidAt)}
+            {/* Receipts open right under the payment they belong to. */}
+            <Row
+              icon={Wallet}
+              label={t("buyerPaid")}
+              aside={
+                purchase.receipts.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">{t("buyerNoReceipts")}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setReceiptsOpen((v) => !v)}
+                    aria-expanded={receiptsOpen}
+                    className="flex items-center gap-1.5 rounded-sm text-sm font-medium focus-ring"
+                  >
+                    <Receipt className="h-4 w-4 text-muted-foreground" />
+                    {t("buyerReceipts")}
+                    <span className="text-muted-foreground">{purchase.receipts.length}</span>
+                    <ChevronDown
+                      className={cn("h-4 w-4 text-muted-foreground transition-transform", receiptsOpen && "rotate-180")}
+                    />
+                  </button>
+                )
+              }
+              below={
+                receiptsOpen &&
+                purchase.receipts.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {purchase.receipts.map((receipt) => (
+                      <li key={receipt.id}>
+                        <button
+                          type="button"
+                          onClick={() => void openReceipt(receipt)}
+                          disabled={loadingReceipt === receipt.id}
+                          className="flex w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left transition-colors hover:bg-muted focus-ring"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            {loadingReceipt === receipt.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium">
+                              {format(new Date(receipt.created_at), "d MMMM yyyy, HH:mm", { locale })}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {receipt.detected_amount != null ? `${formatPriceTenge(Number(receipt.detected_amount))} · ` : ""}
+                              {t(`buyerReceiptStatus_${receipt.verification_status}` as "buyerReceiptStatus_confirmed")}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              }
+            >
+              {/* Wraps between the price and the date, never inside the date. */}
+              <span className="whitespace-nowrap">{formatPriceTenge(Number(purchase.amount))} ·</span>{" "}
+              <span className="whitespace-nowrap">{fmt(paidAt)}</span>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
-              <span className="flex flex-wrap items-center gap-2">
-                <span>
-                  {urgency === "closed"
-                    ? t("buyerAccessClosed")
-                    : urgency === "forever" || !end
-                      ? t("buyerAccessForever")
-                      : fmt(end)}
+              {/* "Forever" and "closed" are said once; a date gets its countdown badge. */}
+              {urgency === "closed" ? (
+                t("buyerAccessClosed")
+              ) : urgency === "forever" || !end ? (
+                t("buyerAccessForever")
+              ) : (
+                <span className="flex flex-wrap items-center gap-2">
+                  <span>{fmt(end)}</span>
+                  <UrgencyBadge purchase={purchase} />
                 </span>
-                <UrgencyBadge purchase={purchase} />
-              </span>
+              )}
             </Row>
           </dl>
 
-          <div className="space-y-2 rounded-xl border border-border p-3">
-            <p className="text-sm font-medium">{t("buyerAccessPeriod")}</p>
-            <Select value="" onValueChange={onPreset} disabled={saving}>
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder={saving ? t("buyerSaving") : t("buyerChangePeriod")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="forever">{t("buyerAccessForever")}</SelectItem>
-                {(["1m", "3m", "6m", "1y"] as const).map((preset) => (
-                  <SelectItem key={preset} value={preset}>
-                    {presetLabel(preset)}
-                  </SelectItem>
-                ))}
-                {urgency !== "closed" && (
-                  <SelectItem value="revoke" className="text-destructive focus:text-destructive">
-                    {t("revokeAccess")}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Input
-                type="date"
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-                aria-label={t("buyerCustomDate")}
-                className="h-10 flex-1"
-              />
-              <Button
-                variant="outline"
-                className="h-10"
-                disabled={!customDate || saving}
-                onClick={() => void apply("until", new Date(`${customDate}T23:59:59`))}
-              >
-                {t("buyerSetDate")}
-              </Button>
-            </div>
-          </div>
+          {urgency === "closed" ? (
+            <Button className="h-10 w-full" disabled={saving} onClick={() => void setAccess("forever")}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t("buyerOpenAccess")}
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              className="h-10 w-full"
+              disabled={saving}
+              onClick={() => setConfirmRevoke(true)}
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t("revokeAccess")}
+            </Button>
+          )}
 
           {teachers.length > 0 && (
             <div className="space-y-2">
@@ -252,45 +276,6 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             </div>
           )}
 
-          <div className="space-y-2">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-              {t("buyerReceipts")}
-            </p>
-            {purchase.receipts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("buyerNoReceipts")}</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {purchase.receipts.map((receipt) => (
-                  <li key={receipt.id}>
-                    <button
-                      type="button"
-                      onClick={() => void openReceipt(receipt)}
-                      disabled={loadingReceipt === receipt.id}
-                      className="flex w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left transition-colors hover:bg-muted focus-ring"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        {loadingReceipt === receipt.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4" />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium">
-                          {format(new Date(receipt.created_at), "d MMMM yyyy, HH:mm", { locale })}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {receipt.detected_amount != null ? `${formatPriceTenge(Number(receipt.detected_amount))} · ` : ""}
-                          {t(`buyerReceiptStatus_${receipt.verification_status}` as "buyerReceiptStatus_confirmed")}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -298,12 +283,9 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}
+        light
         actions={
-          <Button
-            variant="outline"
-            className="h-10 gap-2 rounded-full border-white/20 bg-transparent px-4 text-white hover:bg-white/10 hover:text-white"
-            onClick={downloadReceipt}
-          >
+          <Button variant="outline" className="h-10 gap-2 rounded-full px-4" onClick={downloadReceipt}>
             <Download className="h-4 w-4" />
             {t("download")}
           </Button>
@@ -313,16 +295,16 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
       <AlertDialog open={confirmRevoke} onOpenChange={setConfirmRevoke}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("revokeAccessTitle")}</AlertDialogTitle>
+            <AlertDialogTitle>{t("buyerRevokeConfirm")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("revokeAccessDescription")} <strong>{purchase.simple_user.name}</strong>?
+              <strong>{purchase.simple_user.name}</strong> · {purchase.product.title}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => void apply("revoke")}
+              onClick={() => void setAccess("revoke")}
             >
               {t("revokeAccess")}
             </AlertDialogAction>
@@ -336,17 +318,29 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
 const Row = ({
   icon: Icon,
   label,
+  aside,
+  below,
   children,
 }: {
   icon: typeof Package;
   label: string;
+  /** Shown on the right of the row, e.g. the receipts toggle. */
+  aside?: React.ReactNode;
+  /** Shown under the value, e.g. the opened receipts. */
+  below?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <div className="flex items-start gap-3">
     <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
     <div className="min-w-0 flex-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium text-foreground">{children}</dd>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="break-words font-medium text-foreground">{children}</dd>
+        </div>
+        {aside && <div className="shrink-0">{aside}</div>}
+      </div>
+      {below && <dd className="mt-2">{below}</dd>}
     </div>
   </div>
 );
