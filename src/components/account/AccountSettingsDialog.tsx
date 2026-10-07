@@ -2,8 +2,16 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimplePurchases } from "@/hooks/useSimplePurchases";
-import AccountSettingsView from "@/components/account/AccountSettingsView";
+import AccountSettingsView, { SettingsSectionKey } from "@/components/account/AccountSettingsView";
 import { cn } from "@/lib/utils";
+
+export function openAccountSettings(section?: SettingsSectionKey) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("open-account-settings", { detail: { section } })
+    );
+  }
+}
 
 interface AccountSettingsDialogProps {
   open: boolean;
@@ -12,6 +20,7 @@ interface AccountSettingsDialogProps {
   displayName: string;
   createdAt?: Date | string | null;
   userId?: string;
+  initialSection?: SettingsSectionKey;
   /** Section bar pinned to the bottom on phones; tapping an item closes the dialog. */
   mobileNav?: ReactNode;
 }
@@ -23,6 +32,7 @@ export const AccountSettingsDialog = ({
   displayName,
   createdAt,
   userId,
+  initialSection,
   mobileNav,
 }: AccountSettingsDialogProps) => {
   const { t } = useLanguage();
@@ -81,6 +91,7 @@ export const AccountSettingsDialog = ({
             purchases={purchases}
             purchasesLoading={purchasesLoading}
             onClose={() => onOpenChange(false)}
+            initialSection={initialSection}
           />
         </div>
         {mobileNav && <div className="sm:hidden">{mobileNav}</div>}

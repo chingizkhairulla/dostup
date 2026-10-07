@@ -15,6 +15,7 @@ import {
   Loader2,
   Trash2,
   Check,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { usePWADetection } from "@/hooks/usePWADetection";
 import { unregisterPushToken } from "@/lib/firebase";
 import AvatarSettings from "@/components/account/AvatarSettings";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import TimezoneSelector from "@/components/account/TimezoneSelector";
 import NotificationPreferences from "@/components/NotificationPreferences";
 import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
@@ -35,7 +37,7 @@ import { ru } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export type SettingsSectionKey = "profile" | "language" | "notifications" | "app";
+export type SettingsSectionKey = "profile" | "language" | "timezone" | "notifications" | "app";
 
 interface PurchaseItem {
   id: string;
@@ -54,6 +56,7 @@ interface AccountSettingsViewProps {
   purchases?: PurchaseItem[];
   purchasesLoading?: boolean;
   onClose?: () => void;
+  initialSection?: SettingsSectionKey;
 }
 
 export const AccountSettingsView = ({
@@ -64,17 +67,25 @@ export const AccountSettingsView = ({
   purchases,
   purchasesLoading = false,
   onClose,
+  initialSection,
 }: AccountSettingsViewProps) => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { logout, profileType, profiles, switchProfile, setProfileName, applySession, removeProfile } = useSimpleAuth();
   const isAppInstalled = usePWADetection();
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection || "profile");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileSectionOpen, setMobileSectionOpen] = useState(false);
+  const [mobileSectionOpen, setMobileSectionOpen] = useState(Boolean(initialSection));
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteProfileConfirm, setShowDeleteProfileConfirm] = useState(false);
   const [deletingProfile, setDeletingProfile] = useState(false);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+      setMobileSectionOpen(true);
+    }
+  }, [initialSection]);
 
   // Profile name editing state
   const [nameInput, setNameInput] = useState(displayName || "");
@@ -114,6 +125,13 @@ export const AccountSettingsView = ({
       icon: Globe,
       description: language === "ru" ? "Выбор языка интерфейса" : "Интерфейс тілін таңдау",
       keywords: ["язык", "русский", "казахский", "қазақша", "language", "locale"],
+    },
+    {
+      id: "timezone" as SettingsSectionKey,
+      label: language === "ru" ? "Часовой пояс" : "Уақыт белдеуі",
+      icon: Clock,
+      description: language === "ru" ? "Выбор часового пояса и отображение времени" : "Уақыт белдеуін таңдау және уақытты көрсету",
+      keywords: ["время", "пояс", "часовой", "utc", "алматы", "астана", "timezone", "time", "clock", "пояса", "город"],
     },
     {
       id: "notifications" as SettingsSectionKey,
@@ -398,6 +416,21 @@ export const AccountSettingsView = ({
             </CardHeader>
             <CardContent>
               <LanguageSwitcher />
+            </CardContent>
+          </Card>
+        );
+
+      case "timezone":
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary" />
+                {language === "ru" ? "Часовой пояс" : "Уақыт белдеуі"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TimezoneSelector />
             </CardContent>
           </Card>
         );

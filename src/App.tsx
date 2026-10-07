@@ -16,6 +16,7 @@ import { useSimpleAuth } from '@/contexts/SimpleAuthContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { SimpleAuthProvider } from '@/contexts/SimpleAuthContext'
 import { LanguageProvider } from '@/contexts/LanguageContext'
+import { TimezoneProvider } from '@/contexts/TimezoneContext'
 import { InstallPromptProvider } from '@/contexts/InstallPromptContext'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import MarketplacePage from './pages/MarketplacePage'
@@ -32,6 +33,7 @@ import SchoolDashboard from './pages/SchoolDashboard'
 import ModeratorDashboard from './pages/ModeratorDashboard'
 import InstallPage from './pages/InstallPage'
 import AuthCallback from './pages/AuthCallback'
+import GoogleMeetCallback from './pages/GoogleMeetCallback'
 import WelcomePage from './pages/WelcomePage'
 import NotFound from './pages/NotFound'
 import LegalPage from './pages/LegalPage'
@@ -114,6 +116,7 @@ function AppRoutes() {
 					<Route path='/s/:handle' element={<StorefrontPage />} />
 					<Route path='/p/:productId' element={<ProductPage />} />
 					<Route path='/auth/callback' element={<AuthCallback />} />
+					<Route path='/auth/google/meet-callback' element={<GoogleMeetCallback />} />
 					<Route path={ONBOARDING_PATH} element={<WelcomePage />} />
 					<Route path='/product/:productId' element={<ProductRedirect />} />
 					<Route
@@ -203,20 +206,22 @@ const App = () => (
 	<ErrorBoundary>
 		<QueryClientProvider client={queryClient}>
 			<LanguageProvider>
-				<InstallPromptProvider>
-					<SimpleAuthProvider>
-						<AuthProvider>
-							<TooltipProvider>
-								<Toaster />
-								<Sonner />
-								<BrowserRouter>
-									<ScrollManager />
-									<AppRoutes />
-								</BrowserRouter>
-							</TooltipProvider>
-						</AuthProvider>
-					</SimpleAuthProvider>
-				</InstallPromptProvider>
+				<TimezoneProvider>
+					<InstallPromptProvider>
+						<SimpleAuthProvider>
+							<AuthProvider>
+								<TooltipProvider>
+									<Toaster />
+									<Sonner />
+									<BrowserRouter>
+										<ScrollManager />
+										<AppRoutes />
+									</BrowserRouter>
+								</TooltipProvider>
+							</AuthProvider>
+						</SimpleAuthProvider>
+					</InstallPromptProvider>
+				</TimezoneProvider>
 			</LanguageProvider>
 		</QueryClientProvider>
 	</ErrorBoundary>
