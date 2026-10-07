@@ -95,6 +95,28 @@ export const captureStateFromEventDetail = (detail: unknown): boolean | null => 
   return typeof isCaptured === "boolean" ? isCaptured : null;
 };
 
+interface ScreenCaptureShortcut {
+  key: string;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+}
+
+/**
+ * Best-effort detection for screenshot shortcuts that are sometimes delivered
+ * to the page before the operating system opens its capture UI.
+ */
+export const isScreenCaptureShortcut = ({
+  key,
+  metaKey = false,
+  shiftKey = false,
+}: ScreenCaptureShortcut): boolean => {
+  if (key === "PrintScreen") return true;
+  if (!metaKey || !shiftKey) return false;
+
+  const normalizedKey = key.toLowerCase();
+  return ["3", "4", "5", "s"].includes(normalizedKey);
+};
+
 export const readScreenCaptureState = async (
   bridge: ScreenCaptureProtectionBridge,
 ): Promise<boolean> => {

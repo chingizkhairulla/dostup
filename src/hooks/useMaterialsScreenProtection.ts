@@ -4,12 +4,14 @@ import {
   acquireScreenCaptureProtection,
   captureStateFromEventDetail,
   getScreenCaptureProtectionBridge,
+  isScreenCaptureShortcut,
   readScreenCaptureState,
   releaseScreenCaptureProtection,
 } from "@/lib/screenCaptureProtection";
 
 export type MaterialsProtectionStatus =
-  | "web-unavailable"
+  | "web-protected"
+  | "web-shielded"
   | "checking"
   | "protected"
   | "captured"
@@ -34,8 +36,14 @@ const initialState = (): MaterialsScreenProtectionState => {
       }
     : {
         isNativeProtectionAvailable: false,
-        status: "web-unavailable",
-        shouldHideContent: false,
+        status:
+          typeof document !== "undefined" &&
+          (document.visibilityState !== "visible" || !document.hasFocus())
+            ? "web-shielded"
+            : "web-protected",
+        shouldHideContent:
+          typeof document !== "undefined" &&
+          (document.visibilityState !== "visible" || !document.hasFocus()),
       };
 };
 
@@ -44,15 +52,98 @@ const initialState = (): MaterialsScreenProtectionState => {
  *
  * Native Capacitor apps use the local ScreenProtection plugin. An alternative
  * host can provide window.DostupScreenProtection. Browsers do not expose an
- * equivalent API, so the web/PWA path remains explicitly unsupported instead
- * of pretending to block screenshots with JavaScript.
+ * equivalent API, so the web/PWA path provides a best-effort black shield when
+ * the page loses focus, becomes hidden, starts printing, or receives a known
+ * screenshot shortcut. It cannot detect capture performed by another app.
  */
 export const useMaterialsScreenProtection = (): MaterialsScreenProtectionState => {
   const [state, setState] = useState<MaterialsScreenProtectionState>(initialState);
 
   useEffect(() => {
     const bridge = getScreenCaptureProtectionBridge();
-    if (!bridge) return;
+    if (!bridge) {
+      let revealTimer: ReturnType<typeof window.setTimeout> | null = null;
+      let shortcutTimer: ReturnType<typeof window.setTimeout> | null = null;
+
+      const clearRevealTimer = () => {
+        if (revealTimer !== null) window.clearTimeout(revealTimer);
+        revealTimer = null;
+      };
+
+      const clearShortcutTimer = () => {
+        if (shortcutTimer !== null) window.clearTimeout(shortcutTimer);
+        shortcutTimer = null;
+      };
+
+      const hideWebContent = () => {
+        clearRevealTimer();
+        setState({
+          isNativeProtectionAvailable: false,
+          status: "web-shielded",
+          shouldHideContent: true,
+        });
+      };
+
+      const revealWebContent = (delay = 250) => {
+        clearRevealTimer();
+        if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+
+        revealTimer = window.setTimeout(() => {
+          if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+          setState({
+            isNativeProtectionAvailable: false,
+            status: "web-protected",
+            shouldHideContent: false,
+          });
+        }, delay);
+      };
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState !== "visible") {
+          hideWebContent();
+          return;
+        }
+        revealWebContent();
+      };
+
+      const handleCaptureShortcut = (event: KeyboardEvent) => {
+        if (!isScreenCaptureShortcut(event)) return;
+        hideWebContent();
+        clearShortcutTimer();
+        shortcutTimer = window.setTimeout(() => revealWebContent(0), 1500);
+      };
+
+      const handleFocus = () => revealWebContent();
+      const handleAfterPrint = () => revealWebContent();
+
+      document.documentElement.classList.add("materials-screen-protected");
+      window.addEventListener("blur", hideWebContent);
+      window.addEventListener("focus", handleFocus);
+      window.addEventListener("keydown", handleCaptureShortcut, true);
+      window.addEventListener("keyup", handleCaptureShortcut, true);
+      window.addEventListener("beforeprint", hideWebContent);
+      window.addEventListener("afterprint", handleAfterPrint);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+
+      if (document.visibilityState !== "visible" || !document.hasFocus()) {
+        hideWebContent();
+      } else {
+        revealWebContent(0);
+      }
+
+      return () => {
+        clearRevealTimer();
+        clearShortcutTimer();
+        document.documentElement.classList.remove("materials-screen-protected");
+        window.removeEventListener("blur", hideWebContent);
+        window.removeEventListener("focus", handleFocus);
+        window.removeEventListener("keydown", handleCaptureShortcut, true);
+        window.removeEventListener("keyup", handleCaptureShortcut, true);
+        window.removeEventListener("beforeprint", hideWebContent);
+        window.removeEventListener("afterprint", handleAfterPrint);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
 
     let active = true;
     let unsubscribeFromBridge: (() => void) | null = null;

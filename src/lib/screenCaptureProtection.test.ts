@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   acquireScreenCaptureProtection,
   captureStateFromEventDetail,
+  isScreenCaptureShortcut,
   isScreenCaptureProtectionBridge,
   readScreenCaptureState,
   releaseScreenCaptureProtection,
@@ -22,6 +23,24 @@ test("malformed capture events are ignored", () => {
   assert.equal(captureStateFromEventDetail(null), null);
   assert.equal(captureStateFromEventDetail({ isCaptured: "yes" }), null);
   assert.equal(captureStateFromEventDetail({ captured: true }), null);
+});
+
+test("common operating-system screenshot shortcuts are recognized", () => {
+  assert.equal(isScreenCaptureShortcut({ key: "PrintScreen" }), true);
+  assert.equal(
+    isScreenCaptureShortcut({ key: "s", metaKey: true, shiftKey: true }),
+    true,
+  );
+  assert.equal(
+    isScreenCaptureShortcut({ key: "4", metaKey: true, shiftKey: true }),
+    true,
+  );
+});
+
+test("ordinary keyboard input is not treated as a screenshot shortcut", () => {
+  assert.equal(isScreenCaptureShortcut({ key: "s", shiftKey: true }), false);
+  assert.equal(isScreenCaptureShortcut({ key: "4", metaKey: true }), false);
+  assert.equal(isScreenCaptureShortcut({ key: "Escape" }), false);
 });
 
 test("a bridge must provide setProtected", () => {
