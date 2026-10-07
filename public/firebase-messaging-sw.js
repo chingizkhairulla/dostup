@@ -34,7 +34,9 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   let targetUrl = '/';
 
-  if (data.type === 'booking' || data.type === 'cancellation' || data.type === 'payment') {
+  if (data.type === 'payment') {
+    targetUrl = '/creator?tab=users';
+  } else if (data.type === 'booking' || data.type === 'cancellation') {
     targetUrl = '/creator';
   } else if (data.type === 'creator_cancellation' || data.type === 'reminder' || data.type === 'material_unlocked') {
     targetUrl = '/dashboard';

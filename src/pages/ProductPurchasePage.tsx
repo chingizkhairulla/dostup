@@ -9,7 +9,6 @@ import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 import { invokeApi, studentCreds } from "@/lib/sessionApi";
-import { cardDigits, formatCardNumber } from "@/lib/paymentFormat";
 import { ArrowLeft, Lock, Loader2, ExternalLink, Clock, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
@@ -19,6 +18,7 @@ import { loginPath, loginState } from "@/lib/loginModal";
 import { formatPriceTenge } from "@/lib/catalog";
 import ReceiptUploadCard, { ReceiptSubmission } from "@/components/checkout/ReceiptUploadCard";
 import { cn } from "@/lib/utils";
+import { resolvePaymentMethods, formatCardNumber } from "@/lib/paymentMethods";
 
 function getOptionDisplay(opt: any) {
   const priceStr = formatPriceTenge(Number(opt.price));
@@ -221,34 +221,36 @@ const ProductPurchasePage = () => {
     return () => window.clearInterval(id);
   }, [purchaseStatus, purchaseId, navigate, t, sessionToken, productId]);
 
-  const activeKaspiLink = activeOption?.kaspi_link || product?.kaspi_link || null;
-  const activeKaspiPhone = activeOption?.kaspi_phone || product?.kaspi_phone || null;
-  // Card lives only in the option: there is no product-level column to fall back to.
-  const activeCard = activeOption?.kaspi_card || null;
+  const payment = useMemo(
+    () => resolvePaymentMethods(activeOption, product),
+    [activeOption, product],
+  );
+  const activeKaspiLink = payment.link;
+  const activeKaspiPhone = payment.phone;
+  const activeKaspiCard = payment.card;
 
   const handleKaspiPayment = () => {
     if (!activeKaspiLink) return;
     window.open(activeKaspiLink, "_blank");
   };
 
-  const copyToClipboard = async (value: string, okMessage: string) => {
+  const copyToClipboard = async (value: string, successKey: "kaspiPhoneCopied" | "cardNumberCopied") => {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success(okMessage);
+      toast.success(t(successKey));
     } catch {
-      // No clipboard permission: show the value so it can be copied by hand.
       toast.error(value);
     }
   };
 
   const handleCopyKaspiPhone = () => {
     if (!activeKaspiPhone) return;
-    void copyToClipboard(activeKaspiPhone, t("kaspiPhoneCopied"));
+    void copyToClipboard(activeKaspiPhone, "kaspiPhoneCopied");
   };
 
-  const handleCopyCard = () => {
-    if (!activeCard) return;
-    void copyToClipboard(cardDigits(activeCard), t("cardNumberCopied"));
+  const handleCopyKaspiCard = () => {
+    if (!activeKaspiCard) return;
+    void copyToClipboard(activeKaspiCard, "cardNumberCopied");
   };
 
   const handleSubmitPurchase = async (e: React.FormEvent) => {
@@ -291,8 +293,10 @@ const ProductPurchasePage = () => {
       }
       setPurchaseId(purchase.id);
       setPurchaseStatus("pending");
-    } catch {
-      toast.error("Ошибка создания заказа");
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "";
+      console.error("create_purchase failed", err);
+      toast.error(message ? `Ошибка создания заказа: ${message}` : "Ошибка создания заказа");
     }
     setIsProcessing(false);
   };
@@ -321,8 +325,10 @@ const ProductPurchasePage = () => {
 
   const hasKaspiLink = Boolean(activeKaspiLink);
   const hasKaspiPhone = Boolean(activeKaspiPhone);
-  const hasCard = Boolean(activeCard);
-  const hasPaymentMethod = hasKaspiLink || hasKaspiPhone || hasCard;
+  const hasKaspiCard = Boolean(activeKaspiCard);
+  const hasPaymentMethod = payment.hasAny;
+  const paymentMethodCount = [hasKaspiLink, hasKaspiPhone, hasKaspiCard].filter(Boolean).length;
+  const buyerReady = Boolean(firstName.trim() && lastName.trim());
   const checkoutPath = `/checkout/${product.id}`;
   const goToLogin = () => {
     rememberAuthNext(checkoutPath);
@@ -562,12 +568,15 @@ const ProductPurchasePage = () => {
 
                 {hasPaymentMethod ? (
                   <div className="space-y-4">
+                    {paymentMethodCount > 1 && (
+                      <p className="text-xs font-semibold text-muted-foreground">{t("paymentMethodsHint")}</p>
+                    )}
                     {hasKaspiLink && (
                       <Button
                         type="button"
                         onClick={handleKaspiPayment}
                         className="w-full h-14 bg-[#F14635] hover:bg-[#d63d2e] text-white font-semibold text-lg"
-                        disabled={!firstName.trim() || !lastName.trim()}
+                        disabled={!buyerReady}
                       >
                         <span className="flex items-center gap-2">
                           {t("payWithKaspi")}
@@ -575,12 +584,10 @@ const ProductPurchasePage = () => {
                         </span>
                       </Button>
                     )}
-
                     {hasKaspiPhone && (
                       <div className="rounded-lg border border-[#F14635]/30 bg-[#F14635]/5 p-4 space-y-3">
-                        <p className="text-sm text-foreground">{t("kaspiPhoneInstruction")}</p>
-                        <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {t("payPhoneLabel")}
+                        <p className="text-sm text-foreground">
+                          {t("transferPhoneInstruction", { bank: payment.bankLabel })}
                         </p>
                         <p className="text-xl font-bold text-center tracking-wide">
                           {formatKaspiPhone(String(activeKaspiPhone))}
@@ -590,29 +597,27 @@ const ProductPurchasePage = () => {
                           variant="outline"
                           className="w-full"
                           onClick={handleCopyKaspiPhone}
-                          disabled={!firstName.trim() || !lastName.trim()}
+                          disabled={!buyerReady}
                         >
                           <Copy className="w-4 h-4 mr-2" />
                           {t("copyKaspiPhone")}
                         </Button>
                       </div>
                     )}
-
-                    {hasCard && (
+                    {hasKaspiCard && (
                       <div className="rounded-lg border border-[#F14635]/30 bg-[#F14635]/5 p-4 space-y-3">
-                        <p className="text-sm text-foreground">{t("payByCardInstruction")}</p>
-                        <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {t("payCardLabel")}
+                        <p className="text-sm text-foreground">
+                          {t("transferCardInstruction", { bank: payment.bankLabel })}
                         </p>
-                        <p className="text-xl font-bold text-center tracking-wide">
-                          {formatCardNumber(String(activeCard))}
+                        <p className="text-xl font-bold text-center tracking-widest tabular-nums">
+                          {formatCardNumber(activeKaspiCard)}
                         </p>
                         <Button
                           type="button"
                           variant="outline"
                           className="w-full"
-                          onClick={handleCopyCard}
-                          disabled={!firstName.trim() || !lastName.trim()}
+                          onClick={handleCopyKaspiCard}
+                          disabled={!buyerReady}
                         >
                           <Copy className="w-4 h-4 mr-2" />
                           {t("copyCardNumber")}

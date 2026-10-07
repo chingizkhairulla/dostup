@@ -1,12 +1,6 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { resolveUser, serviceClient } from '../_shared/session.ts'
-import {
-  completePurchase,
-  latestSubmissionForPurchase,
-  recordVerificationEvent,
-} from '../_shared/purchase.ts'
-import { parseReceipt, sha256Hex } from '../_shared/receipt-parse.ts'
-import { buildFingerprint, verifyReceipt } from '../_shared/receipt-verify.ts'
+import { latestSubmissionForPurchase, recordVerificationEvent } from '../_shared/purchase.ts'
 
 const MAX_BYTES = 4_194_304
 const ALLOWED_MIME = new Set([
@@ -82,76 +76,21 @@ Deno.serve(async (req) => {
 
     const { data: product } = await supabase
       .from('products')
-      .select('id, title, price, kaspi_phone, kaspi_link, creator_account_id')
+      .select('id, title, creator_account_id')
       .eq('id', purchase.product_id)
       .maybeSingle()
 
-    let sellerName: string | null = null
-    if (product?.creator_account_id) {
-      const { data: account } = await supabase
-        .from('creator_accounts')
-        .select('display_name')
-        .eq('id', product.creator_account_id)
-        .maybeSingle()
-      sellerName = account?.display_name ?? null
-    }
-
     const fileSha = await sha256Hex(parsed.bytes)
+    const fingerprint = `sha256:${fileSha}`
 
-    let extracted
-    try {
-      extracted = await parseReceipt({ bytes: parsed.bytes, mimeType: mime })
-    } catch (err) {
-      console.error('parseReceipt threw', err)
-      extracted = {
-        amount: null,
-        currency: null,
-        transactionId: null,
-        paidAt: null,
-        phones: [] as string[],
-        names: [] as string[],
-        qrPayloads: [] as string[],
-        rawText: '',
-        receiptType: 'unreadable' as const,
-        documentClass: 'unreadable' as const,
-        sources: { amount: null, transactionId: null, paidAt: null },
-        ai: { error: 'parse_threw' },
-      }
-    }
-
-    console.log('receipt extracted', {
-      mime,
-      bytes: parsed.bytes.byteLength,
-      amount: extracted.amount,
-      currency: extracted.currency,
-      txn: extracted.transactionId,
-      paidAt: extracted.paidAt,
-      phones: extracted.phones,
-      sources: extracted.sources,
-      qrCount: extracted.qrPayloads.length,
-      receiptType: extracted.receiptType,
-      documentClass: extracted.documentClass,
-      ai: extracted.ai ? extracted.ai._source ?? true : false,
-    })
-
-    const fingerprint = buildFingerprint(extracted, fileSha)
-
+    // Тот же файл уже подтверждён для другой покупки — не принимаем повторно.
     const { data: existingFp } = await supabase
       .from('payment_submissions')
       .select('id, purchase_id, verification_status')
       .eq('fingerprint', fingerprint)
       .order('created_at', { ascending: false })
 
-    let existingTxn: { id: string; purchase_id: string; verification_status: string }[] = []
-    if (extracted.transactionId) {
-      const { data } = await supabase
-        .from('payment_submissions')
-        .select('id, purchase_id, verification_status')
-        .eq('transaction_id', extracted.transactionId)
-      existingTxn = data ?? []
-    }
-
-    const duplicate = [...(existingFp ?? []), ...existingTxn].some(
+    const duplicate = (existingFp ?? []).some(
       (row) => row.purchase_id !== purchase.id && row.verification_status === 'confirmed',
     )
     const reuseId = (existingFp ?? []).find((row) => row.purchase_id === purchase.id)?.id ?? null
@@ -174,41 +113,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    const verified = await verifyReceipt({
-      purchaseAmount: Number(purchase.amount),
-      purchaseCreatedAt: purchase.created_at,
-      expectedCurrency: 'KZT',
-      kaspiPhone: product?.kaspi_phone ?? null,
-      kaspiLink: product?.kaspi_link ?? null,
-      sellerName,
-      productTitle: product?.title ?? null,
-      extracted,
-      fingerprint,
-      duplicate,
-    })
-
-    const parsedMetadata = jsonbSafe({
-      phones: extracted.phones,
-      names: extracted.names,
-      qr_payloads: extracted.qrPayloads.map(redactQr),
-      sources: extracted.sources,
-      paid_at: extracted.paidAt,
-      document_class: extracted.documentClass,
-      expected_amount: Number(purchase.amount),
-      ai: extracted.ai
-        ? {
-            used: true,
-            source: extracted.ai._source ?? 'openai',
-            isKaspiReceipt: extracted.ai.isKaspiReceipt ?? null,
-            isKaspiPayQr: extracted.ai.isKaspiPayQr ?? null,
-            documentClass: extracted.ai.documentClass ?? null,
-            amount: extracted.ai.amount ?? null,
-            error: extracted.ai.error ?? null,
-            rawText: typeof extracted.ai.rawText === 'string' ? String(extracted.ai.rawText).slice(0, 200) : null,
-          }
-        : null,
-      checks: verified.checks,
-    })
+    // Автопроверки нет: чек ждёт подтверждения продавца.
+    let decision: 'manual_review' | 'rejected' = duplicate ? 'rejected' : 'manual_review'
+    let rejectionReason: string | null = duplicate ? 'duplicate_receipt' : null
+    const decidedAt = new Date().toISOString()
 
     const row = {
       id: submissionId,
@@ -217,18 +125,16 @@ Deno.serve(async (req) => {
       receipt_path: receiptPath,
       receipt_mime_type: mime,
       receipt_sha256: fileSha,
-      detected_amount: extracted.amount,
-      detected_currency: extracted.currency === 'KZT' || extracted.currency === 'USD' || extracted.currency === 'EUR' || extracted.currency === 'RUB'
-        ? extracted.currency
-        : null,
-      transaction_id: extracted.transactionId,
-      receipt_type: extracted.receiptType,
-      parsed_metadata: parsedMetadata,
-      verification_status: 'pending',
-      rejection_reason: null as string | null,
+      detected_amount: null as number | null,
+      detected_currency: null as string | null,
+      transaction_id: null as string | null,
+      receipt_type: 'unknown',
+      parsed_metadata: { expected_amount: Number(purchase.amount), auto_check: false },
+      verification_status: decision,
+      rejection_reason: rejectionReason,
       fingerprint,
-      decided_at: null as string | null,
-      decided_by: null as string | null,
+      decided_at: duplicate ? decidedAt : null,
+      decided_by: duplicate ? 'system' : null,
     }
 
     if (reuseId) {
@@ -241,64 +147,12 @@ Deno.serve(async (req) => {
       const { error } = await supabase.from('payment_submissions').insert(row)
       if (error) {
         if (error.code === '23505') {
-          verified.decision = 'rejected'
-          verified.rejectionReason = 'duplicate_receipt'
+          decision = 'rejected'
+          rejectionReason = 'duplicate_receipt'
         } else {
           console.error('submission insert after upload failed', error)
           return fail('db_insert', 'DB_INSERT_FAILED', dbMessage(error.message), 500)
         }
-      }
-    }
-
-    let purchaseStatus = purchase.status
-    let decision = verified.decision
-    const decidedAt = new Date().toISOString()
-
-    const { error: updateError } = await supabase
-      .from('payment_submissions')
-      .update({
-        verification_status: decision,
-        rejection_reason: verified.rejectionReason,
-        decided_at: decidedAt,
-        decided_by: 'system',
-        parsed_metadata: parsedMetadata,
-      })
-      .eq('id', submissionId)
-
-    if (updateError?.code === '23505') {
-      decision = 'rejected'
-      verified.rejectionReason = 'duplicate_receipt'
-      await supabase
-        .from('payment_submissions')
-        .update({
-          verification_status: 'rejected',
-          rejection_reason: 'duplicate_receipt',
-          decided_at: decidedAt,
-          decided_by: 'system',
-        })
-        .eq('id', submissionId)
-    } else if (updateError) {
-      console.error('submission status update failed', updateError)
-      if (decision === 'confirmed') decision = 'manual_review'
-    }
-
-    if (decision === 'confirmed') {
-      const completed = await completePurchase(supabase, purchase.id)
-      if (completed.ok) {
-        purchaseStatus = 'completed'
-      } else {
-        console.error('complete purchase failed', completed)
-        decision = 'manual_review'
-        verified.rejectionReason = null
-        await supabase
-          .from('payment_submissions')
-          .update({
-            verification_status: 'manual_review',
-            rejection_reason: null,
-            decided_at: decidedAt,
-            decided_by: 'system',
-          })
-          .eq('id', submissionId)
       }
     }
 
@@ -307,17 +161,21 @@ Deno.serve(async (req) => {
       purchaseId: purchase.id,
       actor: 'system',
       decision,
-      checks: jsonbSafe({ checks: verified.checks, completeEnough: verified.completeEnough }) as Record<string, unknown>,
-      notes: verified.rejectionReason,
+      checks: { auto_check: false, duplicate },
+      notes: rejectionReason,
     })
+
+    if (decision === 'manual_review') {
+      await notifySellerAboutReceipt(purchase.id, product?.title ?? null, Number(purchase.amount))
+    }
 
     const submission = await latestSubmissionForPurchase(supabase, purchase.id)
     return ok({
       verification_status: decision,
-      purchase_status: purchaseStatus,
-      rejection_reason: verified.rejectionReason,
+      purchase_status: purchase.status,
+      rejection_reason: rejectionReason,
       expected_amount: Number(purchase.amount),
-      detected_amount: extracted.amount,
+      detected_amount: null,
       submission,
     })
   } catch (e) {
@@ -417,46 +275,37 @@ function extFromMime(mime: string): string {
   return 'jpg'
 }
 
-function redactQr(payload: string): string {
-  if (payload.length <= 80) return payload
-  return `${payload.slice(0, 48)}…`
-}
-
 function dbMessage(raw: string): string {
   if (/unicode escape/i.test(raw)) return 'Не удалось сохранить данные чека. Попробуйте другое фото.'
   return 'Не удалось сохранить запись о чеке. Попробуйте ещё раз.'
 }
 
-function jsonbSafe(value: unknown): unknown {
-  return JSON.parse(JSON.stringify(sanitize(value), jsonReplacer))
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-function jsonReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === 'string') return stripJsonbUnsafe(value)
-  return value
-}
-
-function sanitize(value: unknown): unknown {
-  if (typeof value === 'string') return stripJsonbUnsafe(value)
-  if (Array.isArray(value)) return value.map(sanitize)
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = sanitize(v)
-    }
-    return out
+/** Пуш продавцу: «Новая покупка!» — по клику открывается раздел «Пользователи». */
+async function notifySellerAboutReceipt(purchaseId: string, productTitle: string | null, amount: number) {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!supabaseUrl || !serviceRoleKey) return
+    const productPart = productTitle ? ` «${productTitle}»` : ''
+    await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify({
+        targetRole: 'creator',
+        title: 'Новая покупка!',
+        body: `После проверки оплаты, откройте доступ.${productPart} · ${amount}₸`,
+        data: { type: 'payment', purchaseId },
+      }),
+    })
+  } catch (err) {
+    console.error('seller push failed', err)
   }
-  if (typeof value === 'number' && !Number.isFinite(value)) return null
-  return value
-}
-
-function stripJsonbUnsafe(value: string): string {
-  let out = ''
-  for (const ch of value) {
-    const code = ch.charCodeAt(0)
-    if (code === 0) continue
-    if (code >= 0xd800 && code <= 0xdfff) continue
-    out += ch
-  }
-  return out
 }

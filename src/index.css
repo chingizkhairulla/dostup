@@ -337,6 +337,15 @@
   background-color: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* Диалог с длинной прокруткой без transform: при центрировании через translate и zoom-анимации
+   браузер рисует полосу прокрутки со смещением (поверх крестика), пока не начнёшь скроллить. */
+.dialog-static {
+  inset: 0 !important;
+  margin: auto !important;
+  height: fit-content !important;
+  transform: none !important;
+}
+
 /* Hide scrollbar completely across all browsers */
 .no-scrollbar::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar-thumb,

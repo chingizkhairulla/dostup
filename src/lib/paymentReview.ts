@@ -3,7 +3,7 @@ export type SubmissionStatus = {
   verification_status: string
 } | null | undefined
 
-const CREATOR_REVIEW_STATUSES = new Set(['manual_review'])
+const CREATOR_REVIEW_STATUSES = new Set(['manual_review', 'pending'])
 
 export function needsCreatorReview(purchase: {
   status: string
