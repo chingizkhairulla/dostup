@@ -145,6 +145,10 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
   });
 
   const setAccess = async (purchaseId: string, mode: "forever" | "until" | "revoke", until?: Date) => {
+    if (purchaseId.startsWith("demo-")) {
+      toast.success(t("buyerAccessSaved"));
+      return;
+    }
     await invokeApi("manage-products", {
       action: "set_purchase_access",
       ...creatorCreds(),
@@ -179,6 +183,10 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
   // Обработчик выбора учителя
   const handleTeacherChange = (purchaseId: string, value: string) => {
+    if (purchaseId.startsWith("demo-")) {
+      toast.success(language === "ru" ? "Расписание изменено" : "Кесте өзгертілді");
+      return;
+    }
     if (value === "author") {
       updateTeacherAssignment.mutate({ purchaseId, teacherId: null, canChoose: false });
     } else if (value === "choose") {
@@ -226,30 +234,35 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
       {creatorProducts.length > 0 && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <ProductSwitcher
-              products={creatorProducts.map((p) => ({ id: p.id, title: p.title }))}
-              selectedId={selectedProductId}
-              onChange={(id) => {
-                setSelectedProductId(id);
-                setAllProducts(false);
-              }}
-              className={cn(showAll && "opacity-60")}
-            />
+          <div className="flex items-center gap-2 w-full">
+            <div className="flex-1 min-w-0 sm:flex-initial">
+              <ProductSwitcher
+                products={creatorProducts.map((p) => ({ id: p.id, title: p.title }))}
+                selectedId={selectedProductId}
+                onChange={(id) => {
+                  setSelectedProductId(id);
+                  setAllProducts(false);
+                }}
+                className={cn(
+                  "w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                  showAll && "opacity-60"
+                )}
+              />
+            </div>
             {creatorProducts.length >= 2 && (
               <button
                 type="button"
                 onClick={() => setAllProducts((v) => !v)}
                 aria-pressed={showAll}
                 className={cn(
-                  "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors focus-ring",
+                  "shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border px-3 text-xs sm:text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] h-9 min-h-0 md:h-10 md:min-h-10",
                   showAll
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-input bg-background text-foreground hover:bg-muted",
+                    ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white"
+                    : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
                 )}
               >
-                <Layers className="h-4 w-4" />
-                {t("buyersAllProducts")}
+                <Layers className={cn("w-4 h-4 shrink-0 transition-colors", showAll ? "text-white" : "text-primary")} />
+                <span>{t("buyersAllProducts")}</span>
               </button>
             )}
           </div>
@@ -266,8 +279,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 className={cn(
                   "shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
                   period === key
-                    ? "border-primary/30 bg-primary/15 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "border-primary bg-primary text-white"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
                 )}
               >
                 {t(`buyersPeriod_${key}` as "buyersPeriod_month")}

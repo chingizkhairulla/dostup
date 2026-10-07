@@ -1,12 +1,14 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Loader2, Eye, X, Check, ChevronRight } from "lucide-react";
+import { Clock, Loader2, Eye, X, Check, ChevronRight, Download } from "lucide-react";
 import { formatPriceTenge } from "@/lib/catalog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { creatorCreds, invokeApi, fetchCreatorReceiptBlob } from "@/lib/sessionApi";
 import { needsCreatorReview } from "@/lib/paymentReview";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import MediaViewer from "@/components/media/MediaViewer";
 
 export type CreatorPendingPurchase = {
   id: string;
@@ -62,6 +64,37 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: pendingPurchases = [], isLoading } = useCreatorPendingPurchases(creatorName);
+  const [receiptView, setReceiptView] = useState<{ url: string; kind: "image" | "pdf"; name: string } | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (receiptView) URL.revokeObjectURL(receiptView.url);
+  }, [receiptView]);
+
+  const openReceipt = async (submissionId: string, userName?: string) => {
+    setLoadingReceipt(submissionId);
+    try {
+      const blob = await fetchCreatorReceiptBlob(submissionId);
+      const mime = blob.type;
+      setReceiptView({
+        url: URL.createObjectURL(blob),
+        kind: mime.includes("pdf") ? "pdf" : "image",
+        name: `${t("buyerReceipt")}${userName ? ` - ${userName}` : ""}`,
+      });
+    } catch {
+      toast.error(language === "ru" ? "Не удалось открыть чек" : "Чекті ашу мүмкін болмады");
+    } finally {
+      setLoadingReceipt(null);
+    }
+  };
+
+  const downloadReceipt = () => {
+    if (!receiptView) return;
+    const a = document.createElement("a");
+    a.href = receiptView.url;
+    a.download = `${receiptView.name.replace(/\s+/g, "_")}.${receiptView.kind === "pdf" ? "pdf" : "jpg"}`;
+    a.click();
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["creator-pending-purchases"] });
@@ -172,17 +205,15 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                 {purchase.latest_submission?.id ? (
                   <button
                     type="button"
-                    className="mt-1 text-xs text-primary inline-flex items-center gap-1 hover:underline"
-                    onClick={async () => {
-                      try {
-                        const blob = await fetchCreatorReceiptBlob(purchase.latest_submission!.id);
-                        window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
-                      } catch {
-                        toast.error(language === "ru" ? "Не удалось открыть чек" : "Чекті ашу мүмкін болмады");
-                      }
-                    }}
+                    disabled={loadingReceipt === purchase.latest_submission.id}
+                    className="mt-1 text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+                    onClick={() => void openReceipt(purchase.latest_submission!.id, purchase.user?.name)}
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    {loadingReceipt === purchase.latest_submission.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
                     {t("viewReceipt")}
                   </button>
                 ) : (
@@ -230,6 +261,23 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           </CardContent>
         </Card>
       ))}
+
+      <MediaViewer
+        align="left"
+        items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
+        index={receiptView ? 0 : null}
+        onIndexChange={(i) => i === null && setReceiptView(null)}
+        actions={
+          <Button
+            variant="outline"
+            className="h-10 gap-2 rounded-full border-white/20 bg-transparent px-4 text-white hover:bg-white/10 hover:text-white"
+            onClick={downloadReceipt}
+          >
+            <Download className="h-4 w-4" />
+            {t("download")}
+          </Button>
+        }
+      />
     </div>
   );
 }

@@ -159,9 +159,12 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
   return (
     <>
       <Dialog open={!!purchase} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl sm:rounded-2xl">
+        <DialogContent
+          hideCloseButton
+          className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl sm:rounded-2xl"
+        >
           <DialogHeader className="text-left">
-            <DialogTitle className="flex items-center gap-3 pr-6">
+            <DialogTitle className="flex items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                 {purchase.simple_user.name.charAt(0).toUpperCase()}
               </span>
@@ -174,7 +177,10 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
               {purchase.product.title}
             </Row>
             <Row icon={Wallet} label={t("buyerPaid")}>
-              {formatPriceTenge(Number(purchase.amount))} · {fmt(paidAt)}
+              <div className="flex flex-col">
+                <span>{formatPriceTenge(Number(purchase.amount))}</span>
+                <span className="text-xs text-muted-foreground font-normal">{fmt(paidAt)}</span>
+              </div>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
               <span className="flex flex-wrap items-center gap-2">
@@ -295,6 +301,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
       </Dialog>
 
       <MediaViewer
+        align="left"
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}
