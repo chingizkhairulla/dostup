@@ -33,6 +33,7 @@ import SchoolDashboard from './pages/SchoolDashboard'
 import ModeratorDashboard from './pages/ModeratorDashboard'
 import InstallPage from './pages/InstallPage'
 import AuthCallback from './pages/AuthCallback'
+import GoogleMeetCallback from './pages/GoogleMeetCallback'
 import NotFound from './pages/NotFound'
 import LegalPage from './pages/LegalPage'
 import RequireProfile from '@/components/auth/RequireProfile'
@@ -95,6 +96,7 @@ function AppRoutes() {
 					<Route path='/s/:handle' element={<StorefrontPage />} />
 					<Route path='/p/:productId' element={<ProductPage />} />
 					<Route path='/auth/callback' element={<AuthCallback />} />
+				<Route path='/auth/google/meet-callback' element={<GoogleMeetCallback />} />
 					<Route path='/product/:productId' element={<ProductRedirect />} />
 					<Route
 						path='/checkout/:productId'

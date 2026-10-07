@@ -338,12 +338,24 @@ Deno.serve(async (req) => {
     if (action === 'create_google_meet_link') {
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
-      const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN')
-      if (!clientId || !clientSecret || !refreshToken) {
+      if (!clientId || !clientSecret) {
         return json({ error: 'Google credentials not configured' }, 500)
       }
 
-      // Get a fresh access token
+      // Try teacher/creator's own token first
+      let refreshToken: string | null = null
+      const callerId = caller.kind === 'creator' ? caller.accountId : caller.userId
+      if (callerId) {
+        const { data: tokenRow } = await supabase
+          .from('teacher_google_tokens')
+          .select('refresh_token')
+          .eq('user_id', callerId)
+          .maybeSingle()
+        if (tokenRow?.refresh_token) refreshToken = tokenRow.refresh_token
+      }
+      if (!refreshToken) refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN') || null
+      if (!refreshToken) return json({ error: 'No Google token available' }, 500)
+
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -360,12 +372,10 @@ Deno.serve(async (req) => {
         return json({ error: 'Failed to get Google access token' }, 500)
       }
 
-      // Title and time from body (optional)
       const eventTitle = String(body.title || 'Урок')
       const startIso = body.startIso ? String(body.startIso) : new Date().toISOString()
       const endIso = body.endIso ? String(body.endIso) : new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
-      // Create a Calendar event with Meet conference
       const eventRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
         method: 'POST',
         headers: {
@@ -395,6 +405,54 @@ Deno.serve(async (req) => {
       }
 
       return json({ meetLink })
+    }
+
+    if (action === 'get_google_oauth_url') {
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      if (!clientId) return json({ error: 'Google not configured' }, 500)
+      const redirectUri = 'https://trydostup.online/auth/google/meet-callback'
+      const scope = 'https://www.googleapis.com/auth/calendar.events'
+      const callerId = caller.kind === 'creator' ? caller.accountId : caller.userId
+      const tokenVal = String(body.token || body.sessionToken || '')
+      const state = btoa(JSON.stringify({ userId: callerId, token: tokenVal }))
+      const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`
+      return json({ url })
+    }
+
+    if (action === 'save_google_meet_token') {
+      const code = String(body.code || '')
+      const stateStr = String(body.state || '')
+      if (!code || !stateStr) return json({ error: 'Missing code or state' }, 400)
+      let userId: string
+      try {
+        const decoded = JSON.parse(atob(decodeURIComponent(stateStr)))
+        userId = decoded.userId
+      } catch {
+        return json({ error: 'Invalid state' }, 400)
+      }
+      if (!userId) return json({ error: 'Missing userId in state' }, 400)
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const redirectUri = 'https://trydostup.online/auth/google/meet-callback'
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: clientId!, client_secret: clientSecret!, code, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
+      })
+      const tokenData = await tokenRes.json()
+      if (!tokenData.refresh_token) {
+        console.error('No refresh_token from Google:', tokenData)
+        return json({ error: 'No refresh token received' }, 400)
+      }
+      await supabase.from('teacher_google_tokens').upsert({ user_id: userId, refresh_token: tokenData.refresh_token, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      return json({ ok: true })
+    }
+
+    if (action === 'check_google_token') {
+      const callerId = caller.kind === 'creator' ? caller.accountId : caller.userId
+      if (!callerId) return json({ hasToken: false })
+      const { data } = await supabase.from('teacher_google_tokens').select('id').eq('user_id', callerId).maybeSingle()
+      return json({ hasToken: Boolean(data) })
     }
 
     return json({ error: 'Unknown action' }, 400)

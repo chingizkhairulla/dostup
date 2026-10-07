@@ -580,6 +580,7 @@ export default function SlotCreationWizard({
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isGeneratingMeet, setIsGeneratingMeet] = useState(false);
+  const [hasGoogleToken, setHasGoogleToken] = useState<boolean | null>(null);
 
   // Step 2: Global repetition settings (default: off)
   const [repeatWeekly, setRepeatWeekly] = useState(false);
@@ -865,6 +866,7 @@ export default function SlotCreationWizard({
       googleMeetOption: "Google Meet",
       googleMeetAuto: "Ссылка создаётся автоматически",
       addMeetLink: "Добавить видеоконференцию",
+      connectGoogle: "Подключить Google-аккаунт",
       customLinkOption: "Другая ссылка:",
       customLinkPlaceholder: "Zoom, Яндекс телемост…",
       generatingMeet: "Создаём ссылку…",
@@ -922,6 +924,7 @@ export default function SlotCreationWizard({
       googleMeetOption: "Google Meet",
       googleMeetAuto: "Сілтеме автоматты түрде жасалады",
       addMeetLink: "Бейнеконференция қосу",
+      connectGoogle: "Google аккаунтын қосу",
       customLinkOption: "Басқа сілтеме:",
       customLinkPlaceholder: "Zoom, Яндекс телемост…",
       generatingMeet: "Сілтемені жасап жатырмыз…",
@@ -1518,6 +1521,101 @@ export default function SlotCreationWizard({
     });
   };
 
+
+  const checkGoogleToken = async (): Promise<boolean> => {
+    try {
+      const creds = sessionCreds();
+      const result = await invokeApi<{ hasToken: boolean }>('manage-schedules', { action: 'check_google_token', ...creds });
+      setHasGoogleToken(result.hasToken);
+      return result.hasToken;
+    } catch {
+      setHasGoogleToken(false);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      void checkGoogleToken();
+    }
+  }, [open]);
+
+  const connectGoogleAccount = async () => {
+    setIsGeneratingMeet(true);
+
+    // Open popup synchronously during user gesture so modern browsers don't block it
+    const popup = window.open('about:blank', 'google_meet_auth', 'width=520,height=640,left=300,top=100');
+    if (popup) {
+      try {
+        popup.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head><meta charset="utf-8"><title>Google Meet</title></head>
+            <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#ffffff;color:#374151;">
+              <div style="text-align:center;">
+                <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Подключение к Google...</div>
+                <div style="font-size:13px;color:#9ca3af;">Пожалуйста, подождите</div>
+              </div>
+            </body>
+          </html>
+        `);
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      const creds = sessionCreds();
+      const result = await invokeApi<{ url: string }>('manage-schedules', { action: 'get_google_oauth_url', ...creds });
+      if (result.url) {
+        if (popup && !popup.closed) {
+          popup.location.href = result.url;
+        } else {
+          // If popup was blocked (e.g. mobile Safari / Chrome popup blocker), direct redirect fallback
+          window.location.href = result.url;
+          return;
+        }
+
+        const onStorage = (e: StorageEvent) => {
+          if (e.key === 'google_meet_auth_success') {
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener('message', handler);
+            localStorage.removeItem('google_meet_auth_success');
+            setHasGoogleToken(true);
+            generateGoogleMeetLink();
+          }
+        };
+        window.addEventListener('storage', onStorage);
+
+        const handler = (e: MessageEvent) => {
+          if (e.data?.type === 'GOOGLE_MEET_AUTH_SUCCESS') {
+            window.removeEventListener('message', handler);
+            window.removeEventListener('storage', onStorage);
+            setHasGoogleToken(true);
+            generateGoogleMeetLink();
+          }
+        };
+        window.addEventListener('message', handler);
+        const interval = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(interval);
+            window.removeEventListener('message', handler);
+            window.removeEventListener('storage', onStorage);
+            setIsGeneratingMeet(false);
+          }
+        }, 1000);
+      } else {
+        if (popup && !popup.closed) popup.close();
+        setIsGeneratingMeet(false);
+        toast.error(language === 'ru' ? 'Не удалось получить ссылку Google' : 'Google сілтемесі алынбады');
+      }
+    } catch (e: any) {
+      if (popup && !popup.closed) popup.close();
+      setIsGeneratingMeet(false);
+      toast.error(e?.message || (language === 'ru' ? 'Не удалось открыть Google' : 'Google ашылмады'));
+    }
+  };
+
   const generateGoogleMeetLink = async () => {
     setIsGeneratingMeet(true);
     try {
@@ -1539,6 +1637,7 @@ export default function SlotCreationWizard({
       setIsGeneratingMeet(false);
     }
   };
+
 
   const updateRepeatUntilFromParts = (d: string, m: string, y: string) => {
     if (d && m && y && y.length === 4) {
@@ -3037,7 +3136,13 @@ export default function SlotCreationWizard({
                         <button
                           type="button"
                           disabled={isGeneratingMeet}
-                          onClick={() => generateGoogleMeetLink()}
+                          onClick={() => {
+                            if (hasGoogleToken) {
+                              generateGoogleMeetLink();
+                            } else {
+                              connectGoogleAccount();
+                            }
+                          }}
                           className="w-full h-10 px-3 rounded-xl border border-dashed border-border bg-background text-xs text-muted-foreground hover:border-primary/40 hover:text-primary transition-all flex items-center gap-2 cursor-pointer"
                         >
                           {isGeneratingMeet ? (
@@ -3045,7 +3150,7 @@ export default function SlotCreationWizard({
                           ) : (
                             <Plus className="w-4 h-4 shrink-0" />
                           )}
-                          <span>{t.addMeetLink}</span>
+                          <span>{hasGoogleToken ? t.addMeetLink : t.connectGoogle}</span>
                         </button>
                       )
                     )}
@@ -3694,7 +3799,13 @@ export default function SlotCreationWizard({
                           <button
                             type="button"
                             disabled={selectedSlotKeys.size === 0 || isGeneratingMeet}
-                            onClick={() => generateGoogleMeetLink()}
+                            onClick={() => {
+                              if (hasGoogleToken) {
+                                generateGoogleMeetLink();
+                              } else {
+                                connectGoogleAccount();
+                              }
+                            }}
                             className={cn(
                               "w-full h-11 sm:h-12 px-3 rounded-xl border border-dashed border-border bg-background text-xs sm:text-sm text-muted-foreground transition-all flex items-center gap-2",
                               selectedSlotKeys.size === 0 ? "opacity-40 cursor-not-allowed" : "hover:border-primary/40 hover:text-primary cursor-pointer"
@@ -3705,7 +3816,7 @@ export default function SlotCreationWizard({
                             ) : (
                               <Plus className="w-4 h-4 shrink-0" />
                             )}
-                            <span>{t.addMeetLink}</span>
+                            <span>{hasGoogleToken ? t.addMeetLink : t.connectGoogle}</span>
                           </button>
                         )
                       )}
