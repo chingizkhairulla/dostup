@@ -97,7 +97,7 @@ export async function buyerHasProductAccess(
 
   const { data } = await supabase
     .from('simple_purchases')
-    .select('id, is_trial, trial_ends_at')
+    .select('id, is_trial, trial_ends_at, access_expires_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('product_id', productId)
     .eq('status', 'completed')
@@ -107,7 +107,12 @@ export async function buyerHasProductAccess(
   if (data.is_trial) {
     return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
   }
-  return true
+  return purchaseAccessOpen(data)
+}
+
+/** A seller-set end date closes a one-time purchase; NULL keeps it open for good. */
+export function purchaseAccessOpen(row: { access_expires_at?: string | null }, now = new Date()): boolean {
+  return !row.access_expires_at || new Date(row.access_expires_at) > now
 }
 
 export async function buyerAccessibleProductIds(
@@ -119,7 +124,7 @@ export async function buyerAccessibleProductIds(
 
   const { data: purchases } = await supabase
     .from('simple_purchases')
-    .select('product_id, is_trial, trial_ends_at')
+    .select('product_id, is_trial, trial_ends_at, access_expires_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('status', 'completed')
 
@@ -131,6 +136,7 @@ export async function buyerAccessibleProductIds(
       }
       continue
     }
+    if (!purchaseAccessOpen(row, now)) continue
     if (!(await isSubscriptionProduct(supabase, productId))) {
       ids.add(productId)
     }
@@ -235,4 +241,55 @@ export async function onPurchaseCompleted(
   if (!result.ok) {
     console.error('subscription activation failed', result.error)
   }
+}
+
+/**
+ * A seller keeps one schedule for all their products, so the author's schedule (teacher_id
+ * null) is open to anyone with access to any product of that seller. Teacher schedules stay
+ * tied to their own product.
+ */
+export async function buyerScheduleScope(
+  supabase: SupabaseClient,
+  buyerProfileId: string,
+): Promise<{ productIds: string[]; creatorAccountIds: string[] }> {
+  const productIds = await buyerAccessibleProductIds(supabase, buyerProfileId)
+  if (!productIds.length) return { productIds, creatorAccountIds: [] }
+  const { data } = await supabase.from('products').select('creator_account_id').in('id', productIds)
+  const creatorAccountIds = [
+    ...new Set((data ?? []).map((p: { creator_account_id: string | null }) => p.creator_account_id).filter(Boolean)),
+  ] as string[]
+  return { productIds, creatorAccountIds }
+}
+
+/** Schedule ids from `scheduleIds` the buyer may see and book into. */
+export async function buyerUsableScheduleIds(
+  supabase: SupabaseClient,
+  buyerProfileId: string,
+  scheduleIds: string[],
+): Promise<string[]> {
+  if (!scheduleIds.length) return []
+  const scope = await buyerScheduleScope(supabase, buyerProfileId)
+  if (!scope.productIds.length) return []
+  const { data } = await supabase
+    .from('schedules')
+    .select('id, product_id, teacher_id, product:products(creator_account_id)')
+    .in('id', scheduleIds)
+  const creators = new Set(scope.creatorAccountIds)
+  type Row = {
+    id: string
+    product_id: string
+    teacher_id: string | null
+    product: { creator_account_id: string | null } | { creator_account_id: string | null }[] | null
+  }
+  const creatorOf = (row: Row) => {
+    const product = Array.isArray(row.product) ? row.product[0] : row.product
+    return product?.creator_account_id ?? null
+  }
+  return ((data ?? []) as unknown as Row[])
+    .filter((s) => {
+      if (scope.productIds.includes(s.product_id)) return true
+      const creator = creatorOf(s)
+      return !s.teacher_id && !!creator && creators.has(creator)
+    })
+    .map((s) => s.id)
 }

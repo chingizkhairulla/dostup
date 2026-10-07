@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2, Send } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
+import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 
 interface Message {
   id: string;
   sender: "user" | "moderator";
   text: string;
   created_at: string;
+  attachments?: ChatAttachment[];
 }
 
 interface Props {
@@ -18,25 +18,25 @@ interface Props {
   asModerator?: boolean;
   threadId?: string;
   moderatorToken?: string;
+  /** "embedded" drops the card chrome and title bar so the chat fills a messenger pane. */
+  variant?: "card" | "embedded";
 }
 
-const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: initialThreadId, moderatorToken }: Props) => {
+const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: initialThreadId, moderatorToken, variant = "card" }: Props) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
-  const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
   const baseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const headers = useMemo(() => ({ apikey: anonKey, Authorization: `Bearer ${anonKey}` }), [anonKey]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     if (asModerator && threadId) {
       const resp = await fetch(`${baseUrl}/functions/v1/moderator-api`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ action: "support_get_messages", token: moderatorToken, thread_id: threadId, mark_read: true }),
       });
       const data = await resp.json();
@@ -44,7 +44,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
     } else {
       const resp = await fetch(`${baseUrl}/functions/v1/support-api`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ action: "get_thread", user_type: userType, user_ref: userRef, display_name: displayName }),
       });
       const data = await resp.json();
@@ -53,12 +53,10 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
         setMessages(data.messages);
       }
     }
-    setLoading(false);
-  }, [asModerator, threadId, moderatorToken, userType, userRef, displayName, baseUrl, anonKey]);
+    if (!quiet) setLoading(false);
+  }, [asModerator, threadId, moderatorToken, userType, userRef, displayName, baseUrl, headers]);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
     if (!threadId) return;
@@ -66,70 +64,90 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       .channel(`support-${threadId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages", filter: `thread_id=eq.${threadId}` },
         (payload) => {
-          setMessages((prev) => prev.some(m => m.id === (payload.new as any).id) ? prev : [...prev, payload.new as Message]);
+          const row = payload.new as Message;
+          // Realtime carries raw storage paths, so a message with files needs a signed reload.
+          if (row.attachments?.length) {
+            void load(true);
+            return;
+          }
+          setMessages((prev) => prev.some((m) => m.id === row.id) ? prev : [...prev, row]);
         })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [threadId]);
+  }, [threadId, load]);
 
-  const send = async () => {
-    const t = text.trim();
-    if (!t || sending) return;
-    setSending(true);
+  const who = { user_type: userType, user_ref: userRef, display_name: displayName };
+
+  const uploadFile = async (file: File, kind: ChatAttachmentKind, signal: AbortSignal): Promise<ChatAttachment> => {
+    if (kind === "video") {
+      return uploadChatVideo(
+        file,
+        async (meta) => {
+          const resp = await fetch(`${baseUrl}/functions/v1/support-upload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify({ action: "presign_video", ...who, ...meta }),
+            signal,
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data?.uploadUrl) throw new Error(data?.error || "Upload failed");
+          return data;
+        },
+        signal,
+      );
+    }
+    const form = new FormData();
+    form.append("file", file);
+    form.append("user_type", userType);
+    form.append("user_ref", userRef);
+    form.append("display_name", displayName);
+    const resp = await fetch(`${baseUrl}/functions/v1/support-upload`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal,
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data?.attachment) throw new Error(data?.error || "Upload failed");
+    return data.attachment;
+  };
+
+  const send = async (text: string, attachments: ChatAttachment[]) => {
     if (asModerator) {
       await fetch(`${baseUrl}/functions/v1/moderator-api`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-        body: JSON.stringify({ action: "support_send_message", token: moderatorToken, thread_id: threadId, text: t }),
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ action: "support_send_message", token: moderatorToken, thread_id: threadId, text }),
       });
-    } else {
-      await fetch(`${baseUrl}/functions/v1/support-api`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-        body: JSON.stringify({ action: "send_message", user_type: userType, user_ref: userRef, display_name: displayName, text: t }),
-      });
+      return;
     }
-    setText("");
-    setSending(false);
+    const resp = await fetch(`${baseUrl}/functions/v1/support-api`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ action: "send_message", ...who, text, attachments }),
+    });
+    if (!resp.ok) throw new Error("Send failed");
+    if (attachments.length) await load(true);
   };
 
+  const chatMessages: ChatMessage[] = messages.map((m) => ({
+    id: m.id,
+    mine: asModerator ? m.sender === "moderator" : m.sender === "user",
+    text: m.text,
+    created_at: m.created_at,
+    attachments: m.attachments,
+  }));
+
   return (
-    <div className="flex flex-col h-[70vh] max-h-[70vh] border rounded-lg bg-card">
-      <div className="px-4 py-3 border-b font-semibold">
-        {asModerator ? displayName : "Тех. поддержка"}
-      </div>
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {loading ? (
-          <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-        ) : messages.length === 0 ? (
-          <div className="text-center text-muted-foreground text-sm pt-8">Нет сообщений. Напишите первое сообщение.</div>
-        ) : (
-          messages.map((m) => {
-            const mine = asModerator ? m.sender === "moderator" : m.sender === "user";
-            return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words ${mine ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                  {m.text}
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef} />
-      </div>
-      <div className="border-t p-3 flex gap-2">
-        <Input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Напишите сообщение..."
-          disabled={sending}
-        />
-        <Button onClick={send} disabled={sending || !text.trim()} size="icon">
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </Button>
-      </div>
-    </div>
+    <ChatThread
+      messages={chatMessages}
+      loading={loading}
+      variant={variant}
+      title={asModerator ? displayName : "Тех. поддержка"}
+      canAttach={!asModerator}
+      uploadFile={uploadFile}
+      send={send}
+    />
   );
 };
 

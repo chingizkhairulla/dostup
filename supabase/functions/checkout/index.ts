@@ -8,6 +8,7 @@ import {
 import { latestSubmissionForPurchase } from '../_shared/purchase.ts'
 import {
   isSubscriptionProduct,
+  purchaseAccessOpen,
   subscriptionGrantsAccess,
   type SubscriptionRow,
 } from '../_shared/subscription.ts'
@@ -43,7 +44,20 @@ Deno.serve(async (req) => {
 
       if (data?.is_paused) {
         const { kaspi_link: _l, kaspi_phone: _p, ...rest } = data as Record<string, unknown>
-        return json({ product: { ...rest, kaspi_link: null, kaspi_phone: null } })
+        const options = Array.isArray(rest.pricing_options) ? rest.pricing_options : []
+        return json({
+          product: {
+            ...rest,
+            kaspi_link: null,
+            kaspi_phone: null,
+            pricing_options: options.map((o: Record<string, unknown>) => ({
+              ...o,
+              kaspi_link: null,
+              kaspi_phone: null,
+              kaspi_card: null,
+            })),
+          },
+        })
       }
 
       return json({ product: data })
@@ -84,18 +98,22 @@ Deno.serve(async (req) => {
     if (action === 'list_my_purchases') {
       const { data, error } = await supabase
         .from('simple_purchases')
-        .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id')
+        .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id, access_expires_at')
         .eq('buyer_profile_id', user.userId)
         .eq('status', body.status || 'completed')
       if (error) return json({ error: error.message }, 500)
-      if (!data?.length) return json({ purchases: [] })
-      const productIds = data.map((p: { product_id: string }) => p.product_id)
+      // Access the seller ended is no longer "mine" on the buyer's side.
+      const rows = (body.status || 'completed') === 'completed'
+        ? (data ?? []).filter((p: { access_expires_at?: string | null }) => purchaseAccessOpen(p))
+        : data ?? []
+      if (!rows.length) return json({ purchases: [] })
+      const productIds = rows.map((p: { product_id: string }) => p.product_id)
       const { data: products } = await supabase
         .from('products')
         .select('id, title, headline, telegram_link, group_link_label')
         .in('id', productIds)
       return json({
-        purchases: data.map((purchase: { product_id: string }) => ({
+        purchases: rows.map((purchase: { product_id: string }) => ({
           ...purchase,
           product: products?.find((p: { id: string }) => p.id === purchase.product_id) || null,
         })),

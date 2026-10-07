@@ -1583,6 +1583,10 @@ export type Database = {
         Args: { _name: string; _payload: Json }
         Returns: undefined
       }
+      claim_moderator_session: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_catalog_taxonomy: {
         Args: Record<PropertyKey, never>
         Returns: Json

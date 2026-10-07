@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import RoleSelectionScreen from "@/components/auth/RoleSelectionScreen";
 import SellerProfileSetupScreen from "@/components/auth/SellerProfileSetupScreen";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { type ProfileType } from "@/lib/creatorAuth";
 
 type AddSellerProfileDialogProps = {
@@ -11,13 +12,15 @@ type AddSellerProfileDialogProps = {
   creating?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
-    type: "creator" | "school",
+    type: ProfileType,
     displayName: string,
     avatarFile: File | null
   ) => Promise<boolean | { ok: boolean; error?: string } | void> | boolean | void;
 };
 
-const SELLER_TYPES: ProfileType[] = ["creator", "school"];
+const SELLER_TYPES: ProfileType[] = ["creator"];
+// An identity can own one buyer profile (unique index), so it is offered only while missing.
+const ALL_TYPES: ProfileType[] = ["buyer", ...SELLER_TYPES];
 
 const AddSellerProfileDialog = ({
   open,
@@ -26,6 +29,8 @@ const AddSellerProfileDialog = ({
   onConfirm,
 }: AddSellerProfileDialogProps) => {
   const { t } = useLanguage();
+  const { profiles } = useSimpleAuth();
+  const availableTypes = profiles.some((profile) => profile.type === "buyer") ? SELLER_TYPES : ALL_TYPES;
   const [step, setStep] = useState<"role" | "setup">("role");
   const [pendingType, setPendingType] = useState<"creator" | "school" | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -116,9 +121,13 @@ const AddSellerProfileDialog = ({
           />
         ) : (
           <RoleSelectionScreen
-            types={SELLER_TYPES}
-            onSelect={(type) => {
-              if (type !== "creator" && type !== "school") return;
+            types={availableTypes}
+            onSelect={async (type) => {
+              if (type === "buyer") {
+                // A buyer profile needs no name/avatar step.
+                await onConfirm("buyer", "", null);
+                return;
+              }
               setPendingType(type);
               setStep("setup");
             }}

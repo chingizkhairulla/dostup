@@ -4,6 +4,8 @@ import {
   isDisplayNameTaken,
   issueAppSession,
   listProfiles,
+  pickUsableProfile,
+  publicProfiles,
   resolveSessionProfileId,
   type ProfileRow,
 } from '../_shared/profiles.ts'
@@ -21,13 +23,11 @@ function parseDisplayName(raw: unknown): string | null {
  * Resolve auth_user_id from:
  *  1) JWT in Authorization header (supabase.auth.getUser)
  *  2) session token in body or x-creator-token header (creator_sessions lookup)
- *  3) hintProfileId fallback
  */
 async function resolveAuthUserId(
   supabase: ReturnType<typeof serviceClient>,
   req: Request,
   token: string,
-  hintProfileId?: string | null,
 ): Promise<string | null> {
   // 1. JWT from Authorization header
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
@@ -51,6 +51,7 @@ async function resolveAuthUserId(
       .from('creator_sessions')
       .select('token, creator_name, profile_id, expires_at')
       .eq('token', effectiveToken)
+      .gt('expires_at', new Date().toISOString())
       .maybeSingle()
 
     if (session) {
@@ -97,18 +98,7 @@ async function resolveAuthUserId(
     }
   }
 
-  // 3. Fallback: if hintProfileId given, resolve user of that profile
-  if (hintProfileId) {
-    const { data: targetProf } = await supabase
-      .from('profiles')
-      .select('auth_user_id')
-      .eq('id', hintProfileId)
-      .maybeSingle()
-    if (targetProf?.auth_user_id) {
-      return targetProf.auth_user_id
-    }
-  }
-
+  // A bare profileId is not proof of ownership, so there is no fallback here.
   return null
 }
 
@@ -129,7 +119,7 @@ Deno.serve(async (req) => {
     const supabase = serviceClient()
 
     // --- AUTH ---
-    const authUserId = await resolveAuthUserId(supabase, req, token, hintProfileId)
+    const authUserId = await resolveAuthUserId(supabase, req, token)
     if (!authUserId) return json({ error: 'Unauthorized' }, 401)
 
     // --- Resolve target profile ---
@@ -238,65 +228,89 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'delete_profile') {
-      if (row.type !== 'creator' && row.type !== 'school') {
-        return json({ error: 'Cannot delete buyer profile' }, 400)
+      // Never fall back to "some other profile" for a destructive action.
+      if (!hintProfileId || row.id !== hintProfileId) {
+        return json({ error: 'Profile not found' }, 404)
       }
 
-      // 0. Prepare next buyer session
-      let nextSession: any = null
-      const { data: buyerProf } = await supabase
-        .from('profiles')
-        .select(PROFILE_COLUMNS)
-        .eq('auth_user_id', authUserId)
-        .eq('type', 'buyer')
-        .maybeSingle()
+      const allProfiles = await listProfiles(supabase, authUserId)
+      if (allProfiles.length <= 1) {
+        return json({ error: 'last_profile' }, 409)
+      }
 
-      if (buyerProf) {
-        const issued = await issueAppSession(supabase, {
-          profile: buyerProf as ProfileRow,
-          account: null,
+      // Which profile does the calling session currently use?
+      const effectiveToken = token || req.headers.get('x-creator-token')?.trim() || ''
+      let activeProfileId: string | null = null
+      if (effectiveToken) {
+        const { data: callerSession } = await supabase
+          .from('creator_sessions')
+          .select('token, creator_name, profile_id')
+          .eq('token', effectiveToken)
+          .maybeSingle()
+        if (callerSession) {
+          activeProfileId = await resolveSessionProfileId(supabase, callerSession)
+        }
+      }
+      const deletingActive = !activeProfileId || activeProfileId === row.id
+
+      // Pick the next profile before deleting anything, so a failure leaves data intact.
+      let nextSession: Record<string, unknown> | null = null
+      if (deletingActive) {
+        const { data: userData } = await supabase.auth.admin.getUserById(authUserId)
+        const email = userData?.user?.email?.trim().toLowerCase() ?? ''
+        const next = await pickUsableProfile(supabase, {
+          authUserId,
+          email,
+          profiles: allProfiles,
+          excludeProfileId: row.id,
         })
-        if (issued.ok) {
-          nextSession = issued.session
+        if (!next) {
+          return json({ error: 'no_available_profile' }, 409)
+        }
+        const issued = await issueAppSession(supabase, next)
+        if (!issued.ok) return issued.response
+        nextSession = { ...issued.session, createdAt: next.profile.created_at }
+      }
+
+      // 1. Seller data (unchanged behaviour: products and their content are removed)
+      if (row.type === 'creator' || row.type === 'school') {
+        const { data: creatorAcc } = await supabase
+          .from('creator_accounts')
+          .select('id, login')
+          .eq('profile_id', row.id)
+          .maybeSingle()
+
+        if (creatorAcc) {
+          const { data: prods } = await supabase
+            .from('products')
+            .select('id')
+            .or(`creator_account_id.eq.${creatorAcc.id},creator_id.eq.${creatorAcc.login}`)
+
+          if (prods && prods.length > 0) {
+            const prodIds = prods.map((p: { id: string }) => p.id)
+            await supabase.from('signup_tokens').delete().in('product_id', prodIds)
+            await supabase.from('materials').delete().in('product_id', prodIds)
+            await supabase.from('product_prices').delete().in('product_id', prodIds)
+            await supabase.from('product_purchases').delete().in('product_id', prodIds)
+            await supabase.from('products').delete().in('id', prodIds)
+          }
+
+          if (creatorAcc.login) {
+            await supabase.from('announcements').delete().eq('creator_id', creatorAcc.login)
+            await supabase.from('bookings').delete().eq('creator_id', creatorAcc.login)
+            await supabase.from('lesson_schedule').delete().eq('creator_id', creatorAcc.login)
+          }
+          await supabase.from('creator_members').delete().eq('creator_account_id', creatorAcc.id)
+          await supabase.from('creator_account_links').delete().eq('creator_account_id', creatorAcc.id)
+          await supabase.from('creator_accounts').delete().eq('id', creatorAcc.id)
         }
       }
 
-      // 1. Find creator account for this profile
-      const { data: creatorAcc } = await supabase
-        .from('creator_accounts')
-        .select('id, login')
-        .eq('profile_id', row.id)
-        .maybeSingle()
-
-      if (creatorAcc) {
-        const { data: prods } = await supabase
-          .from('products')
-          .select('id')
-          .or(`creator_account_id.eq.${creatorAcc.id},creator_id.eq.${creatorAcc.login}`)
-
-        if (prods && prods.length > 0) {
-          const prodIds = prods.map((p: { id: string }) => p.id)
-          await supabase.from('signup_tokens').delete().in('product_id', prodIds)
-          await supabase.from('materials').delete().in('product_id', prodIds)
-          await supabase.from('product_prices').delete().in('product_id', prodIds)
-          await supabase.from('product_purchases').delete().in('product_id', prodIds)
-          await supabase.from('products').delete().in('id', prodIds)
-        }
-
-        if (creatorAcc.login) {
-          await supabase.from('announcements').delete().eq('creator_id', creatorAcc.login)
-          await supabase.from('bookings').delete().eq('creator_id', creatorAcc.login)
-          await supabase.from('lesson_schedule').delete().eq('creator_id', creatorAcc.login)
-        }
-        await supabase.from('creator_members').delete().eq('creator_account_id', creatorAcc.id)
-        await supabase.from('creator_account_links').delete().eq('creator_account_id', creatorAcc.id)
-        await supabase.from('creator_accounts').delete().eq('id', creatorAcc.id)
-      }
-
-      // 2. Delete sessions for this profile
+      // 2. Sessions still pointing at this profile (other devices) end here.
       await supabase.from('creator_sessions').delete().eq('profile_id', row.id)
 
-      // 3. Delete the profile row
+      // 3. The profile row. Buyer purchases/bookings keep their rows (FK SET NULL);
+      //    subscriptions and reviews of this buyer are removed by FK cascade.
       const { error: delErr } = await supabase
         .from('profiles')
         .delete()
@@ -307,26 +321,14 @@ Deno.serve(async (req) => {
         return json({ error: 'Failed to delete profile: ' + delErr.message }, 500)
       }
 
-      let remainingProfiles: ProfileRow[] = await listProfiles(supabase, authUserId)
-
-      if (nextSession) {
-        const mappedProfiles = remainingProfiles.map((p) => ({
-          id: p.id,
-          type: p.type,
-          displayName: p.display_name || p.type,
-          handle: p.handle ?? null,
-          avatarUrl: p.avatar_url ?? null,
-          isCurrent: p.id === nextSession.profileId,
-          lastUsedAt: p.last_used_at ?? null,
-        }))
-        nextSession.profiles = mappedProfiles
-      }
+      const remaining = publicProfiles(await listProfiles(supabase, authUserId))
+      if (nextSession) nextSession.profiles = remaining
 
       return json({
         ok: true,
         deletedProfileId: row.id,
         session: nextSession,
-        profiles: remainingProfiles,
+        profiles: remaining,
       })
     }
 

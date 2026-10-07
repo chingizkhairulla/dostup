@@ -10,7 +10,7 @@ import {
   type LessonFormat,
 } from "@/lib/catalog";
 
-export type CatalogSort = "newest" | "price_asc" | "price_desc" | "rating";
+export type CatalogSort = "newest" | "price_asc" | "price_desc" | "rating" | "popular" | "trending";
 
 export type CatalogFilters = {
   q?: string;
@@ -78,12 +78,29 @@ export function useCatalogSearch(filters: CatalogFilters, enabled = true, limit 
 
 const HOME_RAIL_LIMIT = 8;
 
+/**
+ * A sales-driven rail only earns its place once it has a few products to show — one or two
+ * cards read as a bug, not as a ranking. Below this the homepage hides the rail entirely,
+ * so "Популярные" and "В тренде" switch themselves on as the marketplace fills up.
+ */
+export const HOME_RAIL_MIN_ITEMS = 3;
+
 export function useNewProducts(enabled = true) {
   return useCatalogSearch({ sort: "newest", onlyNew: true }, enabled, HOME_RAIL_LIMIT);
 }
 
 export function useTopRatedProducts(enabled = true) {
   return useCatalogSearch({ sort: "rating" }, enabled, HOME_RAIL_LIMIT);
+}
+
+/** Most completed purchases over the last 30 days. */
+export function usePopularProducts(enabled = true) {
+  return useCatalogSearch({ sort: "popular" }, enabled, HOME_RAIL_LIMIT);
+}
+
+/** Selling faster this week than last — growth, not volume. */
+export function useTrendingProducts(enabled = true) {
+  return useCatalogSearch({ sort: "trending" }, enabled, HOME_RAIL_LIMIT);
 }
 
 export function useCatalogTaxonomy(enabled = true) {

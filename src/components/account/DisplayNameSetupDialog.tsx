@@ -26,6 +26,7 @@ const DisplayNameSetupDialog = ({ open, onSaved }: DisplayNameSetupDialogProps) 
   const { t } = useLanguage();
   const [value, setValue] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const valid = isDisplayNameValid(value);
 
   const save = async () => {

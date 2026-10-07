@@ -9,6 +9,7 @@ import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 import { invokeApi, studentCreds } from "@/lib/sessionApi";
+import { cardDigits, formatCardNumber } from "@/lib/paymentFormat";
 import { ArrowLeft, Lock, Loader2, ExternalLink, Clock, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
@@ -222,20 +223,32 @@ const ProductPurchasePage = () => {
 
   const activeKaspiLink = activeOption?.kaspi_link || product?.kaspi_link || null;
   const activeKaspiPhone = activeOption?.kaspi_phone || product?.kaspi_phone || null;
+  // Card lives only in the option: there is no product-level column to fall back to.
+  const activeCard = activeOption?.kaspi_card || null;
 
   const handleKaspiPayment = () => {
     if (!activeKaspiLink) return;
     window.open(activeKaspiLink, "_blank");
   };
 
-  const handleCopyKaspiPhone = async () => {
-    if (!activeKaspiPhone) return;
+  const copyToClipboard = async (value: string, okMessage: string) => {
     try {
-      await navigator.clipboard.writeText(activeKaspiPhone);
-      toast.success(t("kaspiPhoneCopied"));
+      await navigator.clipboard.writeText(value);
+      toast.success(okMessage);
     } catch {
-      toast.error(activeKaspiPhone);
+      // No clipboard permission: show the value so it can be copied by hand.
+      toast.error(value);
     }
+  };
+
+  const handleCopyKaspiPhone = () => {
+    if (!activeKaspiPhone) return;
+    void copyToClipboard(activeKaspiPhone, t("kaspiPhoneCopied"));
+  };
+
+  const handleCopyCard = () => {
+    if (!activeCard) return;
+    void copyToClipboard(cardDigits(activeCard), t("cardNumberCopied"));
   };
 
   const handleSubmitPurchase = async (e: React.FormEvent) => {
@@ -308,7 +321,8 @@ const ProductPurchasePage = () => {
 
   const hasKaspiLink = Boolean(activeKaspiLink);
   const hasKaspiPhone = Boolean(activeKaspiPhone);
-  const hasPaymentMethod = hasKaspiLink || hasKaspiPhone;
+  const hasCard = Boolean(activeCard);
+  const hasPaymentMethod = hasKaspiLink || hasKaspiPhone || hasCard;
   const checkoutPath = `/checkout/${product.id}`;
   const goToLogin = () => {
     rememberAuthNext(checkoutPath);
@@ -548,7 +562,7 @@ const ProductPurchasePage = () => {
 
                 {hasPaymentMethod ? (
                   <div className="space-y-4">
-                    {hasKaspiLink ? (
+                    {hasKaspiLink && (
                       <Button
                         type="button"
                         onClick={handleKaspiPayment}
@@ -560,9 +574,14 @@ const ProductPurchasePage = () => {
                           <ExternalLink className="w-5 h-5" />
                         </span>
                       </Button>
-                    ) : (
+                    )}
+
+                    {hasKaspiPhone && (
                       <div className="rounded-lg border border-[#F14635]/30 bg-[#F14635]/5 p-4 space-y-3">
                         <p className="text-sm text-foreground">{t("kaspiPhoneInstruction")}</p>
+                        <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {t("payPhoneLabel")}
+                        </p>
                         <p className="text-xl font-bold text-center tracking-wide">
                           {formatKaspiPhone(String(activeKaspiPhone))}
                         </p>
@@ -575,6 +594,28 @@ const ProductPurchasePage = () => {
                         >
                           <Copy className="w-4 h-4 mr-2" />
                           {t("copyKaspiPhone")}
+                        </Button>
+                      </div>
+                    )}
+
+                    {hasCard && (
+                      <div className="rounded-lg border border-[#F14635]/30 bg-[#F14635]/5 p-4 space-y-3">
+                        <p className="text-sm text-foreground">{t("payByCardInstruction")}</p>
+                        <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {t("payCardLabel")}
+                        </p>
+                        <p className="text-xl font-bold text-center tracking-wide">
+                          {formatCardNumber(String(activeCard))}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={handleCopyCard}
+                          disabled={!firstName.trim() || !lastName.trim()}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          {t("copyCardNumber")}
                         </Button>
                       </div>
                     )}

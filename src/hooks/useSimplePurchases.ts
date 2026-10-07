@@ -58,6 +58,7 @@ interface SimpleTimeSlot {
   start_time: string;
   end_time: string;
   lesson_link?: string | null;
+  max_participants?: number | null;
   [key: string]: unknown;
 }
 

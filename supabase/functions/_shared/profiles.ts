@@ -312,6 +312,45 @@ export async function createSellerProfile(
   return null
 }
 
+/** Profiles ordered by last use (most recent first), then newest. */
+export function profilesByRecency(profiles: ProfileRow[]): ProfileRow[] {
+  return [...profiles].sort((a, b) => {
+    const aTime = a.last_used_at ? Date.parse(a.last_used_at) : 0
+    const bTime = b.last_used_at ? Date.parse(b.last_used_at) : 0
+    if (bTime !== aTime) return bTime - aTime
+    return Date.parse(b.created_at) - Date.parse(a.created_at)
+  })
+}
+
+/**
+ * Most recently used profile that can actually be opened: seller profiles get
+ * their creator_accounts row ensured, blocked sellers are skipped.
+ */
+export async function pickUsableProfile(
+  supabase: SupabaseClient,
+  args: {
+    authUserId: string
+    email: string
+    profiles: ProfileRow[]
+    excludeProfileId?: string | null
+  },
+): Promise<{ profile: ProfileRow; account: CreatorAccountRow | null } | null> {
+  const candidates = profilesByRecency(args.profiles).filter((p) => p.id !== args.excludeProfileId)
+  for (const profile of candidates) {
+    const sellerType = accountTypeFor(profile.type)
+    if (!sellerType) return { profile, account: null }
+    const account = await ensureCreatorAccount(supabase, {
+      authUserId: args.authUserId,
+      email: args.email,
+      displayName: profile.display_name || args.email.split('@')[0] || 'User',
+      profile,
+      accountType: sellerType,
+    })
+    if (account && !account.is_blocked) return { profile, account }
+  }
+  return null
+}
+
 export function pickProfile(
   profiles: ProfileRow[],
   requested: ProfileType | null,
@@ -458,6 +497,15 @@ export async function linkAccountsByEmail(
         .from('creator_accounts')
         .update({ auth_user_id: authUserId, email })
         .eq('id', account.id)
+    }
+    // Legacy password-era profiles have no identity; attach them so the seller
+    // sees their existing profile instead of the role picker.
+    if (account.profile_id) {
+      await supabase
+        .from('profiles')
+        .update({ auth_user_id: authUserId })
+        .eq('id', account.profile_id)
+        .is('auth_user_id', null)
     }
   }
 }

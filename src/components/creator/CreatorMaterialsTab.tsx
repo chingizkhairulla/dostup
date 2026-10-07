@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/context-menu";
 import ProductMaterialsManager from "./ProductMaterialsManager";
 import ProductSwitcher from "./ProductSwitcher";
+import { useSelectedCreatorProduct } from "@/hooks/useSelectedCreatorProduct";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -81,7 +82,7 @@ interface Props { creatorName: string; onGoToProducts?: () => void; }
 const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
   const { data: products = [], isLoading } = useCreatorProducts();
   const { language } = useLanguage();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useSelectedCreatorProduct(products);
   const [mode, setMode] = useState<"add" | "edit" | null>(null);
   const [addParentId, setAddParentId] = useState<string | null>(null);
   const [section, setSection] = useState<MaterialsSection>("library");
@@ -94,11 +95,6 @@ const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
     setSection("library");
   }, [selectedId]);
 
-  useEffect(() => {
-    if (!selectedId && products.length > 0) {
-      setSelectedId(products[0].id);
-    }
-  }, [products, selectedId]);
 
   const product = products.find((p) => p.id === selectedId);
   const viewer: BookmarkViewer = { userType: "creator", userRef: creatorName };
@@ -161,11 +157,13 @@ const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
       <h2 className="text-lg font-semibold text-foreground">
         {language === "kk" ? "Материалдар" : "Материалы"}
       </h2>
-      <div className="flex items-center justify-between gap-3">
+      {/* On phones the switcher gets its own row, otherwise the section tabs are squeezed out of view. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ProductSwitcher
           products={products.map((p) => ({ id: p.id, title: p.title }))}
           selectedId={selectedId}
           onChange={(id) => setSelectedId(id)}
+          className="self-start sm:self-auto"
         />
         <MaterialsSectionsNav
           value={section}
@@ -921,9 +919,15 @@ const CreatorMaterialsReadOnlyList = ({
         </div>
         {!isBookmarksSection && (
         <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-          <SelectTrigger className="h-9 w-auto min-w-[160px] gap-2 flex-shrink-0" aria-label={language === "kk" ? "Сұрыптау" : "Сортировка"}>
-            <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
-            <SelectValue />
+          {/* On phones the trigger shrinks to icon + arrow; the list it opens is unchanged. */}
+          <SelectTrigger
+            className="h-9 w-auto flex-shrink-0 gap-1.5 px-2 sm:min-w-[160px] sm:gap-2 sm:px-3"
+            aria-label={language === "kk" ? "Сұрыптау" : "Сортировка"}
+          >
+            <ArrowUpDown className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+            <div className="hidden min-w-0 truncate sm:block">
+              <SelectValue />
+            </div>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="newest">{language === "kk" ? "Алдымен жаңалары" : "Сначала новые"}</SelectItem>

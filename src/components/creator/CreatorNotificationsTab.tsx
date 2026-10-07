@@ -392,7 +392,6 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-foreground">{t("notifications")}</h2>
       <CreatorPendingPayments creatorName={creatorName} />
 
       {/* Reschedule Requests Section */}

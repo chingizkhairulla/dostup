@@ -6,11 +6,14 @@ import CategoryMenu from "@/components/marketplace/CategoryMenu";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import PublicContainer from "@/components/marketplace/PublicContainer";
+import CatalogSectionHeader from "@/components/marketplace/CatalogSectionHeader";
 import BuyerAppShell from "@/components/layout/BuyerAppShell";
 import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
 import PublicFooter from "@/components/layout/PublicFooter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useHideScrollbar } from "@/hooks/useHideScrollbar";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
@@ -24,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 const MarketplacePage = () => {
   const { t, language } = useLanguage();
+  useHideScrollbar();
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
@@ -57,8 +61,14 @@ const MarketplacePage = () => {
     },
     !isDefaultView,
   );
+  const isMobile = useIsMobile();
   const newProducts = useNewProducts(isDefaultView);
   const topRatedProducts = useTopRatedProducts(isDefaultView);
+  // "Popular" and "Trending" rails (usePopularProducts / useTrendingProducts) come back once the
+  // catalog is big enough for sales rankings to mean something — see docs/marketplace-roadmap.md.
+
+  const visibleNewProducts = (newProducts.data ?? []).slice(0, isMobile ? 3 : 8);
+  const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, isMobile ? 3 : 8);
 
   const products = search.data ?? [];
   const loading = isDefaultView
@@ -78,7 +88,7 @@ const MarketplacePage = () => {
   };
 
   const page = (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background no-scrollbar">
       <MarketplaceHeader />
       <main className="flex flex-1 flex-col pb-0 pt-0 md:pb-16">
         <PublicContainer>
@@ -131,7 +141,7 @@ const MarketplacePage = () => {
         </PublicContainer>
 
         {isDefaultView ? (
-          <section className="mt-[140px] w-full px-6 pb-16 space-y-14">
+          <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-[64px] md:space-y-14">
             {taxonomy.isLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -140,32 +150,50 @@ const MarketplacePage = () => {
               <>
                 {(newProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <div className="mb-6 flex items-center justify-between gap-4">
-                      <h2 className="text-[26px] font-bold tracking-tight text-[#1F2328]">
-                        🆕 {t("newProductsHeading")}
-                      </h2>
-                      <Link
-                        to="/new"
-                        className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline focus-ring rounded-md"
-                      >
-                        {t("newProductsSeeAll")}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                    <CatalogGrid products={newProducts.data ?? []} />
+                    <CatalogSectionHeader
+                      title={<span className="whitespace-nowrap">🆕 {t("newProductsHeading")}</span>}
+                      action={
+                        <Link
+                          to="/new"
+                          aria-label={t("newProductsSeeAll")}
+                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+                        >
+                          <span className="md:hidden">{t("seeAllMobile")}</span>
+                          <span className="hidden md:inline-flex md:items-center md:gap-1">
+                            {t("newProductsSeeAll")}
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        </Link>
+                      }
+                    />
+                    <CatalogGrid products={visibleNewProducts} />
                   </div>
                 )}
 
                 {(topRatedProducts.data?.length ?? 0) > 0 && (
                   <div>
-                    <h2 className="mb-6 text-[26px] font-bold tracking-tight text-[#1F2328]">
-                      ⭐ {t("topRatedHeading")}
-                    </h2>
-                    <CatalogGrid products={topRatedProducts.data ?? []} />
+                    <CatalogSectionHeader
+                      title={<span className="whitespace-nowrap">⭐ {t("topRatedHeading")}</span>}
+                      action={
+                        <Link
+                          to="/top-rated"
+                          aria-label={t("topRatedSeeAll")}
+                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+                        >
+                          <span className="md:hidden">{t("seeAllMobile")}</span>
+                          <span className="hidden md:inline-flex md:items-center md:gap-1">
+                            {t("topRatedSeeAll")}
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        </Link>
+                      }
+                    />
+                    <CatalogGrid products={visibleTopRatedProducts} />
                   </div>
                 )}
 
-                {(newProducts.data?.length ?? 0) === 0 && (topRatedProducts.data?.length ?? 0) === 0 && (
+                {(newProducts.data?.length ?? 0) === 0 &&
+                  (topRatedProducts.data?.length ?? 0) === 0 && (
                   <div className="rounded-2xl border border-border px-6 py-16 text-center">
                     <p className="text-lg font-medium text-foreground">{t("catalogEmpty")}</p>
                     <p className="public-meta mt-2">{t("catalogEmptyHint")}</p>

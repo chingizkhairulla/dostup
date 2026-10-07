@@ -4,7 +4,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { FileText, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import TeacherMaterialsManager from "./TeacherMaterialsManager";
-import MaterialsProtectionNotice from "@/components/materials/MaterialsProtectionNotice";
 
 interface TeacherMaterialsTabProps {
   productIds: string[];
@@ -58,10 +57,6 @@ const TeacherMaterialsTab = ({ productIds, teacherName }: TeacherMaterialsTabPro
             ? "Материалы, которые вы добавляете, будут доступны только вашим ученикам"
             : "Сіз қосқан материалдар тек сіздің оқушыларыңызға қол жетімді болады"}
         </p>
-
-        <div className="mb-4">
-          <MaterialsProtectionNotice />
-        </div>
 
         {teacherUser?.id && products.length > 0 ? (
           <div className="space-y-6">

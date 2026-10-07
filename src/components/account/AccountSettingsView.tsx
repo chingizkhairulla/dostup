@@ -31,6 +31,7 @@ import TimezoneSelector from "@/components/account/TimezoneSelector";
 import NotificationPreferences from "@/components/NotificationPreferences";
 import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
+import { profileHomePath, type AppProfile, type SessionPayload } from "@/lib/creatorAuth";
 import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,17 @@ export const AccountSettingsView = ({
 
   const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") : null;
   const isSeller = profileType === "creator" || profileType === "school" || role === "creator" || role === "school";
+  // An account keeps at least one profile; teachers have no deletable profile here.
+  const canManageProfileDeletion = role !== "teacher" && profiles.length > 0;
+  const canDeleteProfile = canManageProfileDeletion && profiles.length > 1;
+  const lastProfileText = language === "ru"
+    ? "Это единственный профиль аккаунта — его нельзя удалить."
+    : "Бұл аккаунттың жалғыз профилі — оны жоюға болмайды.";
+  const deleteWarningText = isSeller
+    ? t("deleteProfileWarning")
+    : language === "ru"
+      ? "Профиль покупателя будет удалён вместе с доступом к купленным в нём продуктам, подписками и отзывами."
+      : "Сатып алушы профилі онда сатып алынған өнімдерге қолжетімділікпен, жазылымдармен және пікірлермен бірге жойылады.";
 
   const sections = useMemo(() => [
     {
@@ -183,29 +195,24 @@ export const AccountSettingsView = ({
     }
   };
 
-  const handleDeleteSellerProfile = async () => {
+  const handleDeleteProfile = async () => {
+    const failText = language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады";
     setDeletingProfile(true);
     try {
       const token = localStorage.getItem("creator_token") || "";
-      // Find profileId of the seller profile being deleted (match by role/type)
-      const sellerProfile = profiles.find(
-        (p) => p.type === role || p.type === profileType
-      );
-      const currentProfileId =
-        sellerProfile?.id ||
-        localStorage.getItem("profile_id") ||
-        activeProfileId ||
-        "";
+      // Always the profile these settings belong to (the active one), never "first of this type".
+      const currentProfileId = localStorage.getItem("profile_id") || "";
 
-      if (!token || !currentProfileId) {
-        toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+      if (!token || !currentProfileId || !canDeleteProfile) {
+        toast.error(failText);
         return;
       }
 
       const res = await invokeApi<{
         ok: boolean;
         deletedProfileId?: string;
-        session?: any;
+        session?: SessionPayload | null;
+        profiles?: AppProfile[];
       }>("manage-profile", {
         action: "delete_profile",
         token,
@@ -213,23 +220,22 @@ export const AccountSettingsView = ({
       });
 
       if (!res.ok) {
-        toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+        toast.error(failText);
         return;
       }
 
-      // Instantly remove deleted profile from UI and switch to buyer
-      removeProfile(
-        res.deletedProfileId || currentProfileId,
-        res.session ?? null,
-      );
+      removeProfile(res.deletedProfileId || currentProfileId, res.session ?? null, res.profiles);
 
       toast.success(language === "ru" ? "Профиль удалён" : "Профиль жойылды");
       setShowDeleteProfileConfirm(false);
       onClose?.();
-      navigate("/");
+      navigate(res.session ? profileHomePath(res.session.profileType, res.session.accountType) : "/");
     } catch (err) {
       console.error("Delete profile error:", err);
-      toast.error(language === "ru" ? "Не удалось удалить профиль" : "Профильді жою мүмкін болмады");
+      const message = err instanceof Error && err.message === "last_profile"
+        ? lastProfileText
+        : failText;
+      toast.error(message);
     } finally {
       setDeletingProfile(false);
     }
@@ -367,8 +373,8 @@ export const AccountSettingsView = ({
               )}
             </div>
 
-            {/* Seller Delete Profile Section - at the bottom */}
-            {isSeller && (
+            {/* Delete Profile Section - at the bottom */}
+            {canManageProfileDeletion && (
               <div className="mt-auto pt-10">
                 <Card className="border-destructive/30 bg-destructive/5">
                   <CardHeader className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 space-y-0">
@@ -377,7 +383,7 @@ export const AccountSettingsView = ({
                         {t("deleteProfile")}
                       </CardTitle>
                       <CardDescription className="text-xs text-muted-foreground">
-                        {t("deleteProfileWarning")}
+                        {canDeleteProfile ? deleteWarningText : lastProfileText}
                       </CardDescription>
                     </div>
                     <Button
@@ -385,6 +391,7 @@ export const AccountSettingsView = ({
                       variant="ghost"
                       size="icon"
                       onClick={() => setShowDeleteProfileConfirm(true)}
+                      disabled={!canDeleteProfile}
                       className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl shrink-0 transition-colors"
                       title={t("deleteProfile")}
                       aria-label={t("deleteProfile")}
@@ -691,7 +698,7 @@ export const AccountSettingsView = ({
                   {t("deleteProfileConfirmTitle")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("deleteProfileConfirmDesc")}
+                  {isSeller ? t("deleteProfileConfirmDesc") : deleteWarningText}
                 </p>
               </div>
               <div className="flex justify-end gap-3 pt-2">
@@ -707,7 +714,7 @@ export const AccountSettingsView = ({
                 <Button
                   type="button"
                   variant="destructive"
-                  onClick={handleDeleteSellerProfile}
+                  onClick={handleDeleteProfile}
                   disabled={deletingProfile}
                   className="rounded-xl"
                 >
