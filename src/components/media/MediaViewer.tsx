@@ -18,6 +18,7 @@ interface Props {
   onIndexChange: (index: number | null) => void;
   /** Buttons placed before "Done" (e.g. a download button for receipts). */
   actions?: ReactNode;
+  align?: "center" | "left";
   /** White window instead of the dark one — for documents such as payment receipts. */
   light?: boolean;
 }
@@ -27,7 +28,7 @@ interface Props {
  * around the window stays free, so a tap anywhere outside it closes the viewer — as does
  * the single "Done" button in the bottom-right corner.
  */
-const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Props) => {
+const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", light = false }: Props) => {
   const { t } = useLanguage();
   const open = index !== null && !!items[index];
   const item = open ? items[index!] : null;
@@ -55,19 +56,34 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed z-[60] flex flex-col overflow-hidden rounded-2xl shadow-2xl outline-none",
+            "fixed z-[60] flex flex-col overflow-hidden shadow-2xl outline-none",
             light ? "bg-white" : "bg-neutral-950",
-            // The margins are the tap-to-close area; the bottom one clears the phone's home bar.
-            "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
-            "sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            align === "left"
+              ? "left-0 top-0 bottom-0 w-[calc(100%-2.5rem)] sm:w-[480px] sm:max-w-[45vw] rounded-r-2xl rounded-l-none"
+              : "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16 rounded-2xl",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            align === "left"
+              ? "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+              : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           )}
         >
           <DialogPrimitive.Title className="sr-only">{item?.name || t("mediaViewerTitle")}</DialogPrimitive.Title>
 
-          <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          <div
+            className={cn(
+              "relative flex min-h-0 flex-1 items-center",
+              align === "left" ? "justify-start p-3 sm:p-4" : "justify-center",
+            )}
+          >
             {item?.kind === "image" && (
-              <img src={item.url} alt={item.name ?? ""} className="max-h-full max-w-full object-contain" />
+              <img
+                src={item.url}
+                alt={item.name ?? ""}
+                className={cn(
+                  "max-h-full max-w-full object-contain",
+                  align === "left" && "object-left",
+                )}
+              />
             )}
             {item?.kind === "video" && (
               <video
