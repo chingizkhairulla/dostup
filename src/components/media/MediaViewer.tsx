@@ -28,7 +28,6 @@ interface Props {
  * around the window stays free, so a tap anywhere outside it closes the viewer — as does
  * the single "Done" button in the bottom-right corner.
  */
-const MediaViewer = ({ items, index, onIndexChange, actions, align = "center" }: Props) => {
 const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", light = false }: Props) => {
   const { t } = useLanguage();
   const open = index !== null && !!items[index];
