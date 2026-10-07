@@ -19,6 +19,8 @@ interface Props {
   /** Buttons placed before "Done" (e.g. a download button for receipts). */
   actions?: ReactNode;
   align?: "center" | "left";
+  /** White window instead of the dark one — for documents such as payment receipts. */
+  light?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ interface Props {
  * the single "Done" button in the bottom-right corner.
  */
 const MediaViewer = ({ items, index, onIndexChange, actions, align = "center" }: Props) => {
+const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", light = false }: Props) => {
   const { t } = useLanguage();
   const open = index !== null && !!items[index];
   const item = open ? items[index!] : null;
@@ -54,7 +57,8 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center" }:
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed z-[60] flex flex-col overflow-hidden bg-neutral-950 shadow-2xl outline-none",
+            "fixed z-[60] flex flex-col overflow-hidden shadow-2xl outline-none",
+            light ? "bg-white" : "bg-neutral-950",
             align === "left"
               ? "left-0 top-0 bottom-0 w-[calc(100%-2.5rem)] sm:w-[480px] sm:max-w-[45vw] rounded-r-2xl rounded-l-none"
               : "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16 rounded-2xl",
@@ -118,9 +122,14 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center" }:
             )}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/10 bg-neutral-950 px-3 py-3">
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-end gap-2 border-t px-3 py-3",
+              light ? "border-neutral-200 bg-white" : "border-white/10 bg-neutral-950",
+            )}
+          >
             {many && index !== null && (
-              <span className="mr-auto text-xs tabular-nums text-white/60">
+              <span className={cn("mr-auto text-xs tabular-nums", light ? "text-neutral-500" : "text-white/60")}>
                 {index + 1} / {items.length}
               </span>
             )}
