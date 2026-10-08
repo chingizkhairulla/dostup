@@ -35,6 +35,28 @@ export const formatCardNumber = (raw: string | null | undefined): string =>
 export const isValidCardNumber = (raw: string | null | undefined): boolean =>
   cardDigits(raw).length === CARD_DIGITS;
 
+export interface PaymentMethodFormValue {
+  kaspiMethods: KaspiMethod[];
+  kaspiLink: string;
+  kaspiPhone: string;
+  kaspiCard: string;
+  bank: PaymentBank;
+  bankName: string;
+}
+
+/** Сохраняет реквизиты и выбранный банк для любого вида перевода. */
+export const serializeKaspiFields = (opt: PaymentMethodFormValue) => {
+  const methods = new Set(opt.kaspiMethods);
+  const usesTransfer = methods.has("phone") || methods.has("card");
+  return {
+    kaspi_link: methods.has("link") ? opt.kaspiLink.trim() || null : null,
+    kaspi_phone: methods.has("phone") ? opt.kaspiPhone.trim() || null : null,
+    kaspi_card: methods.has("card") ? cardDigits(opt.kaspiCard) || null : null,
+    bank: usesTransfer ? opt.bank : null,
+    bank_name: usesTransfer && opt.bank === "other" ? opt.bankName.trim() || null : null,
+  };
+};
+
 /** Название банка для показа покупателю. */
 export const bankLabel = (bank: unknown, bankName?: string | null): string => {
   if (bank === "other") return (bankName || "").trim() || "банк";
