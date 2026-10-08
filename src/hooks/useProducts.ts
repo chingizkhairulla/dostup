@@ -22,6 +22,8 @@ export interface Product {
   updated_at: string;
   kaspi_link: string | null;
   telegram_link: string | null;
+  after_access_enabled?: boolean;
+  after_access_url?: string | null;
   faq: Array<{ question: string; answer: string }> | null;
   kaspi_phone: string | null;
   access_duration_days: number | null;
@@ -161,6 +163,8 @@ export const useCreatorProducts = (passedCreatorName?: string | null) => {
 };
 
 interface CreateProductInput {
+  after_access_enabled?: boolean;
+  after_access_url?: string | null;
   title: string;
   headline?: string | null;
   description?: string | null;

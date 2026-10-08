@@ -203,4 +203,4 @@ export const CATALOG_COLUMNS =
 export const CHECKOUT_COLUMNS = `${CATALOG_COLUMNS}, kaspi_link, kaspi_phone`
 
 // Seller-only view of a product: adds the marketplace visibility flag.
-export const CREATOR_PRODUCT_COLUMNS = `${CHECKOUT_COLUMNS}, is_published`
+export const CREATOR_PRODUCT_COLUMNS = `${CHECKOUT_COLUMNS}, is_published, after_access_enabled, after_access_url`

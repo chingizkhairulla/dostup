@@ -200,7 +200,7 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
       bodyRef={bodyRef}
       footer={
         // A channel only the author writes in: say so, or the empty bottom reads as a bug.
-        isSupport || loading || channels.length === 0 ? undefined : (
+        isSupport || directPeer || loading || channels.length === 0 ? undefined : (
           <p className="flex items-center justify-center gap-2 py-2 text-center text-xs text-muted-foreground">
             <Radio className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {t("messagesChannelReadOnly")}

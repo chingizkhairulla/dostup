@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BadgeCheck, ChevronLeft, Loader2, MessagesSquare, Search, type LucideIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import MessengerInstallHint from "./MessengerInstallHint";
+import { FileDropProvider, FileDropTarget } from "./FileDropZone";
+import { ConversationVisibility } from "./ConversationVisibility";
 
 export interface ChatListItem {
   id: string;
@@ -85,6 +88,13 @@ const MessengerLayout = ({
   const [activeKey, setActiveKey] = useState(categories[0]?.key ?? "");
   // Phones show one pane at a time; picking a chat slides the conversation in.
   const [mobilePane, setMobilePane] = useState<"list" | "chat">("list");
+  const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const change = () => setDesktop(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
 
   const active = categories.find((category) => category.key === activeKey) ?? categories[0];
   const [filterKey, setFilterKey] = useState<string | null>(null);
@@ -139,6 +149,7 @@ const MessengerLayout = ({
       >
         <div className="shrink-0 px-4 pb-3 pt-4">
           <h2 className="mb-3 text-lg font-semibold text-foreground">{t("messages")}</h2>
+          <MessengerInstallHint />
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -174,6 +185,7 @@ const MessengerLayout = ({
                 >
                   <CategoryIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                   <span className="truncate">{category.label}</span>
+                  {category.items.some((item) => item.unread) && <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">{category.items.reduce((sum, item) => sum + (item.unread ?? 0), 0)}</span>}
                 </button>
               );
             })}
@@ -289,7 +301,9 @@ const MessengerLayout = ({
         </div>
       </aside>
 
-      <section
+      <FileDropProvider key={selectedId}>
+      <ConversationVisibility.Provider value={desktop || mobilePane === "chat"}>
+      <FileDropTarget
         className={cn("flex min-h-0 min-w-0 flex-1 flex-col", mobilePane === "list" && "hidden md:flex")}
       >
         {selectedId ? (
@@ -318,7 +332,9 @@ const MessengerLayout = ({
             <p className="max-w-xs text-sm text-muted-foreground">{t("messagesPickChat")}</p>
           </div>
         )}
-      </section>
+      </FileDropTarget>
+      </ConversationVisibility.Provider>
+      </FileDropProvider>
     </div>
   );
 };

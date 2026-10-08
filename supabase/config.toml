@@ -175,3 +175,6 @@ verify_jwt = false
 
 [functions.direct-messages]
 verify_jwt = false
+
+[functions.messenger-state]
+verify_jwt = false

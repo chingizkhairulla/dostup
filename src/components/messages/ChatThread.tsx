@@ -14,6 +14,8 @@ import { formatFileSize } from "@/lib/announcementHtml";
 import type { ChatAttachment, ChatAttachmentKind } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { FileDropZone } from "./FileDropZone";
+import { chatFileError, MAX_CHAT_ATTACHMENTS } from "@/lib/chatFiles";
 
 export interface ChatMessage {
   id: string;
@@ -47,7 +49,7 @@ interface Props {
   composerNotice?: ReactNode;
 }
 
-const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS = MAX_CHAT_ATTACHMENTS;
 const newId = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const kindOf = (file: File, source: "media" | "documents"): ChatAttachmentKind => {
@@ -77,15 +79,20 @@ const ChatThread = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const sendingRef = useRef(false);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const dropPending = (id: string) =>
+  const dropPending = (id: string) => {
+    pendingRef.current = pendingRef.current.filter((p) => p.id !== id);
     setPending((prev) => {
       const gone = prev.find((p) => p.id === id);
       if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
       return prev.filter((p) => p.id !== id);
     });
+  };
 
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
@@ -99,15 +106,17 @@ const ChatThread = ({
     [],
   );
 
-  const handleFiles = async (files: FileList | null, source: "media" | "documents") => {
-    if (!files?.length || !uploadFile) return;
-    const room = MAX_ATTACHMENTS - attachments.length - pending.length;
+  const handleFiles = async (files: FileList | File[] | null, source: "media" | "documents") => {
+    if (!files?.length || !uploadFile || !canAttach || composerNotice || sendingRef.current) return;
+    const room = MAX_ATTACHMENTS - attachmentsRef.current.length - pendingRef.current.length;
     const list = Array.from(files).slice(0, Math.max(room, 0));
     if (list.length < files.length) toast.error(t("announcementTooManyFiles", { count: MAX_ATTACHMENTS }));
     if (!list.length) return;
 
     await Promise.all(
       list.map(async (file) => {
+        const error = chatFileError(file);
+        if (error) { toast.error(`${file.name}: ${error}`); return; }
         const kind = kindOf(file, source);
         const entry: PendingUpload = {
           id: newId(),
@@ -116,11 +125,13 @@ const ChatThread = ({
           previewUrl: kind === "file" ? undefined : URL.createObjectURL(file),
           controller: new AbortController(),
         };
-        setPending((prev) => [...prev, entry]);
+        pendingRef.current = [...pendingRef.current, entry];
+        setPending(pendingRef.current);
         try {
           const attachment = await uploadFile(file, kind, entry.controller.signal);
           if (entry.controller.signal.aborted) return;
-          setAttachments((prev) => [...prev, { ...attachment, localId: newId() }]);
+          attachmentsRef.current = [...attachmentsRef.current, { ...attachment, localId: newId() }];
+          setAttachments(attachmentsRef.current);
         } catch (e) {
           // Cancelling is not a failure — the tile simply disappears.
           if (!entry.controller.signal.aborted) {
@@ -137,7 +148,8 @@ const ChatThread = ({
   const canSend = !sending && pending.length === 0 && (text.trim().length > 0 || attachments.length > 0);
 
   const submit = async () => {
-    if (!canSend) return;
+    if (!canSend || sendingRef.current || pendingRef.current.length) return;
+    sendingRef.current = true;
     setSending(true);
     try {
       await send(text.trim(), attachments.map(({ localId: _localId, url: _url, ...a }) => a));
@@ -147,6 +159,7 @@ const ChatThread = ({
       console.error(e);
       toast.error(t("chatSendError"));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -162,7 +175,7 @@ const ChatThread = ({
   const viewerItems = useMemo(() => viewer?.items ?? [], [viewer]);
 
   return (
-    <div
+    <FileDropZone enabled={canAttach && !!uploadFile && !composerNotice && !sending} onFiles={(files) => void handleFiles(files, "media")}
       className={
         variant === "embedded"
           ? "flex h-full flex-col bg-transparent"
@@ -187,7 +200,7 @@ const ChatThread = ({
                     onOpen={() => openMedia(m.attachments ?? [], a)}
                   />
                 ))}
-                {m.text}
+                <MessageText text={m.text} />
               </div>
             </div>
           ))
@@ -314,7 +327,7 @@ const ChatThread = ({
         index={viewer?.index ?? null}
         onIndexChange={(index) => setViewer((v) => (index === null || !v ? null : { ...v, index }))}
       />
-    </div>
+    </FileDropZone>
   );
 };
 
@@ -388,3 +401,9 @@ const MessageAttachment = ({
 };
 
 export default ChatThread;
+
+function MessageText({ text }: { text: string }) {
+  return <>{text.split(/(https:\/\/[^\s<>]+)/g).map((part, index) => part.startsWith("https://")
+    ? <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all">{part}</a>
+    : part)}</>;
+}
