@@ -18,6 +18,7 @@ import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } fro
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
+import PaymentMethodFields from "./PaymentMethodFields";
 import {
   Dialog,
   DialogContent,
@@ -56,14 +57,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-  KASPI_METHOD_ORDER,
-  KASPI_METHOD_LABELS,
-  BANK_OPTIONS,
   DEFAULT_BANK,
-  formatCardNumber,
   cardDigits,
   isValidCardNumber,
   isPaymentBank,
+  serializeKaspiFields,
   type KaspiMethod,
   type PaymentBank,
 } from "@/lib/paymentMethods";
@@ -134,20 +132,6 @@ export const kaspiSettingsFromStored = (
     card: cardDigits(src.kaspi_card),
     bank: isPaymentBank(src.bank) ? src.bank : DEFAULT_BANK,
     bankName: src.bank_name || "",
-  };
-};
-
-/** Поля способа оплаты для сохранения в pricing_options. */
-export const serializeKaspiFields = (opt: PricingOptionFormItem) => {
-  const m = new Set(opt.kaspiMethods);
-  // Банк выбирается только вместе с картой; перевод по номеру без карты — Kaspi по умолчанию.
-  const usesCard = m.has("card");
-  return {
-    kaspi_link: m.has("link") ? (opt.kaspiLink.trim() || null) : null,
-    kaspi_phone: m.has("phone") ? (opt.kaspiPhone.trim() || null) : null,
-    kaspi_card: usesCard ? (cardDigits(opt.kaspiCard) || null) : null,
-    bank: usesCard ? opt.bank : m.has("phone") ? DEFAULT_BANK : null,
-    bank_name: usesCard && opt.bank === "other" ? (opt.bankName.trim() || null) : null,
   };
 };
 
@@ -1243,7 +1227,7 @@ const ProductForm = ({
       if (methods.has("card") && !isValidCardNumber(opt.kaspiCard)) {
         return { id: `kaspi-card-${opt.id}`, optId: opt.id, message: "Номер карты должен содержать 16 цифр" };
       }
-      if (methods.has("card") && opt.bank === "other" && !opt.bankName.trim()) {
+      if ((methods.has("phone") || methods.has("card")) && opt.bank === "other" && !opt.bankName.trim()) {
         return { id: `bank-name-${opt.id}`, optId: opt.id };
       }
     }
@@ -2391,125 +2375,12 @@ const ProductForm = ({
                             )}
                           </div>
 
-                          {/* Способы оплаты для этого варианта: можно включить несколько */}
-                          <div className="space-y-3 pt-2 border-t border-border/60">
-                            <div className="space-y-1">
-                              <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
-                                Способ оплаты <ReqStar />
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                Можно выбрать несколько — покупатель увидит все.
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {KASPI_METHOD_ORDER.map((method) => {
-                                const active = opt.kaspiMethods.includes(method);
-                                return (
-                                  <Button
-                                    key={method}
-                                    type="button"
-                                    size="sm"
-                                    variant={active ? "default" : "toggle"}
-                                    aria-pressed={active}
-                                    onClick={() => {
-                                      const next = active
-                                        ? opt.kaspiMethods.filter((m) => m !== method)
-                                        : [...opt.kaspiMethods, method];
-                                      updateOption(opt.id, { kaspiMethods: next });
-                                    }}
-                                    className="text-xs sm:text-sm h-9 px-1"
-                                  >
-                                    {KASPI_METHOD_LABELS[method]}
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                            {opt.kaspiMethods.includes("link") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-link-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Ссылка на оплату
-                                </Label>
-                                <Input
-                                  id={`kaspi-link-${opt.id}`}
-                                  type="url"
-                                  placeholder={t("kaspiLinkPlaceholder")}
-                                  className="h-11 text-base"
-                                  value={opt.kaspiLink}
-                                  onChange={(e) => updateOption(opt.id, { kaspiLink: e.target.value })}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("phone") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-phone-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Номер телефона
-                                </Label>
-                                <Input
-                                  id={`kaspi-phone-${opt.id}`}
-                                  type="tel"
-                                  placeholder="+7 776 475 00-99"
-                                  className="h-11 text-base"
-                                  value={opt.kaspiPhone}
-                                  onChange={(e) => {
-                                    const formatted = formatPhone(e.target.value);
-                                    updateOption(opt.id, { kaspiPhone: formatted });
-                                  }}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("card") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-card-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Номер карты
-                                </Label>
-                                <Input
-                                  id={`kaspi-card-${opt.id}`}
-                                  type="text"
-                                  inputMode="numeric"
-                                  autoComplete="off"
-                                  placeholder="0000 0000 0000 0000"
-                                  maxLength={19}
-                                  className="h-11 text-base tracking-wider"
-                                  value={formatCardNumber(opt.kaspiCard)}
-                                  onChange={(e) => updateOption(opt.id, { kaspiCard: cardDigits(e.target.value) })}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("card") && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-muted-foreground">Банк для перевода</Label>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  {BANK_OPTIONS.map((b) => (
-                                    <Button
-                                      key={b.value}
-                                      type="button"
-                                      size="sm"
-                                      variant={opt.bank === b.value ? "default" : "toggle"}
-                                      aria-pressed={opt.bank === b.value}
-                                      onClick={() => updateOption(opt.id, { bank: b.value })}
-                                      className="text-xs sm:text-sm h-9 px-1 gap-1.5"
-                                    >
-                                      {b.logo && (
-                                        <img src={b.logo} alt="" className="h-4 w-4 shrink-0 rounded-sm object-contain" />
-                                      )}
-                                      {b.label}
-                                    </Button>
-                                  ))}
-                                </div>
-                                {opt.bank === "other" && (
-                                  <Input
-                                    id={`bank-name-${opt.id}`}
-                                    type="text"
-                                    placeholder="Название банка"
-                                    className="h-11 text-base"
-                                    value={opt.bankName}
-                                    onChange={(e) => updateOption(opt.id, { bankName: e.target.value })}
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-
+                          <PaymentMethodFields
+                            value={opt}
+                            onChange={(updates) => updateOption(opt.id, updates)}
+                            formatPhone={formatPhone}
+                            linkPlaceholder={t("kaspiLinkPlaceholder")}
+                          />
                           {/* Footer внутри карточки варианта */}
                           <div className="flex items-center justify-between pt-2 border-t border-border/50">
                             {(formData.pricingOptions || []).length > 1 ? (
