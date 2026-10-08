@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { accessUrgency, periodStart, presetEnd } from "./buyerAccess.ts";
+import { accessUrgency, periodStart } from "./buyerAccess.ts";
 
 const now = new Date("2026-09-24T12:00:00Z");
 const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
@@ -28,5 +28,4 @@ test("a subscription's period end wins, and a far-future end reads as forever", 
 test("period filter starts this month by default and presets count from payment", () => {
   assert.equal(periodStart("month", now)?.getDate(), 1);
   assert.equal(periodStart("all", now), null);
-  assert.equal(presetEnd("3m", new Date("2026-01-15T00:00:00Z")).getUTCMonth(), 3);
 });

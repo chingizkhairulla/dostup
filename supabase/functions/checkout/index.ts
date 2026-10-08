@@ -43,21 +43,15 @@ Deno.serve(async (req) => {
       }
 
       if (data?.is_paused) {
-        const { kaspi_link: _l, kaspi_phone: _p, ...rest } = data as Record<string, unknown>
-        const options = Array.isArray(rest.pricing_options) ? rest.pricing_options : []
-        return json({
-          product: {
-            ...rest,
-            kaspi_link: null,
-            kaspi_phone: null,
-            pricing_options: options.map((o: Record<string, unknown>) => ({
-              ...o,
-              kaspi_link: null,
-              kaspi_phone: null,
-              kaspi_card: null,
-            })),
-          },
-        })
+        const { kaspi_link: _l, kaspi_phone: _p, pricing_options, ...rest } = data as Record<string, unknown>
+        const strippedOptions = Array.isArray(pricing_options)
+          ? pricing_options.map((opt) => {
+              const { kaspi_link: _ol, kaspi_phone: _op, kaspi_card: _oc, bank: _b, bank_name: _bn, ...optRest } =
+                (opt ?? {}) as Record<string, unknown>
+              return optRest
+            })
+          : pricing_options
+        return json({ product: { ...rest, kaspi_link: null, kaspi_phone: null, pricing_options: strippedOptions } })
       }
 
       return json({ product: data })

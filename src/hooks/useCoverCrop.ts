@@ -246,5 +246,6 @@ export function useCoverCrop() {
     onPointerUp,
     resetCrop,
     cropResult,
+    getCroppedImage: cropResult,
   };
 }

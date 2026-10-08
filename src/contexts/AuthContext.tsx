@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureUserTimezoneDetected } from "@/lib/timezones";
 
 interface AuthContextType {
   user: User | null;
@@ -51,6 +52,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signUp = async (email: string, password: string, name: string) => {
+    ensureUserTimezoneDetected();
     const redirectUrl = `${window.location.origin}/dashboard`;
     
     const { error } = await supabase.auth.signUp({
@@ -68,6 +70,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signIn = async (email: string, password: string) => {
+    ensureUserTimezoneDetected();
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
