@@ -885,6 +885,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           repeatWeekly?: boolean;
           repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
           repeatUntil?: string | null;
+          lessonLink?: string;
         }[]
       >;
       timeIntervals: { start: string; end: string }[];
@@ -898,6 +899,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       description?: string;
       imageUrl?: string;
       location?: string;
+      lessonLink?: string;
       deletedSlotIds?: string[];
     }) => {
       // Resolve schedules for products
@@ -1039,6 +1041,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           const slotDesc = (interval as any).description ?? params.description;
           const slotImg = (interval as any).imageUrl ?? params.imageUrl;
           const slotLoc = (interval as any).location ?? params.location;
+          const slotLink = (interval as any).lessonLink ?? (params as any).lessonLink ?? (interval as any).lesson_link;
 
           const [startH, startM] = interval.start.split(":").map(Number);
           const [endH, endM] = interval.end.split(":").map(Number);
@@ -1095,6 +1098,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 description: slotDesc || null,
                 image_url: slotImg || null,
                 location: slotLoc || null,
+                lesson_link: slotLink || null,
               });
             }
 
