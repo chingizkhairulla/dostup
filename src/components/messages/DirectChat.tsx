@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { creatorCreds, invokeApi, studentCreds } from "@/lib/sessionApi";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 import { toast } from "sonner";
+import { useConversationVisible } from "./ConversationVisibility";
+import { directUnreadIds } from "@/lib/directRead";
 
 export type DirectSide = "creator" | "buyer";
 
@@ -43,6 +45,7 @@ interface StoredMessage {
   text: string;
   created_at: string;
   attachments?: ChatAttachment[];
+  read_at?: string | null;
 }
 
 /** One personal chat between a seller and a buyer; new messages are picked up every few seconds. */
@@ -50,12 +53,17 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const visible = useConversationVisible();
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const acknowledged = useRef(new Set<string>());
+  const wasVisible = useRef(visible);
 
   const load = useCallback(
     async (quiet = false) => {
       if (!quiet) setLoading(true);
       try {
-        const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId });
+        const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId, markRead: false });
         setMessages(data.messages ?? []);
         queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
         queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
@@ -72,10 +80,27 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
     setMessages([]);
     void load();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
+      if (visibleRef.current) void load(true);
     }, 5000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    const becameVisible = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (becameVisible) void load(true);
+  }, [visible, load]);
+
+  useEffect(() => {
+    if (!visible || !messages.length) return;
+    const messageIds = directUnreadIds(messages, side, visible, acknowledged.current);
+    if (!messageIds.length) return;
+    void directApi(side, { action: "mark_read", peerId, messageIds }).then(() => {
+      messageIds.forEach((id) => acknowledged.current.add(id));
+      queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
+      queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
+    }).catch(() => { /* Retry after the next successful poll. */ });
+  }, [visible, messages, side, peerId, queryClient]);
 
   const uploadFile = async (file: File, kind: ChatAttachmentKind, signal: AbortSignal): Promise<ChatAttachment> => {
     if (kind === "video") {

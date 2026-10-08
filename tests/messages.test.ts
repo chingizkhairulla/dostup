@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { normalizeGroupLink } from '../src/lib/groupLink';
 import { chatFileError } from '../src/lib/chatFiles';
 import { directPurchaseActive } from '../supabase/functions/_shared/directAccess';
+import { directUnreadIds } from '../src/lib/directRead';
 const now = new Date('2026-10-08T12:00:00Z');
 test('group link rejects blank, relative, unsafe and credential-bearing URLs', () => {
   for (const input of ['', ' ', '/group','http://t.me/a','javascript:alert(1)','https://user:pass@t.me/a','https://localhost/a']) assert.equal(normalizeGroupLink(input),null);
@@ -29,4 +30,9 @@ test('subscription and trial expiration use actual access rules', () => {
   assert.ok(directPurchaseActive({status:'completed'},{status:'cancelled',current_period_end:'2026-10-09'},true,now));
   assert.equal(directPurchaseActive({status:'completed'},{status:'past_due',current_period_end:'2026-10-09'},true,now),false);
   assert.equal(directPurchaseActive({status:'completed',is_trial:true,trial_ends_at:'2026-10-07'},undefined,false,now),false);
+});
+test('hidden conversation never acknowledges unread messages; visible acknowledges only the other side once', () => {
+  const messages = [{id:'new',sender:'creator'}, {id:'mine',sender:'buyer'}, {id:'old',sender:'creator',read_at:'2026-10-01'}, {id:'acked',sender:'creator'}];
+  assert.deepEqual(directUnreadIds(messages,'buyer',false,new Set()),[]);
+  assert.deepEqual(directUnreadIds(messages,'buyer',true,new Set(['acked'])),['new']);
 });

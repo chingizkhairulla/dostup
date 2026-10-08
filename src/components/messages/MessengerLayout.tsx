@@ -4,6 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import MessengerInstallHint from "./MessengerInstallHint";
 import { FileDropProvider, FileDropTarget } from "./FileDropZone";
+import { ConversationVisibility } from "./ConversationVisibility";
 
 export interface ChatListItem {
   id: string;
@@ -87,6 +88,13 @@ const MessengerLayout = ({
   const [activeKey, setActiveKey] = useState(categories[0]?.key ?? "");
   // Phones show one pane at a time; picking a chat slides the conversation in.
   const [mobilePane, setMobilePane] = useState<"list" | "chat">("list");
+  const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const change = () => setDesktop(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
 
   const active = categories.find((category) => category.key === activeKey) ?? categories[0];
   const [filterKey, setFilterKey] = useState<string | null>(null);
@@ -294,6 +302,7 @@ const MessengerLayout = ({
       </aside>
 
       <FileDropProvider key={selectedId}>
+      <ConversationVisibility.Provider value={desktop || mobilePane === "chat"}>
       <FileDropTarget
         className={cn("flex min-h-0 min-w-0 flex-1 flex-col", mobilePane === "list" && "hidden md:flex")}
       >
@@ -324,6 +333,7 @@ const MessengerLayout = ({
           </div>
         )}
       </FileDropTarget>
+      </ConversationVisibility.Provider>
       </FileDropProvider>
     </div>
   );

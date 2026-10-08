@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 import MessengerInstallHint from "@/components/messages/MessengerInstallHint";
+import { useConversationVisible } from "@/components/messages/ConversationVisibility";
 
 interface Message {
   id: string;
@@ -27,6 +28,10 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
   const [loading, setLoading] = useState(true);
+  const visible = useConversationVisible();
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const wasVisible = useRef(visible);
 
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
   const baseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -38,7 +43,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       const resp = await fetch(`${baseUrl}/functions/v1/moderator-api`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ action: "support_get_messages", token: moderatorToken, thread_id: threadId, mark_read: true }),
+        body: JSON.stringify({ action: "support_get_messages", token: moderatorToken, thread_id: threadId, mark_read: visibleRef.current }),
       });
       const data = await resp.json();
       if (data?.success) setMessages(data.messages);
@@ -46,7 +51,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       const resp = await fetch(`${baseUrl}/functions/v1/support-api`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ action: "get_thread", user_type: userType, user_ref: userRef, display_name: displayName }),
+        body: JSON.stringify({ action: "get_thread", user_type: userType, user_ref: userRef, display_name: displayName, mark_read: visibleRef.current }),
       });
       const data = await resp.json();
       if (data?.success) {
@@ -58,6 +63,11 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   }, [asModerator, threadId, moderatorToken, userType, userRef, displayName, baseUrl, headers]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const becameVisible = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (becameVisible) void load(true);
+  }, [visible, load]);
 
   useEffect(() => {
     if (!threadId) return;

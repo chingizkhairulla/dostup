@@ -241,11 +241,24 @@ Deno.serve(async (req) => {
         .eq('thread_id', thread.id)
         .order('created_at', { ascending: true })
       const messages = await withSignedAttachmentUrls(supabase, BUCKET, rows ?? [])
-      const read = await supabase.rpc('mark_direct_messages_read', {
-        p_thread: thread.id, p_side: me.side, p_ids: (rows ?? []).map((row) => row.id),
-      })
-      if (read.error) throw read.error
+      // Legacy clients acknowledge on fetch; new clients acknowledge after rendering.
+      if (body.markRead !== false) {
+        const read = await supabase.rpc('mark_direct_messages_read', {
+          p_thread: thread.id, p_side: me.side, p_ids: (rows ?? []).map((row) => row.id),
+        })
+        if (read.error) throw read.error
+      }
       return json({ messages })
+    }
+
+    if (action === 'mark_read') {
+      const ids = body.messageIds
+      if (!Array.isArray(ids) || ids.length > 1000 || ids.some((id) => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) return json({ error: 'Bad message IDs' }, 400)
+      const thread = await findThread(supabase, pair.creatorAccountId, pair.buyerProfileId)
+      if (!thread) return json({ ok: true })
+      const read = await supabase.rpc('mark_direct_messages_read', { p_thread: thread.id, p_side: me.side, p_ids: ids })
+      if (read.error) throw read.error
+      return json({ ok: true })
     }
 
     if (action === 'upload' || action === 'presign_video') {
