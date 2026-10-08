@@ -62,13 +62,14 @@ const NotificationsDialog = ({ open, onOpenChange, children, mobileNav, title, l
         aria-label={label ?? (typeof title === "string" ? title : t("notifications"))}
         className="relative z-10 flex h-full w-full flex-col overflow-hidden border-border/80 bg-background shadow-2xl motion-safe:animate-fade-in sm:h-[85vh] sm:max-h-[720px] sm:max-w-2xl sm:rounded-2xl sm:border"
       >
-        {/* Back arrow on the left, matching the settings window. */}
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 pt-[env(safe-area-inset-top)] sm:px-3">
+        {/* Back arrow on the left on phones, matching the settings window; on a computer the
+            window floats over the page and closes with a click beside it or Esc. */}
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2 pt-[env(safe-area-inset-top)] sm:px-4">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
             aria-label={t("close")}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-ring"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-ring sm:hidden"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>

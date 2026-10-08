@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -253,7 +254,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                   <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                 )}
                 {p.previewUrl && p.kind === "video" && (
-                  <video src={p.previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                  <video src={`${p.previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                 )}
                 {p.kind === "file" && (
                   <span className="flex h-full w-full items-center justify-center">
@@ -266,9 +267,13 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                     p.previewUrl && "bg-black/40",
                   )}
                 >
-                  <Loader2
-                    className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
-                  />
+                  {p.kind === "video" ? (
+                    <UploadingVideoBadge />
+                  ) : (
+                    <Loader2
+                      className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
+                    />
+                  )}
                 </span>
               </div>
               {/* Available while the file uploads, so a big video can be called off. */}

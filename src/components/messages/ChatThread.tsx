@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MediaViewer from "@/components/media/MediaViewer";
+import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { formatFileSize } from "@/lib/announcementHtml";
 import type { ChatAttachment, ChatAttachmentKind } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -380,7 +381,7 @@ const ChatThread = ({
                       <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                     )}
                     {p.previewUrl && p.kind === "video" && (
-                      <video src={p.previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                      <video src={`${p.previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     )}
                     {p.kind === "file" && (
                       <span className="flex h-full w-full items-center justify-center">
@@ -388,7 +389,11 @@ const ChatThread = ({
                       </span>
                     )}
                     <span className={cn("absolute inset-0 flex items-center justify-center", p.previewUrl && "bg-black/40")}>
-                      <Loader2 className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")} />
+                      {p.kind === "video" ? (
+                        <UploadingVideoBadge />
+                      ) : (
+                        <Loader2 className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")} />
+                      )}
                     </span>
                   </div>
                   {/* Available while the file uploads, so a big video can be called off. */}
@@ -592,7 +597,7 @@ const AttachmentTile = ({
       <div className="relative h-20 w-20 overflow-hidden rounded-xl border bg-muted">
         {kind === "video" ? (
           <>
-            <video src={previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+            <video src={`${previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
                 <Play className="h-3.5 w-3.5 fill-current" />

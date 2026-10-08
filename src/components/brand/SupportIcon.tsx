@@ -1,8 +1,9 @@
 import type { SVGProps } from "react";
 
 /**
- * Support: a light bulb wearing a headset with a microphone. Drawn on the same 24×24 grid
- * with round strokes as the lucide icons beside it in the header.
+ * Support: a headset whose band breaks off at the top right for a light bulb; the microphone
+ * boom runs from under the bulb down to the mouthpiece. Drawn on the same 24×24 grid with
+ * round strokes as the lucide icons beside it in the header.
  */
 const SupportIcon = ({ strokeWidth = 1.75, ...props }: SVGProps<SVGSVGElement>) => (
   <svg
@@ -16,16 +17,15 @@ const SupportIcon = ({ strokeWidth = 1.75, ...props }: SVGProps<SVGSVGElement>) 
     aria-hidden
     {...props}
   >
-    {/* Bulb and its base */}
-    <path d="M10 17v-.8c0-.7-.4-1.3-1-1.9a4.2 4.2 0 1 1 6 0c-.6.6-1 1.2-1 1.9v.8" />
-    <path d="M10 17h4" />
-    <path d="M10.75 19.5h2.5" />
-    {/* Headband and ear cups */}
-    <path d="M4.4 12.5v-1.1a7.6 7.6 0 0 1 15.2 0v1.1" />
-    <rect x="2.75" y="11.5" width="3.3" height="5" rx="1.4" />
-    <rect x="17.95" y="11.5" width="3.3" height="5" rx="1.4" />
-    {/* Microphone boom */}
-    <path d="M19.6 16.5v.6a3 3 0 0 1-3 3h-1" />
+    {/* Left ear cup and the headband up to the bulb */}
+    <path d="M3.2 11.1C2.5 11.4 2 12 2 12.8v1.9c0 .8.6 1.4 1.4 1.4h1v-2.5a7.6 7.6 0 0 1 5.25-7.23" />
+    {/* Right ear cup */}
+    <path d="M20.8 11.1c.7.3 1.2.9 1.2 1.7v1.9c0 .8-.6 1.4-1.4 1.4h-1" />
+    {/* Microphone boom and mouthpiece */}
+    <path d="M19.3 11.2A7.6 7.6 0 0 1 15.85 20.4H14.4" />
+    <rect x="9.2" y="19.4" width="5.2" height="2.4" rx="1.2" />
+    {/* Bulb in the top-right corner */}
+    <path d="M14.8 10.1v-.5c0-.6-.3-1.1-.8-1.65a3.5 3.5 0 1 1 5 0c-.5.55-.8 1.05-.8 1.65v.5z" />
   </svg>
 );
 
