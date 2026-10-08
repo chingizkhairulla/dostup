@@ -1,7 +1,14 @@
-import { Library, Star, Trash2, HardDrive } from "lucide-react";
+import { Check, ChevronDown, Library, Star, Trash2, HardDrive } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRef, useLayoutEffect, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type MaterialsSection = "library" | "bookmarks" | "trash" | "storage";
 
@@ -93,6 +100,55 @@ export const MaterialsSectionsNav = ({
       </button>
     );
   };
+
+  if (isMobile && showTrash && showStorage) {
+    const current = items.find((item) => item.key === value) ?? items[0];
+    const CurrentIcon = current.icon;
+    return (
+      <div className="flex shrink-0 items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-9 gap-1 px-2"
+              aria-label={current.label}
+              title={current.label}
+            >
+              <CurrentIcon className="h-4 w-4" />
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              {current.key === "trash" && trashCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-semibold text-white">
+                  {trashCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-48">
+            {items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <DropdownMenuItem
+                  key={item.key}
+                  onClick={() => onChange(item.key)}
+                  className="gap-2"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.key === "trash" && trashCount > 0 && (
+                    <span className="text-xs text-muted-foreground">{trashCount}</span>
+                  )}
+                  <Check className={`h-4 w-4 ${value === item.key ? "opacity-100" : "opacity-0"}`} />
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {showAdd && addButton}
+      </div>
+    );
+  }
 
   return (
     <div

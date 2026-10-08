@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
         type: material.type || 'file',
         content: material.content || null,
         file_url: material.file_url || null,
+        cover_url: material.cover_url || null,
         order_index: material.order_index || 0,
         parent_id: material.parent_id || null,
         allow_view: material.allow_view !== false,

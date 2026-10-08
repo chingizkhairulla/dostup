@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useProductMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial, uploadMaterialFile } from "@/hooks/useMaterials";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Plus, FileText, Folder, Trash2, Edit, Loader2, Upload, GripVertical, ChevronLeft, FolderOpen, Download, X, Clock, Link as LinkIcon, Type, Clipboard } from "lucide-react";
+import { Plus, FileText, Folder, Trash2, Edit, Loader2, Upload, GripVertical, ChevronLeft, FolderOpen, Download, X, Clock, Link as LinkIcon, Type, Clipboard, ImagePlus } from "lucide-react";
 import { ExternalLink } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { requestMaterialToken, buildProxyUrl } from "@/lib/materialToken";
 import { isS3Path, isOfficeDocument, buildS3RedirectUrl, buildStorageRedirectUrl, parseStoragePath } from "@/lib/fileRedirect";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
   import MaterialsSearchBar from "@/components/materials/MaterialsSearchBar";
   import {
     ContextMenu,
@@ -55,9 +56,10 @@ import { Checkbox } from "@/components/ui/checkbox";
     id: string;
     product_id: string;
     title: string;
-    type: string;
+    type: "file" | "video" | "text" | "folder" | "link";
     content: string | null;
     file_url: string | null;
+    cover_url?: string | null;
     order_index: number;
     created_at: string;
      parent_id?: string | null;
@@ -90,6 +92,9 @@ interface FormData {
    availableAt: string;
    linkUrl: string;
    content: string;
+   coverEnabled: boolean;
+   coverFile: File | null;
+   coverUrl: string;
  }
  
  const ProductMaterialsManager = ({ productId, productTitle, isOpen, onClose, mode = "edit", initialFolderId = null }: ProductMaterialsManagerProps) => {
@@ -106,6 +111,7 @@ interface FormData {
     const [uploadProgress, setUploadProgress] = useState(0);
    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
+   const coverInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState(false);
   const [folderRenameValue, setFolderRenameValue] = useState("");
@@ -124,6 +130,9 @@ interface FormData {
       availableAt: "",
       linkUrl: "",
       content: "",
+      coverEnabled: false,
+      coverFile: null,
+      coverUrl: "",
     });
 
   const addFilesToForm = useCallback((files: FileList | File[]) => {
@@ -232,8 +241,9 @@ interface FormData {
    };
  
     const resetForm = () => {
-      setFormData({ title: "", itemType: "file", files: [], filePermissions: [], fileEntries: [], allow_download: true, teacher_allow_download: false, scheduleAccess: false, availableAt: "", linkUrl: "", content: "" });
+      setFormData({ title: "", itemType: "file", files: [], filePermissions: [], fileEntries: [], allow_download: true, teacher_allow_download: false, scheduleAccess: false, availableAt: "", linkUrl: "", content: "", coverEnabled: false, coverFile: null, coverUrl: "" });
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (coverInputRef.current) coverInputRef.current.value = "";
     };
  
     const handleAdd = async (e: React.FormEvent) => {
@@ -259,9 +269,25 @@ interface FormData {
         return;
       }
 
+      if (
+        (formData.itemType === "file" || formData.itemType === "link") &&
+        formData.coverEnabled &&
+        !formData.coverFile &&
+        !formData.coverUrl
+      ) {
+        toast.error(language === "kk" ? "Мұқаба суретін таңдаңыз" : "Выберите изображение для обложки");
+        return;
+      }
+
       try {
         setIsUploading(true);
         setUploadProgress(0);
+        const coverUrl =
+          (formData.itemType === "file" || formData.itemType === "link") && formData.coverEnabled
+            ? formData.coverFile
+              ? await uploadMaterialFile(formData.coverFile, productId)
+              : formData.coverUrl || null
+            : null;
         // Новые материалы вставляются в самый верх текущей папки/корня.
         // Берём минимальный order_index среди соседей и опускаемся ниже него.
         const siblingsHere = (allMaterials as Material[]).filter(
@@ -284,6 +310,7 @@ interface FormData {
               type: "link",
               content: null,
               file_url: normalized,
+              cover_url: coverUrl,
               order_index: topIndex,
               parent_id: addTargetFolderId,
               available_at: formData.scheduleAccess && formData.availableAt
@@ -298,6 +325,7 @@ interface FormData {
               type: "text",
               content: raw,
               file_url: null,
+              cover_url: coverUrl,
               order_index: topIndex,
               parent_id: addTargetFolderId,
               available_at: formData.scheduleAccess && formData.availableAt
@@ -343,6 +371,7 @@ interface FormData {
                  type: "file",
                  content: null,
                  file_url: fileUrl,
+                 cover_url: coverUrl,
                  order_index: i,
                  parent_id: folder.id,
                  allow_view: true,
@@ -365,6 +394,7 @@ interface FormData {
                type: "file",
                content: null,
                file_url: fileUrl,
+               cover_url: coverUrl,
                 // Сохраняем порядок выбора: первый файл оказывается сверху,
                 // остальные — ниже него, но всё ещё выше существующих материалов.
                 order_index: topIndex - (formData.fileEntries.length - 1 - i),
@@ -409,15 +439,27 @@ interface FormData {
           availableAt: material.available_at ? new Date(material.available_at).toISOString().slice(0, 16) : "",
           linkUrl: material.type === "link" ? (material.file_url || "") : "",
           content: material.type === "text" ? (material.content || "") : "",
+          coverEnabled: !!material.cover_url,
+          coverFile: null,
+          coverUrl: material.cover_url || "",
         });
      };
  
     const handleUpdate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!editingId || !formData.title) return;
+      if (
+        (formData.itemType === "file" || formData.itemType === "link") &&
+        formData.coverEnabled &&
+        !formData.coverFile &&
+        !formData.coverUrl
+      ) {
+        toast.error(language === "kk" ? "Мұқаба суретін таңдаңыз" : "Выберите изображение для обложки");
+        return;
+      }
   
        try {
-          const updateData: any = {
+          const updateData: Partial<Material> & { id: string; productId: string } = {
             id: editingId,
             productId: productId,
             title: formData.title,
@@ -431,6 +473,13 @@ interface FormData {
 
           if (formData.itemType === "link") {
             updateData.file_url = formData.linkUrl;
+          }
+          if (formData.itemType === "file" || formData.itemType === "link") {
+            updateData.cover_url = formData.coverEnabled
+              ? formData.coverFile
+                ? await uploadMaterialFile(formData.coverFile, productId)
+                : formData.coverUrl || null
+              : null;
           }
           if (formData.itemType === "text") {
             updateData.content = formData.content;
@@ -506,14 +555,65 @@ interface FormData {
     }
   }, []);
 
+   const renderCoverControl = () => (
+     <div className="space-y-2">
+       <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+         <input
+           ref={coverInputRef}
+           type="file"
+           accept="image/*"
+           className="hidden"
+           onChange={(event) => {
+             const file = event.target.files?.[0] ?? null;
+             if (!file) return;
+             if (!file.type.startsWith("image/")) {
+               toast.error(language === "kk" ? "Сурет файлын таңдаңыз" : "Выберите файл изображения");
+               event.target.value = "";
+               return;
+             }
+             setFormData((prev) => ({
+               ...prev,
+               coverEnabled: true,
+               coverFile: file,
+             }));
+           }}
+         />
+         <Button
+           type="button"
+           variant="outline"
+           size="sm"
+           className="min-w-0 gap-2"
+           onClick={() => coverInputRef.current?.click()}
+         >
+           <ImagePlus className="h-4 w-4" />
+           <span className="truncate">
+             {language === "kk" ? "Мұқаба қосу" : "Добавить обложку"}
+           </span>
+         </Button>
+         <Switch
+           checked={formData.coverEnabled}
+           onCheckedChange={(checked) =>
+             setFormData((prev) => ({ ...prev, coverEnabled: checked }))
+           }
+           aria-label={language === "kk" ? "Мұқабаны пайдалану" : "Использовать обложку"}
+         />
+       </div>
+       {formData.coverEnabled && (formData.coverFile || formData.coverUrl) && (
+         <p className="truncate px-1 text-xs text-muted-foreground">
+           {formData.coverFile?.name || (language === "kk" ? "Мұқаба қосылды" : "Обложка добавлена")}
+         </p>
+       )}
+     </div>
+   );
+
    const renderAddForm = () => (
      <form onSubmit={handleAdd} className="space-y-4">
        <div className="space-y-3">
-         <Label>Что добавить?</Label>
           <RadioGroup
             value={formData.itemType}
             onValueChange={(value: ItemType) => setFormData(prev => ({ ...prev, itemType: value, files: [], fileEntries: [] }))}
             className="flex flex-wrap gap-4"
+            aria-label={language === "kk" ? "Қосу түрі" : "Тип добавления"}
           >
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="file" id="type-file" />
@@ -588,7 +688,7 @@ interface FormData {
                   <div className="flex items-center justify-between gap-2">
                     <FileText className="w-4 h-4 text-primary flex-shrink-0" />
                     <Input
-                      placeholder={entry.file.name}
+                      placeholder={language === "kk" ? "Файл атауын енгізіңіз" : "Введите название файла"}
                       value={entry.customName}
                       onChange={(e) => {
                         setFormData(prev => {
@@ -709,20 +809,24 @@ interface FormData {
            </ContextMenu>
         </div>}
 
+        {(formData.itemType === "file" || formData.itemType === "link") && renderCoverControl()}
+
         {/* Schedule access */}
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
+          <label className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm cursor-pointer">
+            <span className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              {language === "kk" ? "Қолжетімділікті ашуды жоспарлау" : "Запланировать открытие доступа"}
+            </span>
+            <Switch
               checked={formData.scheduleAccess}
               onCheckedChange={(checked) => {
                 const now = new Date();
                 const pad = (n: number) => String(n).padStart(2, '0');
                 const defaultTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                setFormData(prev => ({ ...prev, scheduleAccess: !!checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
+                setFormData(prev => ({ ...prev, scheduleAccess: checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
               }}
             />
-            <Clock className="w-4 h-4" />
-            Запланировать открытие доступа
           </label>
           {formData.scheduleAccess && (
             <Input
@@ -735,23 +839,11 @@ interface FormData {
           )}
         </div>
   
-        <div className="flex gap-2 pt-2">
-         <Button
-           type="button"
-           variant="outline"
-           className="flex-1"
-           onClick={() => {
-             resetForm();
-             if (mode === "add") onClose();
-             else setIsAdding(false);
-           }}
-         >
-           {t("cancel")}
-         </Button>
+        <div className="flex pt-2">
          <Button
            type="submit"
            variant="cta"
-           className="flex-1"
+           className="w-full"
            disabled={isUploading || createMaterial.isPending}
          >
             {(isUploading || createMaterial.isPending) ? (
@@ -824,21 +916,25 @@ interface FormData {
         </div>
       )}
 
+      {(formData.itemType === "file" || formData.itemType === "link") && renderCoverControl()}
+
        {/* Schedule access in edit form */}
-       {formData.itemType === "file" && (
+       {(formData.itemType === "file" || formData.itemType === "link") && (
          <div className="space-y-3">
-           <label className="flex items-center gap-2 text-sm cursor-pointer">
-             <Checkbox
+           <label className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm cursor-pointer">
+             <span className="flex items-center gap-2">
+               <Clock className="w-4 h-4" />
+               {language === "kk" ? "Қолжетімділікті ашуды жоспарлау" : "Запланировать открытие доступа"}
+             </span>
+             <Switch
                checked={formData.scheduleAccess}
                 onCheckedChange={(checked) => {
                    const now = new Date();
                    const pad = (n: number) => String(n).padStart(2, '0');
                    const defaultTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                  setFormData(prev => ({ ...prev, scheduleAccess: !!checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
+                  setFormData(prev => ({ ...prev, scheduleAccess: checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
                 }}
              />
-             <Clock className="w-4 h-4" />
-             Запланировать открытие доступа
            </label>
            {formData.scheduleAccess && (
              <Input
@@ -883,7 +979,13 @@ interface FormData {
    return (
      <>
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); setCurrentFolderId(null); setRenamingFolder(false); } }}>
-         <DialogContent mobileFullScreen className="max-w-3xl sm:w-[95vw]">
+        <DialogContent
+          mobileFullScreen={mode !== "add"}
+          hideCloseButton={mode === "add"}
+          className={mode === "add"
+            ? "max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg sm:w-[95vw]"
+            : "max-w-3xl sm:w-[95vw]"}
+        >
            <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {mode === "add"
@@ -1033,7 +1135,7 @@ interface FormData {
                  {materials.map((material) => (
                     <Card 
                       key={material.id} 
-                      className={`overflow-hidden ${material.type === "folder" ? "cursor-pointer hover:bg-accent/50 transition-colors" : ""}`}
+                      className={`overflow-hidden transition-colors hover:bg-muted/70 ${material.type === "folder" ? "cursor-pointer" : ""}`}
                     >
                        <CardContent className="p-2 sm:p-3">
                          {editingId === material.id ? (
@@ -1126,7 +1228,7 @@ interface FormData {
                                  <Button
                                    variant="ghost"
                                    size="icon"
-                                   className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
+                                   className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                    onClick={() => setDeletingMaterial({ id: material.id, title: material.title, file_url: material.file_url })}
                                  >
                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
