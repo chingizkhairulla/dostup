@@ -195,52 +195,10 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (type === "INSERT" && record) {
-      const purchaseId = record.id;
-
-      const { data: purchase, error } = await supabase
-        .from("simple_purchases")
-        .select(`
-          *,
-          product:products(id, title),
-          user:simple_users(id, name)
-        `)
-        .eq("id", purchaseId)
-        .single();
-
-      if (error || !purchase) {
-        console.error("Failed to fetch purchase:", error);
-        return new Response(JSON.stringify({ error: "Purchase not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-
-      const studentName = purchase.user?.name || "Ученик";
-      const productTitle = purchase.product?.title || "";
-      const amount = purchase.amount || 0;
-
-      const title = "Новая оплата!";
-      const description = `${studentName} оплатил "${productTitle}" (${amount}₸)`;
-
-      const notificationData = {
-        type: "payment",
-        purchaseId: purchaseId
-      };
-
-      // Notify creator — by role only (no user_id)
-      const totalSent = await sendFCMToUser(
-        supabase,
-        null,
-        "creator",
-        title,
-        description,
-        notificationData
-      );
-
-      console.log(`Purchase INSERT: sent ${totalSent} notifications`);
-
+      // Продавца уведомляем не при создании заказа, а когда покупатель прикрепит чек
+      // (см. submit-payment-receipt). Здесь ничего не шлём.
       return new Response(
-        JSON.stringify({ success: true, sent: totalSent }),
+        JSON.stringify({ success: true, sent: 0, skipped: "insert" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -260,8 +218,8 @@ serve(async (req) => {
           .single();
 
         // Notify student by user_id
-        const title = "Оплата подтверждена!";
-        const description = `Ваша оплата за "${purchase?.product?.title || "продукт"}" подтверждена. Теперь вы можете записаться на занятия.`;
+        const title = "Доступ открыт!";
+        const description = `Оплата за "${purchase?.product?.title || "продукт"}" подтверждена. Материалы и расписание уже доступны.`;
 
         const sent = await sendFCMToUser(
           supabase,

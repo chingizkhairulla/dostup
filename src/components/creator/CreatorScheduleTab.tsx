@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,12 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Loader2, Calendar, ChevronLeft, ChevronRight, Plus, Trash2, Users, User, Clock, Pencil, UserPlus, Link, Copy, X, Settings2, Sun, Moon, Video, Sparkles } from "lucide-react";
 import SlotCreationWizard from "@/components/schedule/SlotCreationWizard";
+import SlotDetailsDialog from "@/components/schedule/SlotDetailsDialog";
+import { cn } from "@/lib/utils";
 import CancellationReasonDialog from "@/components/CancellationReasonDialog";
 import RescheduleSlotDialog from "@/components/RescheduleSlotDialog";
 import EditSlotTimeDialog from "@/components/EditSlotTimeDialog";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { convertUserTimeToSlotTime } from "@/lib/timezones";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -82,6 +86,7 @@ interface TimeSlot {
   description?: string | null;
   image_url?: string | null;
   slot_group_id?: string | null;
+  location?: string | null;
 }
 
 interface Booking {
@@ -98,6 +103,7 @@ interface CreatorScheduleTabProps {
 
 const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabProps) => {
   const { t, language } = useLanguage();
+  const { timezone, convertSlotToUser, formatSlotTime } = useTimezone();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
@@ -105,10 +111,51 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [currentMonth, setCurrentMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const dayBookingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedDate || viewMode !== "week") return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      // Ignore clicks if a dialog is open or if clicking inside a dialog/overlay/portal
+      if (
+        document.querySelector('[role="dialog"]') ||
+        document.querySelector('.login-modal-backdrop') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.login-modal-backdrop') ||
+        target.closest('[data-radix-portal]') ||
+        target.closest('[data-radix-popper-content-wrapper]')
+      ) {
+        return;
+      }
+
+      if (dayBookingsRef.current && dayBookingsRef.current.contains(target)) {
+        return;
+      }
+
+      if (target.closest('[data-week-day-button]')) {
+        return;
+      }
+
+      setSelectedDate(null);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [selectedDate, viewMode]);
   const [isDayScheduleDialogOpen, setIsDayScheduleDialogOpen] = useState(false);
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingSlots, setIsAddingSlots] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [editingSlotDetails, setEditingSlotDetails] = useState<TimeSlot | null>(null);
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const [isManagingSlots, setIsManagingSlots] = useState(false);
   const [manageTab, setManageTab] = useState<"edit" | "reschedule" | "delete">("edit");
@@ -204,16 +251,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const queryRange = useMemo(() => {
     if (viewMode === "week") {
       return {
-        from: format(currentWeekStart, "yyyy-MM-dd"),
-        to: format(weekEnd, "yyyy-MM-dd"),
+        from: format(addDays(currentWeekStart, -14), "yyyy-MM-dd"),
+        to: format(addDays(currentWeekStart, 90), "yyyy-MM-dd"),
       };
     } else {
       return {
-        from: format(calendarStart, "yyyy-MM-dd"),
-        to: format(calendarEnd, "yyyy-MM-dd"),
+        from: format(addDays(calendarStart, -14), "yyyy-MM-dd"),
+        to: format(addDays(calendarEnd, 60), "yyyy-MM-dd"),
       };
     }
-  }, [viewMode, currentWeekStart, weekEnd, calendarStart, calendarEnd]);
+  }, [viewMode, currentWeekStart, calendarStart, calendarEnd]);
 
   // Fetch time slots for visible range
   const { data: timeSlots = [], isLoading: slotsLoading } = useQuery({
@@ -231,6 +278,21 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     enabled: scheduleIds.length > 0,
   });
+
+  const userTimeSlots = useMemo(() => {
+    return timeSlots.map((slot) => {
+      const startConv = timezone.offset === 5 ? { date: slot.date, time: slot.start_time.slice(0, 5) } : convertSlotToUser(slot.date, slot.start_time);
+      const endConv = timezone.offset === 5 ? { date: slot.date, time: slot.end_time.slice(0, 5) } : convertSlotToUser(slot.date, slot.end_time);
+      const sched = schedules.find((s) => s.id === slot.schedule_id);
+      return {
+        ...slot,
+        date: startConv.date,
+        start_time: `${startConv.time}:00`,
+        end_time: `${endConv.time}:00`,
+        product_id: sched?.product_id || selectedProductId || undefined,
+      };
+    });
+  }, [timeSlots, timezone.offset, convertSlotToUser, schedules, selectedProductId]);
 
   // Fetch bookings for time slots
   const slotIds = useMemo(() => timeSlots.map(s => s.id), [timeSlots]);
@@ -348,15 +410,33 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
   });
 
-  const ensureScheduleId = async (): Promise<string> => {
-    if (schedules.length > 0) return schedules[0].id;
-    const activeProductId = selectedProductId || "";
+  const ensureScheduleId = async (targetProductId?: string): Promise<string> => {
+    const activeProductId = targetProductId || selectedProductId || "";
     if (!activeProductId) throw new Error(language === "ru" ? "Выберите продукт" : "Өнімді таңдаңыз");
+
+    const existingInState = schedules.find((s) => s.product_id === activeProductId);
+    if (existingInState) return existingInState.id;
+
+    try {
+      const data = await invokeApi<{ schedules: Schedule[] }>("manage-schedules", {
+        action: "list_schedules",
+        ...creatorCreds(),
+        productIds: [activeProductId],
+        creatorOnly: true,
+      });
+      if (data?.schedules && data.schedules.length > 0) {
+        return data.schedules[0].id;
+      }
+    } catch (e) {
+      console.warn("Could not check existing schedules:", e);
+    }
+
+    const prod = products.find((p) => p.id === activeProductId);
     const data = await invokeApi<{ schedule: Schedule }>("manage-schedules", {
       action: "create_schedule",
       ...creatorCreds(),
       productId: activeProductId,
-      title: language === "ru" ? "Расписание" : "Кесте",
+      title: prod?.title || (language === "ru" ? "Расписание" : "Кесте"),
       eventType: "individual",
       maxParticipants: null,
     });
@@ -761,9 +841,15 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onError: () => toast.error(language === "ru" ? "Ошибка при обновлении ссылки" : "Сілтемені жаңарту кезінде қате"),
   });
 
-  // Update slot metadata (title, description, image_url)
+  // Update slot metadata (title, description, image_url, location)
   const updateSlotMeta = useMutation({
-    mutationFn: async ({ slotId, updates }: { slotId: string; updates: { title?: string; description?: string; image_url?: string } }) => {
+    mutationFn: async ({
+      slotId,
+      updates,
+    }: {
+      slotId: string;
+      updates: { title?: string | null; description?: string | null; image_url?: string | null; location?: string | null };
+    }) => {
       await invokeApi("manage-schedules", {
         action: "update_slot",
         ...creatorCreds(),
@@ -771,7 +857,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         updates,
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, { slotId, updates }) => {
+      queryClient.setQueriesData({ queryKey: ["creator-slots"] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((s) => (s.id === slotId ? { ...s, ...updates } : s));
+      });
       invalidateSlotsAndBookings();
     },
     onError: () => toast.error(language === "ru" ? "Ошибка при обновлении" : "Жаңарту кезінде қате"),
@@ -780,38 +870,127 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   // Create slots from wizard
   const createWizardSlots = useMutation({
     mutationFn: async (params: {
-      daySlots?: Record<number, { start: string; end: string }[]>;
+      startDate?: string;
+      daySlots?: Record<
+        number,
+        {
+          start: string;
+          end: string;
+          slotDuration?: number;
+          maxParticipants?: number;
+          title?: string;
+          description?: string;
+          imageUrl?: string;
+          location?: string;
+          repeatWeekly?: boolean;
+          repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+          repeatUntil?: string | null;
+        }[]
+      >;
       timeIntervals: { start: string; end: string }[];
       repeatDays: number[];
       repeatWeekly: boolean;
-      repeatPeriod: "2weeks" | "1month" | "2months" | "custom" | null;
+      repeatPeriod: "1week" | "1month" | "2months" | "custom" | null;
       repeatUntil: string | null;
       slotDuration: number;
       maxParticipants: number;
       title?: string;
       description?: string;
       imageUrl?: string;
+      location?: string;
+      deletedSlotIds?: string[];
     }) => {
-      const scheduleId = schedules[0]?.id || (await ensureScheduleId());
+      // Resolve schedules for products
+      const productIdsInParams = new Set<string>();
+      const allIntervals = Object.values(params.daySlots || {}).flat();
+      allIntervals.forEach((interval: any) => {
+        if (interval.productId) productIdsInParams.add(interval.productId);
+      });
+      if ((params as any).productId) productIdsInParams.add((params as any).productId);
+      if (selectedProductId) productIdsInParams.add(selectedProductId);
+      if (productIdsInParams.size === 0 && products.length > 0) productIdsInParams.add(products[0].id);
+
+      const scheduleMap = new Map<string, string>();
+      for (const pId of productIdsInParams) {
+        const sId = await ensureScheduleId(pId);
+        scheduleMap.set(pId, sId);
+      }
+      const allScheduleIds = Array.from(new Set(Array.from(scheduleMap.values())));
+      const defaultScheduleId = allScheduleIds[0] || (await ensureScheduleId());
+
       const today = new Date();
       const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
 
-      // Calculate start and end dates
-      const startDate = currentWeekStart;
-      let endDate = addDays(currentWeekStart, 6); // default: current week (Mon -> Sun)
+      // 1. Delete removed slots if any
+      let deletedCount = 0;
+      if (params.deletedSlotIds && params.deletedSlotIds.length > 0) {
+        await Promise.all(
+          params.deletedSlotIds.map(async (slotId) => {
+            try {
+              await invokeApi("manage-schedules", {
+                action: "delete_slot",
+                ...creatorCreds(),
+                slotId,
+              });
+              deletedCount++;
+            } catch (e) {
+              console.warn("Failed to delete slot:", slotId, e);
+            }
+          })
+        );
+      }
 
-      if (params.repeatWeekly && params.repeatPeriod) {
-        if (params.repeatPeriod === "2weeks") endDate = addDays(currentWeekStart, 13);
-        else if (params.repeatPeriod === "1month") endDate = addMonths(currentWeekStart, 1);
-        else if (params.repeatPeriod === "2months") endDate = addMonths(currentWeekStart, 2);
-        else if (params.repeatPeriod === "custom" && params.repeatUntil) endDate = new Date(params.repeatUntil);
+      // Calculate start and end dates
+      const startDate = params.startDate ? parseISO(params.startDate) : currentWeekStart;
+      let maxEndDate = addDays(startDate, 6); // default: selected week (Mon -> Sun)
+
+      allIntervals.forEach((interval: any) => {
+        const repWeekly = interval.repeatWeekly ?? params.repeatWeekly;
+        const repPeriod = interval.repeatPeriod ?? params.repeatPeriod;
+        const repUntil = interval.repeatUntil ?? params.repeatUntil;
+        if (repWeekly && repPeriod) {
+          let intervalEnd = addDays(startDate, 6);
+          if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
+          else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
+          else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+          else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
+          if (intervalEnd > maxEndDate) {
+            maxEndDate = intervalEnd;
+          }
+        }
+      });
+
+      if (params.repeatWeekly && params.repeatPeriod && maxEndDate <= addDays(startDate, 6)) {
+        if (params.repeatPeriod === "1week") maxEndDate = addDays(startDate, 13);
+        else if (params.repeatPeriod === "1month") maxEndDate = addMonths(startDate, 1);
+        else if (params.repeatPeriod === "2months") maxEndDate = addMonths(startDate, 2);
+        else if (params.repeatPeriod === "custom" && params.repeatUntil) maxEndDate = parseISO(params.repeatUntil);
+      }
+
+      // Pre-fetch all existing slots across the target range to avoid duplicates
+      let dbSlots: TimeSlot[] = timeSlots;
+      if (allScheduleIds.length > 0) {
+        try {
+          const existingInDb = await invokeApi<{ slots: TimeSlot[] }>("manage-schedules", {
+            action: "list_slots",
+            ...creatorCreds(),
+            scheduleIds: allScheduleIds,
+            fromDate: format(startDate, "yyyy-MM-dd"),
+            toDate: format(maxEndDate, "yyyy-MM-dd"),
+          });
+          if (existingInDb?.slots) {
+            dbSlots = existingInDb.slots;
+          }
+        } catch (err) {
+          console.warn("Could not pre-fetch existing slots:", err);
+        }
       }
 
       const todayStr = format(today, "yyyy-MM-dd");
       const slots: any[] = [];
       let currentDate = new Date(startDate);
 
-      while (currentDate <= endDate) {
+      while (currentDate <= maxEndDate) {
         const dateStr = format(currentDate, "yyyy-MM-dd");
         // Skip dates in the past
         if (dateStr < todayStr) {
@@ -821,68 +1000,176 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
         // 0=Mon, 1=Tue ... 6=Sun
         const monFirstDay = (currentDate.getDay() + 6) % 7;
-        const intervalsForDay = params.daySlots
+        const isFutureWeek = currentDate > addDays(startDate, 6);
+
+        const rawIntervalsForDay = params.daySlots
           ? params.daySlots[monFirstDay] || []
-          : params.repeatDays.includes(monFirstDay)
-          ? params.timeIntervals
-          : [];
+          : params.timeIntervals;
+
+        // On future weeks, ONLY include intervals that have repeatWeekly === true
+        // AND whose repeatPeriod covers this date!
+        const intervalsForDay = isFutureWeek
+          ? rawIntervalsForDay.filter((interval: any) => {
+              const repWeekly = interval.repeatWeekly ?? params.repeatWeekly;
+              const repPeriod = interval.repeatPeriod ?? params.repeatPeriod;
+              const repUntil = interval.repeatUntil ?? params.repeatUntil;
+              if (!repWeekly || !repPeriod) return false;
+
+              let intervalEnd = addDays(startDate, 6);
+              if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
+              else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
+              else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+              else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
+
+              return currentDate <= intervalEnd;
+            })
+          : rawIntervalsForDay;
+
+        if (intervalsForDay.length === 0) {
+          currentDate = addDays(currentDate, 1);
+          continue;
+        }
 
         for (const interval of intervalsForDay) {
-          let [startH, startM] = interval.start.split(":").map(Number);
+          const targetProdId = (interval as any).productId || (params as any).productId || selectedProductId || products[0]?.id;
+          const targetScheduleId = scheduleMap.get(targetProdId) || defaultScheduleId;
+          const duration = (interval as any).slotDuration || params.slotDuration || 60;
+          const maxPart = (interval as any).maxParticipants || params.maxParticipants || 1;
+          const slotTitle = (interval as any).title ?? params.title;
+          const slotDesc = (interval as any).description ?? params.description;
+          const slotImg = (interval as any).imageUrl ?? params.imageUrl;
+          const slotLoc = (interval as any).location ?? params.location;
+
+          const [startH, startM] = interval.start.split(":").map(Number);
           const [endH, endM] = interval.end.split(":").map(Number);
           const endMinutes = endH * 60 + endM;
 
-          while (true) {
-            const currentMinutes = startH * 60 + startM;
-            const slotEndMinutes = currentMinutes + params.slotDuration;
-            if (slotEndMinutes > endMinutes) break;
+          let currentMinutes = startH * 60 + startM;
+          while (currentMinutes < endMinutes) {
+            const remaining = endMinutes - currentMinutes;
+            const currentSlotDur = remaining >= duration ? duration : remaining;
+            const slotEndMinutes = currentMinutes + currentSlotDur;
 
-            const slotStart = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}:00`;
+            const slotStartH = Math.floor(currentMinutes / 60) % 24;
+            const slotStartM = currentMinutes % 60;
+            const slotStart = `${String(slotStartH).padStart(2, "0")}:${String(slotStartM).padStart(2, "0")}:00`;
+
             const slotEndH = Math.floor(slotEndMinutes / 60) % 24;
             const slotEndM = slotEndMinutes % 60;
             const slotEnd = `${String(slotEndH).padStart(2, "0")}:${String(slotEndM).padStart(2, "0")}:00`;
 
-            const exists = timeSlots.some(
-              (s) => s.date === dateStr && s.start_time.slice(0, 5) === slotStart.slice(0, 5)
-            );
+            // If date is today, skip times in past
+            if (dateStr === todayStr) {
+              const [sh, sm] = slotStart.split(":").map(Number);
+              const now = new Date();
+              if (sh < now.getHours() || (sh === now.getHours() && sm < now.getMinutes())) {
+                currentMinutes = slotEndMinutes;
+                continue;
+              }
+            }
+
+            const exists =
+              dbSlots.some((s) => {
+                const checkDate = timezone.offset === 5 ? dateStr : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).date;
+                const checkTime = timezone.offset === 5 ? slotStart.slice(0, 5) : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).time;
+                return s.date === checkDate && s.start_time.slice(0, 5) === checkTime;
+              }) ||
+              timeSlots.some((s) => {
+                const checkDate = timezone.offset === 5 ? dateStr : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).date;
+                const checkTime = timezone.offset === 5 ? slotStart.slice(0, 5) : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5).time;
+                return s.date === checkDate && s.start_time.slice(0, 5) === checkTime;
+              });
+
             if (!exists) {
+              const dbStart = timezone.offset === 5 ? { date: dateStr, time: slotStart.slice(0, 5) } : convertUserTimeToSlotTime(dateStr, slotStart, timezone.offset, 5);
+              const dbEnd = timezone.offset === 5 ? { date: dateStr, time: slotEnd.slice(0, 5) } : convertUserTimeToSlotTime(dateStr, slotEnd, timezone.offset, 5);
+
               slots.push({
-                schedule_id: scheduleId,
-                date: dateStr,
-                start_time: slotStart,
-                end_time: slotEnd,
+                schedule_id: targetScheduleId,
+                date: dbStart.date,
+                start_time: `${dbStart.time}:00`,
+                end_time: `${dbEnd.time}:00`,
                 is_available: true,
-                max_participants: params.maxParticipants,
-                title: params.title || null,
-                description: params.description || null,
-                image_url: params.imageUrl || null,
+                max_participants: maxPart,
+                title: slotTitle || null,
+                description: slotDesc || null,
+                image_url: slotImg || null,
+                location: slotLoc || null,
               });
             }
 
-            startH = Math.floor(slotEndMinutes / 60);
-            startM = slotEndMinutes % 60;
+            currentMinutes = slotEndMinutes;
           }
         }
 
         currentDate = addDays(currentDate, 1);
       }
 
-      if (slots.length === 0) {
-        throw new Error(language === "ru" ? "Нет новых слотов для создания" : "Жаңа слоттар жоқ");
+      if (slots.length > 0) {
+        const slotsBySchedule = new Map<string, any[]>();
+        for (const slot of slots) {
+          const sId = slot.schedule_id;
+          if (!slotsBySchedule.has(sId)) {
+            slotsBySchedule.set(sId, []);
+          }
+          slotsBySchedule.get(sId)!.push(slot);
+        }
+
+        for (const [sId, scheduleSlots] of slotsBySchedule.entries()) {
+          await invokeApi("manage-schedules", {
+            action: "create_slots",
+            ...creatorCreds(),
+            slots: scheduleSlots,
+            scheduleId: sId,
+          });
+        }
       }
 
-      await invokeApi("manage-schedules", {
-        action: "create_slots",
-        ...creatorCreds(),
-        slots,
-        scheduleId,
-      });
-      return slots.length;
+      return { createdCount: slots.length, deletedCount };
     },
-    onSuccess: (count) => {
+    onSuccess: async ({ createdCount, deletedCount }: { createdCount: number; deletedCount: number }) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(language === "ru" ? `Создано ${count} слотов!` : `${count} слот жасалды!`);
+      await queryClient.refetchQueries({ queryKey: ["creator-slots"] });
+      const getCreatedPhrase = (c: number) => {
+        if (language === "kk") return `${c} слот жасалды`;
+        const mod10 = c % 10;
+        const mod100 = c % 100;
+        if (mod100 >= 11 && mod100 <= 19) return `Создано ${c} слотов`;
+        if (mod10 === 1) return `Создан ${c} слот`;
+        if (mod10 >= 2 && mod10 <= 4) return `Создано ${c} слота`;
+        return `Создано ${c} слотов`;
+      };
+
+      const getDeletedPhrase = (c: number) => {
+        if (language === "kk") return `${c} слот жойылды`;
+        const mod10 = c % 10;
+        const mod100 = c % 100;
+        if (mod100 >= 11 && mod100 <= 19) return `удалено ${c} слотов`;
+        if (mod10 === 1) return `удалён ${c} слот`;
+        if (mod10 >= 2 && mod10 <= 4) return `удалено ${c} слота`;
+        return `удалено ${c} слотов`;
+      };
+
+      if (createdCount > 0 && deletedCount > 0) {
+        if (language === "kk") {
+          toast.success(`${createdCount} слот жасалды және ${deletedCount} слот жойылды!`);
+        } else {
+          toast.success(`${getCreatedPhrase(createdCount)} и ${getDeletedPhrase(deletedCount)}!`);
+        }
+      } else if (createdCount > 0) {
+        toast.success(`${getCreatedPhrase(createdCount)}!`);
+      } else if (deletedCount > 0) {
+        const delPhrase = getDeletedPhrase(deletedCount);
+        const capitalized = delPhrase.charAt(0).toUpperCase() + delPhrase.slice(1);
+        toast.success(`${capitalized}!`);
+      } else {
+        toast.info(
+          language === "ru"
+            ? "Новых слотов не добавлено"
+            : "Жаңа слоттар қосылмады"
+        );
+      }
       setIsWizardOpen(false);
     },
     onError: (error: any) => {
@@ -895,7 +1182,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
   const getSlotsForDay = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return timeSlots.filter(slot => slot.date === dateStr);
+    return userTimeSlots.filter(slot => slot.date === dateStr);
   };
 
   const getBookingsForSlot = (slotId: string) => {
@@ -903,7 +1190,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   };
 
   const getScheduleForSlot = (slotId: string) => {
-    const slot = timeSlots.find(s => s.id === slotId);
+    const slot = userTimeSlots.find(s => s.id === slotId);
     if (!slot) return null;
     return schedules.find(s => s.id === slot.schedule_id);
   };
@@ -912,7 +1199,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     const slotBookings = getBookingsForSlot(slotId);
     if (slotBookings.length === 0) return false;
     
-    const slot = timeSlots.find(s => s.id === slotId);
+    const slot = userTimeSlots.find(s => s.id === slotId);
     const schedule = getScheduleForSlot(slotId);
     const maxParticipants = slot?.max_participants ?? (schedule?.event_type === "group" ? (schedule.max_participants ?? 1) : 1);
     return slotBookings.length >= maxParticipants;
@@ -943,11 +1230,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
   const selectedDateSlots = useMemo(() => {
     if (!selectedDate) return [];
     return getSlotsForDay(selectedDate).sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [selectedDate, timeSlots]);
+  }, [selectedDate, userTimeSlots]);
 
   const bookedSlotsInMonth = useMemo(() => {
     const monthPrefix = format(currentMonth, "yyyy-MM");
-    return timeSlots
+    return userTimeSlots
       .filter((slot) => {
         if (!slot.date.startsWith(monthPrefix)) return false;
         const b = getBookingsForSlot(slot.id);
@@ -958,29 +1245,29 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         if (cmpDate !== 0) return cmpDate;
         return a.start_time.localeCompare(b.start_time);
       });
-  }, [timeSlots, bookings, currentMonth]);
+  }, [userTimeSlots, bookings, currentMonth]);
 
   // Booked slots for selected day (for "Записи на этот день" card)
   const bookedSlotsForDay = useMemo(() => {
     if (!selectedDate) return [];
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    return timeSlots
+    return userTimeSlots
       .filter((slot) => {
         if (slot.date !== dateStr) return false;
         const b = getBookingsForSlot(slot.id);
         return b.length > 0;
       })
       .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [timeSlots, bookings, selectedDate]);
+  }, [userTimeSlots, bookings, selectedDate]);
 
   // All slots for selected day (for showing all slots including free ones)
   const allSlotsForDay = useMemo(() => {
     if (!selectedDate) return [];
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    return timeSlots
+    return userTimeSlots
       .filter((slot) => slot.date === dateStr)
       .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [timeSlots, selectedDate]);
+  }, [userTimeSlots, selectedDate]);
 
   // Render "Записи на этот день" card content
   const renderDayBookings = () => {
@@ -996,7 +1283,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     }
 
     return (
-      <div className="space-y-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {daySlots.map((slot) => {
           const slotBookings = getBookingsForSlot(slot.id);
           const schedule = getScheduleForSlot(slot.id);
@@ -1004,7 +1291,6 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           const isGroup = maxParticipants > 1;
           const timeLabel = `${slot.start_time.slice(0, 5)} – ${slot.end_time.slice(0, 5)}`;
           const status = getSlotStatus(slot.id);
-          const isExpanded = expandedSlotId === slot.id;
           const hasBookings = slotBookings.length > 0;
 
           const statusColor = status === "full" ? "bg-green-500" : status === "partial" ? "bg-orange-500" : "bg-red-400";
@@ -1013,158 +1299,90 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           return (
             <div
               key={slot.id}
-              className={`rounded-xl border ${statusBorder} bg-card transition-colors space-y-0`}
+              className={`rounded-xl border ${statusBorder} bg-card transition-all flex flex-col justify-between overflow-hidden shadow-xs hover:border-primary/40`}
             >
-              {/* Main slot row - clickable to expand */}
+              {/* Main slot row - clickable to open details dialog */}
               <div
-                className="p-3 cursor-pointer hover:bg-muted/30 transition-colors rounded-xl"
-                onClick={() => setExpandedSlotId(isExpanded ? null : slot.id)}
+                className="p-3 cursor-pointer hover:bg-muted/30 transition-colors flex items-center justify-between gap-2"
+                onClick={() => setEditingSlotDetails(slot)}
+                title={language === "ru" ? "Нажмите для редактирования деталей" : "Мәліметтерді өңдеу үшін басыңыз"}
               >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-                    <Badge variant="outline" className="text-xs">
-                      {timeLabel}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
+                  <Badge variant="outline" className="text-xs shrink-0 font-medium">
+                    {timeLabel}
+                  </Badge>
+                  {slot.title && (
+                    <span className="font-medium text-sm truncate" title={slot.title}>
+                      {slot.title}
+                    </span>
+                  )}
+                  {isGroup ? (
+                    <Badge variant="secondary" className="text-[11px] shrink-0">
+                      {slotBookings.length}/{maxParticipants >= 9999 ? "∞" : maxParticipants} {language === "ru" ? "группа" : "топ"}
                     </Badge>
-                    {slot.title && (
-                      <span className="font-medium text-sm">{slot.title}</span>
-                    )}
-                    {isGroup ? (
-                      <Badge variant="secondary" className="text-[11px]">
-                        {slotBookings.length}/{maxParticipants} {language === "ru" ? "группа" : "топ"}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[11px]">
-                        {hasBookings 
-                          ? (language === "ru" ? "Занято" : "Бос емес")
-                          : (language === "ru" ? "Свободно" : "Бос")
-                        }
-                      </Badge>
-                    )}
-                  </div>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px] shrink-0">
+                      {hasBookings 
+                        ? (language === "ru" ? "Занято" : "Бос емес")
+                        : (language === "ru" ? "Свободно" : "Бос")
+                      }
+                    </Badge>
+                  )}
+                </div>
 
-                  {/* Action buttons - outside the slot card */}
-                  <div className="flex items-center gap-1">
-                    {/* Video call button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                      onClick={(e) => { e.stopPropagation(); }}
-                      title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
-                    >
-                      <Video className="w-4 h-4" />
-                    </Button>
-                    {/* Reschedule button - always visible between video and delete */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasBookings) {
-                          setReschedulingSlot({ slot, schedule: schedule! });
-                        } else {
-                          setEditingSlotTime(slot);
-                        }
-                      }}
-                      title={language === "ru" ? "Перенести" : "Ауыстыру"}
-                    >
-                      <Clock className="w-4 h-4" />
-                    </Button>
-                    {/* Delete button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasBookings) {
-                          setDeletingSlotWithBookings(slot);
-                        } else {
-                          setDeletingSlot(slot);
-                        }
-                      }}
-                      title={language === "ru" ? "Удалить" : "Жою"}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                {/* Action buttons */}
+                <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {/* Video call button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                    onClick={(e) => { e.stopPropagation(); }}
+                    title={language === "ru" ? "Видеозвонок" : "Бейне қоңырау"}
+                  >
+                    <Video className="w-4 h-4" />
+                  </Button>
+                  {/* Reschedule button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasBookings) {
+                        setReschedulingSlot({ slot, schedule: schedule! });
+                      } else {
+                        setEditingSlotTime(slot);
+                      }
+                    }}
+                    title={language === "ru" ? "Перенести" : "Ауыстыру"}
+                  >
+                    <Clock className="w-4 h-4" />
+                  </Button>
+                  {/* Delete button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasBookings) {
+                        setDeletingSlotWithBookings(slot);
+                      } else {
+                        setDeletingSlot(slot);
+                      }
+                    }}
+                    title={language === "ru" ? "Удалить" : "Жою"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Expanded content: description, image, editable fields for seller */}
-              {isExpanded && (
-                <div className="px-3 pb-3 space-y-3 border-t border-border/50 pt-3 animate-in fade-in slide-in-from-top-2">
-                  {/* Image */}
-                  {slot.image_url && (
-                    <div className="rounded-lg overflow-hidden">
-                      <img src={slot.image_url} alt={slot.title || ""} className="w-full h-40 object-cover" />
-                    </div>
-                  )}
-                  {/* Description */}
-                  {slot.description && (
-                    <p className="text-sm text-muted-foreground">{slot.description}</p>
-                  )}
-                  {/* Editable fields for seller */}
-                  <div className="space-y-2 pt-2 border-t border-border/30">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Название" : "Атауы"}</Label>
-                      <Input
-                        value={slot.title || ""}
-                        placeholder={language === "ru" ? "Название урока" : "Сабақ атауы"}
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { title: e.target.value } });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Описание" : "Сипаттамасы"}</Label>
-                      <Input
-                        value={slot.description || ""}
-                        placeholder={language === "ru" ? "Описание урока" : "Сабақ сипаттамасы"}
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { description: e.target.value } });
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{language === "ru" ? "Обложка (URL)" : "Мұқаба (URL)"}</Label>
-                      <Input
-                        value={slot.image_url || ""}
-                        placeholder="https://..."
-                        className="h-8 text-sm"
-                        onChange={(e) => {
-                          updateSlotMeta.mutate({ slotId: slot.id, updates: { image_url: e.target.value } });
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Student list */}
-                  {hasBookings && (
-                    <div className="space-y-1 pt-2 border-t border-border/50">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {language === "ru" ? "Записи:" : "Жазбалар:"}
-                      </span>
-                      {slotBookings.map((b) => (
-                        <div key={b.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/40">
-                          <span className="font-medium text-foreground">{b.user?.name || "—"}</span>
-                          {b.user?.phone && (
-                            <span className="text-muted-foreground text-[11px]">{b.user.phone}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Non-expanded: show student list for booked slots */}
-              {!isExpanded && hasBookings && (
-                <div className="space-y-1 px-3 pb-2 pt-1 border-t border-border/50">
+              {/* Student list for booked slots */}
+              {hasBookings && (
+                <div className="space-y-1 px-3 pb-2 pt-1 border-t border-border/50 bg-muted/10">
                   {slotBookings.map((b) => (
                     <div key={b.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/40">
                       <span className="font-medium text-foreground">{b.user?.name || "—"}</span>
@@ -1257,7 +1475,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   </div>
                   {isGroup ? (
                     <Badge variant="outline" className="text-[11px] font-medium ml-1">
-                      {slotBookings.length}/{maxParticipants} {language === "ru" ? "мест" : "орын"}
+                      {slotBookings.length}/{maxParticipants >= 9999 ? "∞" : maxParticipants} {language === "ru" ? "мест" : "орын"}
                     </Badge>
                   ) : (
                     <span className={`text-xs font-medium ${styles.text}`}>
@@ -1454,26 +1672,8 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             onClick={() => setIsWizardOpen(true)}
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
-            <Plus className="w-4 h-4" />
-            {language === "ru" ? "Добавить слоты" : "Слоттар қосу"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const targetSchedule = schedules[0];
-              if (targetSchedule) {
-                setSelectedScheduleForDelete(targetSchedule);
-                fetchAvailableDates(targetSchedule.id);
-                setSelectedScheduleForLink(targetSchedule);
-                fetchAvailableDatesForLink(targetSchedule.id);
-              }
-              setIsManagingSlots(true);
-            }}
-            className="gap-1.5 border border-input bg-background hover:bg-primary/15 hover:text-primary hover:border-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
             <Settings2 className="w-4 h-4" />
-            {language === "ru" ? "Управлять" : "Басқару"}
+            {language === "ru" ? "Редактор слотов" : "Слоттар редакторы"}
           </Button>
         </div>
       </div>
@@ -1524,7 +1724,9 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-xs sm:text-sm font-medium min-w-[140px] text-center">
-                  {format(currentWeekStart, "d MMM", { locale: ru })} – {format(weekEnd, "d MMM yyyy", { locale: ru })}
+                  {isSameMonth(currentWeekStart, weekEnd)
+                    ? `${format(currentWeekStart, "d")} - ${format(weekEnd, "d MMM yyyy", { locale: ru })}`
+                    : `${format(currentWeekStart, "d MMM", { locale: ru })} - ${format(weekEnd, "d MMM yyyy", { locale: ru })}`}
                 </span>
                 <Button
                   variant="ghost"
@@ -1542,23 +1744,37 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             </div>
           </CardHeader>
           <CardContent className="pt-0">
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+              {(language === "kk"
+                ? ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"]
+                : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+              ).map((wd, i) => (
+                <div key={wd} className={`text-xs font-semibold py-1 ${i >= 5 ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
+                  {wd}
+                </div>
+              ))}
+            </div>
+
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {weekDays.map((day) => {
                 const dayKey = format(day, "yyyy-MM-dd");
                 const daySlots = getSlotsForDay(day);
-                const bookedSessionsCount = daySlots.filter((slot) =>
-                  bookings.some((b) => b.time_slot_id === slot.id)
-                ).length;
                 const isSelected = selectedDate && isSameDay(selectedDate, day);
                 const isTodayDate = isToday(day);
-                const hasSlots = daySlots.length > 0;
-                const dayStatus = getDayStatus(day);
 
                 return (
                   <button
                     key={dayKey}
                     type="button"
-                    onClick={() => setSelectedDate(day)}
+                    data-week-day-button="true"
+                    onClick={() => {
+                      if (selectedDate && isSameDay(selectedDate, day)) {
+                        setSelectedDate(null);
+                      } else {
+                        setSelectedDate(day);
+                      }
+                    }}
                     className={`p-2 sm:p-2.5 rounded-xl text-center transition-all relative border flex flex-col justify-between items-center min-h-[56px] sm:min-h-[68px] ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
@@ -1567,29 +1783,27 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                           : "bg-card border-border/40 text-foreground hover:bg-muted/60"
                     }`}
                   >
-                    <div className={`text-xs font-semibold ${isSelected ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
-                      {format(day, "EEE", { locale: ru })}
-                    </div>
-                    <div className={`text-sm sm:text-base font-bold my-0.5 ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
+                    <span className={`text-sm sm:text-base font-semibold ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
                       {format(day, "d")}
-                    </div>
-                    <div className="flex items-center justify-center gap-1 min-h-[14px]">
-                      {hasSlots && (
-                        <span
-                          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                            dayStatus === "full"
-                              ? "bg-green-500"
-                              : dayStatus === "partial"
-                                ? "bg-orange-500"
-                                : "bg-red-500"
-                          } ${isSelected ? "ring-1 ring-white/90" : ""}`}
-                        />
-                      )}
-                      {bookedSessionsCount > 0 && (
-                        <span className={`text-[10px] sm:text-xs font-bold ${isSelected ? "text-white" : "text-green-600 dark:text-green-400"}`}>
-                          {bookedSessionsCount}
-                        </span>
-                      )}
+                    </span>
+                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                      {daySlots.map((slot) => {
+                        const slotStatus = getSlotStatus(slot.id);
+                        return (
+                          <span
+                            key={slot.id}
+                            className={cn(
+                              "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0",
+                              slotStatus === "full"
+                                ? "bg-green-500"
+                                : slotStatus === "partial"
+                                  ? "bg-orange-500"
+                                  : "bg-red-500",
+                              isSelected && "ring-1 ring-white/90"
+                            )}
+                          />
+                        );
+                      })}
                     </div>
                   </button>
                 );
@@ -1601,7 +1815,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
       {/* Week Calendar: Day Bookings Underneath */}
       {viewMode === "week" && selectedDate && (
-        <Card>
+        <Card ref={dayBookingsRef}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -1612,9 +1826,6 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
                 })()}
               </CardTitle>
-              <Badge variant="secondary">
-                {allSlotsForDay.length} {language === "ru" ? "слотов" : "слот"}
-              </Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -1628,11 +1839,12 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-semibold text-foreground">
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" />
                   {language === "kk" ? "Күнтізбе:" : "Календарь на"}
-                </span>
-                <div className="inline-flex items-center rounded-lg bg-muted p-0.5 text-muted-foreground">
+                </CardTitle>
+                <div className="inline-flex rounded-lg border border-border bg-muted/50 p-0.5 text-xs text-muted-foreground">
                   <button
                     type="button"
                     onClick={() => {
@@ -1680,8 +1892,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           </CardHeader>
           <CardContent className="pt-0">
             {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2 text-center">
-              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd, i) => (
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+              {(language === "kk"
+                ? ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жс"]
+                : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+              ).map((wd, i) => (
                 <div key={wd} className={`text-xs font-semibold py-1 ${i >= 5 ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
                   {wd}
                 </div>
@@ -1693,14 +1908,9 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               {calendarDays.map((day) => {
                 const dayKey = format(day, "yyyy-MM-dd");
                 const daySlots = getSlotsForDay(day);
-                const bookedSessionsCount = daySlots.filter((slot) =>
-                  bookings.some((b) => b.time_slot_id === slot.id)
-                ).length;
-                const isSelected = selectedDate && isSameDay(selectedDate, day);
+                const isSelected = isDayScheduleDialogOpen && selectedDate && isSameDay(selectedDate, day);
                 const isTodayDate = isToday(day);
                 const inMonth = isSameMonth(day, currentMonth);
-                const hasSlots = daySlots.length > 0;
-                const dayStatus = getDayStatus(day);
 
                 return (
                   <button
@@ -1725,25 +1935,24 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     </span>
                     
                     {/* Indicators */}
-                    <div className="flex flex-col items-center gap-0.5 w-full">
-                      {hasSlots && (
-                        <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                      {daySlots.map((slot) => {
+                        const slotStatus = getSlotStatus(slot.id);
+                        return (
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              dayStatus === "full"
+                            key={slot.id}
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full shrink-0",
+                              slotStatus === "full"
                                 ? "bg-green-500"
-                                : dayStatus === "partial"
+                                : slotStatus === "partial"
                                   ? "bg-orange-500"
-                                  : "bg-red-500"
-                            } ${isSelected ? "ring-1 ring-white/90" : ""}`}
+                                  : "bg-red-500",
+                              isSelected && "ring-1 ring-white/90"
+                            )}
                           />
-                          {bookedSessionsCount > 0 && (
-                            <span className={`text-[10px] font-bold ${isSelected ? "text-white" : "text-green-600 dark:text-green-400"}`}>
-                              {bookedSessionsCount}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   </button>
                 );
@@ -1755,13 +1964,22 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
 
       {/* Day Schedule Dialog for Month View */}
-      <Dialog open={isDayScheduleDialogOpen} onOpenChange={setIsDayScheduleDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <Dialog
+        open={isDayScheduleDialogOpen}
+        onOpenChange={(open) => {
+          setIsDayScheduleDialogOpen(open);
+          if (!open) setSelectedDate(null);
+        }}
+      >
+        <DialogContent hideCloseButton className="max-w-3xl sm:max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
               {language === "ru" ? "Записи на " : ""}
-              {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: ru })}
+              {selectedDate && (() => {
+                const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: ru });
+                return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
+              })()}
             </DialogTitle>
           </DialogHeader>
           <div className="pt-2">
@@ -1770,12 +1988,41 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         </DialogContent>
       </Dialog>
 
+      {/* Slot Details Dialog */}
+      <SlotDetailsDialog
+        open={Boolean(editingSlotDetails)}
+        onOpenChange={(open) => {
+          if (!open) setEditingSlotDetails(null);
+        }}
+        slot={editingSlotDetails}
+        productId={selectedProductId}
+        onSave={async (updates) => {
+          if (!editingSlotDetails) return;
+          await updateSlotMeta.mutateAsync({
+            slotId: editingSlotDetails.id,
+            updates,
+          });
+          setEditingSlotDetails((prev) => (prev ? { ...prev, ...updates } : null));
+        }}
+        language={language as "ru" | "kk"}
+      />
+
       {/* Slot Creation Wizard */}
       <SlotCreationWizard
         open={isWizardOpen}
         onOpenChange={setIsWizardOpen}
         language={language as "ru" | "kk"}
+        existingSlots={userTimeSlots}
+        initialWeekStart={currentWeekStart}
+        products={products.map((p) => ({ id: p.id, title: p.title }))}
+        defaultProductId={selectedProductId}
         onCreateSlots={(params) => createWizardSlots.mutate(params)}
+        onDeleteSlots={async (dates) => {
+          const scheduleId = schedules[0]?.id || (await ensureScheduleId());
+          if (scheduleId) {
+            await deleteMultipleSlots.mutateAsync({ scheduleId, dates });
+          }
+        }}
         isPending={createWizardSlots.isPending}
       />
 
