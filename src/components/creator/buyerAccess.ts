@@ -1,4 +1,4 @@
-import { addMonths, addYears, differenceInCalendarDays, startOfMonth, subMonths, subYears } from "date-fns";
+import { addYears, differenceInCalendarDays, startOfMonth, subMonths, subYears } from "date-fns";
 
 export type BuyerPeriod = "month" | "quarter" | "half" | "year" | "all";
 
@@ -62,13 +62,5 @@ export const URGENCY_CLASSES: Record<AccessUrgency, string> = {
   soon: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   very_soon: "bg-red-500/15 text-red-600 dark:text-red-400",
   expired: "bg-red-500/10 text-red-600/80 dark:text-red-400/80",
-  closed: "bg-muted text-muted-foreground line-through",
+  closed: "bg-muted text-muted-foreground",
 };
-
-export type AccessPreset = "forever" | "1m" | "3m" | "6m" | "1y";
-
-/** Preset periods count from the payment date, like the access that was sold. */
-export function presetEnd(preset: Exclude<AccessPreset, "forever">, paidAt: Date): Date {
-  const months = { "1m": 1, "3m": 3, "6m": 6, "1y": 12 }[preset];
-  return addMonths(paidAt, months);
-}

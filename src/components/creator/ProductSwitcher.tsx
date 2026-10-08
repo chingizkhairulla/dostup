@@ -19,9 +19,11 @@ interface Props {
   placeholder?: string;
   disabled?: boolean;
   hideIcon?: boolean;
+  /** Dimmed while another filter ("all products") is on: a tap picks the shown product instead of opening the list. */
+  inactive?: boolean;
 }
 
-const ProductSwitcher = ({ products, selectedId, onChange, className, placeholder, disabled, hideIcon }: Props) => {
+const ProductSwitcher = ({ products, selectedId, onChange, className, placeholder, disabled, hideIcon, inactive = false }: Props) => {
   const [open, setOpen] = useState(false);
   const selected = products.find((p) => p.id === selectedId);
   const displayTitle = selected ? selected.title : (placeholder || products[0]?.title || "");
@@ -47,24 +49,31 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
     );
   }
 
+  const shown = selected ?? products[0];
+  const trigger = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={disabled}
+      className={cn("group gap-2 max-w-full font-medium", className)}
+      title={displayTitle}
+      onClick={inactive && shown ? () => onChange(shown.id) : undefined}
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {/* text-inherit on hover: the trigger turns orange, so an orange icon would vanish. */}
+        {!hideIcon && <Package className="w-4 h-4 text-primary flex-shrink-0 transition-colors group-hover:text-inherit" />}
+        <span className="truncate text-left">{displayTitle}</span>
+      </div>
+      <ChevronRight className={cn("w-4 h-4 flex-shrink-0 opacity-60 transition-transform duration-200 ml-auto", open && "rotate-90")} />
+    </Button>
+  );
+
+  if (inactive) return trigger;
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          className={cn("group gap-2 max-w-full font-medium", className)}
-          title={displayTitle}
-        >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            {!hideIcon && <Package className="w-4 h-4 text-primary flex-shrink-0 transition-colors group-hover:text-inherit" />}
-            <span className="truncate text-left">{displayTitle}</span>
-          </div>
-          <ChevronRight className={cn("w-4 h-4 flex-shrink-0 opacity-60 transition-transform duration-200 ml-auto", open && "rotate-90")} />
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-w-[90vw] sm:max-w-md">
         {products.map((p) => (
           <DropdownMenuItem
