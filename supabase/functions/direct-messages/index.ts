@@ -1,12 +1,11 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { resolveCaller, serviceClient, unauthorized, forbidden } from '../_shared/session.ts'
 import {
-  ATTACHMENT_LABEL,
   presignChatVideo,
   sanitizeChatAttachments,
   withSignedAttachmentUrls,
 } from '../_shared/chatAttachments.ts'
-import { purchaseAccessOpen, subscriptionGrantsAccess } from '../_shared/subscription.ts'
+import { directPurchaseActive } from '../_shared/directAccess.ts'
 
 // Personal chats between a seller and the people who bought their products.
 // The seller sees one chat per buyer (tagged with the products they bought and whether their
@@ -65,11 +64,9 @@ async function pairPurchases(supabase: Supabase, creatorAccountId: string, buyer
   return (data ?? []) as PurchaseRow[]
 }
 
-function purchaseActive(p: PurchaseRow, sub: { status: string; current_period_end: string } | undefined) {
-  if (p.status !== 'completed') return false
-  if (sub) return subscriptionGrantsAccess(sub as never)
-  if (p.is_trial) return !!p.trial_ends_at && new Date(p.trial_ends_at) > new Date()
-  return purchaseAccessOpen(p)
+const isRecurring = (product: { categories?: unknown } | undefined) => {
+  const categories = product?.categories as { slug: string } | { slug: string }[] | undefined
+  return (Array.isArray(categories) ? categories[0]?.slug : categories?.slug) === 'subscriptions'
 }
 
 async function findThread(supabase: Supabase, creatorAccountId: string, buyerProfileId: string) {
@@ -101,35 +98,37 @@ async function resolvePair(supabase: Supabase, me: Me, peerId: string) {
   const creatorAccountId = me.side === 'creator' ? me.creatorAccountId! : peerId
   const buyerProfileId = me.side === 'buyer' ? me.buyerProfileId! : peerId
   const purchases = await pairPurchases(supabase, creatorAccountId, buyerProfileId)
-  if (!purchases.length) return null
+  if (!purchases.length && !(await findThread(supabase, creatorAccountId, buyerProfileId))) return null
   return { creatorAccountId, buyerProfileId }
 }
 
 async function listForCreator(supabase: Supabase, creatorAccountId: string) {
   const { data: products } = await supabase
     .from('products')
-    .select('id, title')
+    .select('id, title, categories(slug)')
     .eq('creator_account_id', creatorAccountId)
   const productIds = (products ?? []).map((p: { id: string }) => p.id)
-  if (!productIds.length) return []
-  const { data: purchases } = await supabase
+  const { data: savedThreads } = await supabase.from('direct_threads').select('*').eq('creator_account_id', creatorAccountId)
+  const { data: purchases } = productIds.length ? await supabase
     .from('simple_purchases')
     .select('product_id, buyer_profile_id, status, is_trial, trial_ends_at, access_expires_at')
     .in('product_id', productIds)
     .in('status', ['completed', 'revoked'])
     .not('buyer_profile_id', 'is', null)
+    : { data: [] }
   const rows = (purchases ?? []) as PurchaseRow[]
-  const buyerIds = [...new Set(rows.map((r) => r.buyer_profile_id!))]
+  const buyerIds = [...new Set([...rows.map((r) => r.buyer_profile_id!), ...(savedThreads ?? []).map((t) => t.buyer_profile_id)])]
   if (!buyerIds.length) return []
 
   const [{ data: profiles }, { data: subs }, { data: threads }] = await Promise.all([
     supabase.from('profiles').select('id, display_name, avatar_url').in('id', buyerIds),
-    supabase
+    productIds.length ? supabase
       .from('subscriptions')
       .select('product_id, buyer_profile_id, status, current_period_end')
       .in('product_id', productIds)
-      .in('buyer_profile_id', buyerIds),
-    supabase.from('direct_threads').select('*').eq('creator_account_id', creatorAccountId),
+      .in('buyer_profile_id', buyerIds)
+    : Promise.resolve({ data: [] }),
+    Promise.resolve({ data: savedThreads }),
   ])
   const subByKey = new Map(
     ((subs ?? []) as { product_id: string; buyer_profile_id: string; status: string; current_period_end: string }[])
@@ -140,7 +139,7 @@ async function listForCreator(supabase: Supabase, creatorAccountId: string) {
 
   return buyerIds.map((buyerId) => {
     const mine = rows.filter((r) => r.buyer_profile_id === buyerId)
-    const active = mine.some((r) => purchaseActive(r, subByKey.get(`${r.product_id}:${buyerId}`)))
+    const active = mine.some((r) => directPurchaseActive(r, subByKey.get(`${r.product_id}:${buyerId}`), isRecurring(products?.find((p) => p.id === r.product_id))))
     const profile = profileById.get(buyerId) as { display_name?: string | null; avatar_url?: string | null } | undefined
     const thread = threadByBuyer.get(buyerId) as Record<string, unknown> | undefined
     return {
@@ -164,14 +163,13 @@ async function listForBuyer(supabase: Supabase, buyerProfileId: string) {
     .in('status', ['completed', 'revoked'])
   const rows = (purchases ?? []) as PurchaseRow[]
   const productIds = [...new Set(rows.map((r) => r.product_id))]
-  if (!productIds.length) return []
   const [{ data: products }, { data: subs }, { data: threads }] = await Promise.all([
-    supabase.from('products').select('id, creator_account_id').in('id', productIds),
-    supabase
+    productIds.length ? supabase.from('products').select('id, creator_account_id, categories(slug)').in('id', productIds) : Promise.resolve({ data: [] }),
+    productIds.length ? supabase
       .from('subscriptions')
       .select('product_id, status, current_period_end')
       .eq('buyer_profile_id', buyerProfileId)
-      .in('product_id', productIds),
+      .in('product_id', productIds) : Promise.resolve({ data: [] }),
     supabase.from('direct_threads').select('*').eq('buyer_profile_id', buyerProfileId),
   ])
   const creatorByProduct = new Map(
@@ -180,7 +178,7 @@ async function listForBuyer(supabase: Supabase, buyerProfileId: string) {
   const subByProduct = new Map(
     ((subs ?? []) as { product_id: string; status: string; current_period_end: string }[]).map((s) => [s.product_id, s]),
   )
-  const creatorIds = [...new Set([...creatorByProduct.values()].filter(Boolean))] as string[]
+  const creatorIds = [...new Set([...creatorByProduct.values(), ...(threads ?? []).map((t) => t.creator_account_id)].filter(Boolean))] as string[]
   if (!creatorIds.length) return []
   const { data: accounts } = await supabase.from('creator_accounts').select('id, login, profile_id').in('id', creatorIds)
   const profileIds = ((accounts ?? []) as { profile_id: string | null }[]).map((a) => a.profile_id).filter(Boolean) as string[]
@@ -201,7 +199,7 @@ async function listForBuyer(supabase: Supabase, buyerProfileId: string) {
       name: profile?.display_name || account.login,
       avatar_url: profile?.avatar_url ?? null,
       product_ids: [...new Set(mine.map((r) => r.product_id))],
-      active: mine.some((r) => purchaseActive(r, subByProduct.get(r.product_id))),
+      active: mine.some((r) => directPurchaseActive(r, subByProduct.get(r.product_id), isRecurring(products?.find((p) => p.id === r.product_id)))),
       last_message_at: thread?.last_message_at ?? null,
       last_message_preview: thread?.last_message_preview ?? null,
       unread: Number(thread?.unread_for_buyer ?? 0),
@@ -243,10 +241,10 @@ Deno.serve(async (req) => {
         .eq('thread_id', thread.id)
         .order('created_at', { ascending: true })
       const messages = await withSignedAttachmentUrls(supabase, BUCKET, rows ?? [])
-      const unreadColumn = me.side === 'creator' ? 'unread_for_creator' : 'unread_for_buyer'
-      if (Number(thread[unreadColumn] ?? 0) > 0) {
-        await supabase.from('direct_threads').update({ [unreadColumn]: 0 }).eq('id', thread.id)
-      }
+      const read = await supabase.rpc('mark_direct_messages_read', {
+        p_thread: thread.id, p_side: me.side, p_ids: (rows ?? []).map((row) => row.id),
+      })
+      if (read.error) throw read.error
       return json({ messages })
     }
 
@@ -306,16 +304,7 @@ Deno.serve(async (req) => {
         .single()
       if (error) return json({ error: error.message }, 500)
 
-      const preview = text || files.map((f) => ATTACHMENT_LABEL[f.kind]).join(', ')
-      const peerUnread = me.side === 'creator' ? 'unread_for_buyer' : 'unread_for_creator'
-      await supabase
-        .from('direct_threads')
-        .update({
-          last_message_at: new Date().toISOString(),
-          last_message_preview: preview.slice(0, 200),
-          [peerUnread]: Number(thread[peerUnread] ?? 0) + 1,
-        })
-        .eq('id', thread.id)
+      // The insert trigger updates the preview and unread counter atomically.
       return json({ message })
     }
 

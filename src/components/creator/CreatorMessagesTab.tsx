@@ -21,7 +21,6 @@ import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
 import MessengerLayout, { type ChatCategory } from "@/components/messages/MessengerLayout";
 import SupportChat from "@/components/SupportChat";
 import DirectChat, { useDirectContacts } from "@/components/messages/DirectChat";
-import NoProductsEmptyState from "./NoProductsEmptyState";
 import AnnouncementComposer from "./AnnouncementComposer";
 import DostupMark from "@/components/brand/DostupMark";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
@@ -51,7 +50,7 @@ interface Props {
  * Author's messenger: one channel per product on the left, the support thread under
  * personal chats, and the open channel with its composer on the right.
  */
-const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }: Props) => {
+const CreatorMessagesTab = ({ creatorName, supportDisplayName }: Props) => {
   const { t } = useLanguage();
   const { data: products = [], isLoading: productsLoading } = useCreatorProducts();
   const supportUnread = useSupportUnread("creator", creatorName);
@@ -61,7 +60,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
   const productIds = useMemo(() => products.map((p) => p.id), [products]);
   const { data: allPosts = [] } = useAnnouncementsForProducts(productIds);
 
-  const { data: contacts = [] } = useDirectContacts("creator", !productsLoading && products.length > 0);
+  const { data: contacts = [] } = useDirectContacts("creator", !!creatorName);
 
   const isSupport = selectedId === SUPPORT_CHAT_ID;
   const directPeer = selectedId?.startsWith(DIRECT_PREFIX) ? selectedId.slice(DIRECT_PREFIX.length) : null;
@@ -118,7 +117,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
           ...products
             .filter((p) => contacts.some((c) => c.active && c.product_ids.includes(p.id)))
             .map((p) => ({ key: p.id, label: p.title })),
-          ...(contacts.some((c) => !c.active) ? [{ key: "inactive", label: t("messagesFilterInactive") }] : []),
+          { key: "inactive", label: t("messagesFilterInactive") },
         ],
         items: [
           {
@@ -226,18 +225,6 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
     );
   };
 
-  if (!productsLoading && products.length === 0) {
-    return (
-      <div className="space-y-3 px-4 py-6 md:px-6">
-        <div className="flex items-center gap-2">
-          <Megaphone className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">{t("messages")}</h2>
-        </div>
-        <NoProductsEmptyState section="announcements" onGoToProducts={onGoToProducts} />
-      </div>
-    );
-  }
-
   const openChannel = channels.find((c) => c.id === selectedId);
   const openContact = directPeer ? contacts.find((c) => c.peer_id === directPeer) : undefined;
 
@@ -290,6 +277,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
         footer={
           !isChannel || !productId ? undefined : (
             <AnnouncementComposer
+              key={productId}
               productId={productId}
               editing={editing ? { id: editing.id, html: editing.content_html } : null}
               onCancelEdit={() => setEditing(null)}

@@ -4,6 +4,8 @@ import BuyerAccountSheet from "@/components/layout/BuyerAccountSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCreatorMobileNavItems } from "@/lib/mobileNavPreferences";
 import { cn } from "@/lib/utils";
+import { useMessengerUnread } from "@/hooks/useMessengerUnread";
+import MessageUnreadBadge from "@/components/messages/MessageUnreadBadge";
 
 interface Props {
   activeTab?: string;
@@ -18,6 +20,7 @@ interface Props {
  */
 const CreatorMobileNav = ({ activeTab, onTabChange, onNavigate }: Props) => {
   const { t } = useLanguage();
+  const { total: unread } = useMessengerUnread();
   const { activeItems } = useCreatorMobileNavItems();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -53,6 +56,7 @@ const CreatorMobileNav = ({ activeTab, onTabChange, onNavigate }: Props) => {
                     )}
                   >
                     <Icon className="h-6 w-6" strokeWidth={1.75} />
+                    {item.key === "announcements" && <MessageUnreadBadge count={unread} />}
                   </span>
                 </button>
               );

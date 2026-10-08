@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { creatorCreds, invokeApi, studentCreds } from "@/lib/sessionApi";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
+import { toast } from "sonner";
 
 export type DirectSide = "creator" | "buyer";
 
@@ -29,10 +30,10 @@ export const directApi = <T,>(side: DirectSide, body: Record<string, unknown>) =
 /** Seller's buyers or buyer's sellers, with the last message and unread count per chat. */
 export function useDirectContacts(side: DirectSide, enabled = true) {
   return useQuery({
-    queryKey: ["direct-contacts", side],
+    queryKey: ["direct-contacts", side, localStorage.getItem("profile_id")],
     queryFn: async () => (await directApi<{ contacts: DirectContact[] }>(side, { action: "list_contacts" })).contacts ?? [],
     enabled,
-    refetchInterval: 20_000,
+    refetchInterval: 5_000,
   });
 }
 
@@ -57,6 +58,9 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
         const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId });
         setMessages(data.messages ?? []);
         queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
+        queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
+      } catch (error) {
+        if (!quiet) toast.error(error instanceof Error ? error.message : "Не удалось загрузить чат");
       } finally {
         if (!quiet) setLoading(false);
       }

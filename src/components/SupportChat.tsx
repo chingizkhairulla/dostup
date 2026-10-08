@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
+import MessengerInstallHint from "@/components/messages/MessengerInstallHint";
 
 interface Message {
   id: string;
@@ -139,6 +140,8 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   }));
 
   return (
+    <>
+    {!asModerator && variant === "card" && <MessengerInstallHint />}
     <ChatThread
       messages={chatMessages}
       loading={loading}
@@ -148,6 +151,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       uploadFile={uploadFile}
       send={send}
     />
+    </>
   );
 };
 
