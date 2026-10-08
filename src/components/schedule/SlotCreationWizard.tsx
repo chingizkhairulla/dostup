@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Loader2, Link } from "lucide-react";
+import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid, differenceInCalendarWeeks } from "date-fns";
@@ -59,6 +59,7 @@ export interface SlotCreationWizardProps {
     start_time: string;
     end_time: string;
     product_id?: string;
+    lesson_link?: string | null;
   }[];
   initialWeekStart?: Date;
   products?: { id: string; title: string }[];
@@ -80,6 +81,7 @@ export interface SlotCreationWizardProps {
         repeatWeekly?: boolean;
         repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
         repeatUntil?: string | null;
+        lessonLink?: string;
       }[]
     >;
     timeIntervals: { start: string; end: string }[];
@@ -94,6 +96,7 @@ export interface SlotCreationWizardProps {
     description?: string;
     imageUrl?: string;
     location?: string;
+    lessonLink?: string;
     deletedSlotIds?: string[];
   }) => void;
   onDeleteSlots?: (dates: string[]) => Promise<void> | void;
@@ -579,8 +582,7 @@ export default function SlotCreationWizard({
   const [slotSettingsMap, setSlotSettingsMap] = useState<Record<string, SlotSettings>>({});
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [isGeneratingMeet, setIsGeneratingMeet] = useState(false);
-  const [hasGoogleToken, setHasGoogleToken] = useState<boolean | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Step 2: Global repetition settings (default: off)
   const [repeatWeekly, setRepeatWeekly] = useState(false);
@@ -863,13 +865,7 @@ export default function SlotCreationWizard({
       different: "Разные",
       forProduct: "Относится к продукту",
       conferenceLink: "Ссылка на конференцию",
-      googleMeetOption: "Google Meet",
-      googleMeetAuto: "Ссылка создаётся автоматически",
-      addMeetLink: "Добавить видеоконференцию",
-      connectGoogle: "Подключить Google-аккаунт",
-      customLinkOption: "Другая ссылка:",
-      customLinkPlaceholder: "Zoom, Яндекс телемост…",
-      generatingMeet: "Создаём ссылку…",
+      conferenceLinkPlaceholder: "Zoom, Google Meet, Яндекс Телемост…",
     },
     kk: {
       wizTitleStep1: "Жасау, ауыстыру және жою",
@@ -919,15 +915,8 @@ export default function SlotCreationWizard({
       selectAll: "Барлық слоттарды таңдау",
       unselectAll: "Таңдауды алып тастау",
       different: "Әртүрлі",
-      forProduct: "Өнімге қатысты",
       conferenceLink: "Конференцияға сілтеме",
-      googleMeetOption: "Google Meet",
-      googleMeetAuto: "Сілтеме автоматты түрде жасалады",
-      addMeetLink: "Бейнеконференция қосу",
-      connectGoogle: "Google аккаунтын қосу",
-      customLinkOption: "Басқа сілтеме:",
-      customLinkPlaceholder: "Zoom, Яндекс телемост…",
-      generatingMeet: "Сілтемені жасап жатырмыз…",
+      conferenceLinkPlaceholder: "Zoom, Google Meet, Яндекс Телемост…",
     },
   };
   const t = dict[language];
@@ -1183,18 +1172,23 @@ export default function SlotCreationWizard({
   }, [editableDaysOnDesktop, effectiveIntervalsByDay, weekDates, isIntervalUnderGrid]);
 
   // Default initial settings for when a slot is first clicked
-  const createDefaultSlotSettings = (initialProductId?: string): SlotSettings => ({
-    slotDuration: 60,
-    maxParticipants: 1,
-    productId: initialProductId || defaultProductId || products[0]?.id || "",
-    title: "",
-    description: "",
-    imageUrl: "",
-    location: "",
-    repeatWeekly: false,
-    repeatPeriod: "1week",
-    repeatUntil: null,
-  });
+  const createDefaultSlotSettings = (initialProductIdOrExisting?: string | { product_id?: string; lesson_link?: string | null }): SlotSettings => {
+    const pId = typeof initialProductIdOrExisting === "object" ? initialProductIdOrExisting?.product_id : initialProductIdOrExisting;
+    const link = typeof initialProductIdOrExisting === "object" ? initialProductIdOrExisting?.lesson_link || "" : "";
+    return {
+      slotDuration: 60,
+      maxParticipants: 1,
+      productId: pId || defaultProductId || products[0]?.id || "",
+      title: "",
+      description: "",
+      imageUrl: "",
+      location: "",
+      repeatWeekly: false,
+      repeatPeriod: "1week",
+      repeatUntil: null,
+      customConferenceLink: link,
+    };
+  };
 
   // When switching to step 2: auto-select new slots!
   const handleStepChange = (newStep: 1 | 2) => {
@@ -1229,7 +1223,7 @@ export default function SlotCreationWizard({
             const existing = existingSlots?.find(
               (es) => es.date === dStr && es.start_time.slice(0, 5) === sTime
             );
-            copy[k] = createDefaultSlotSettings(existing?.product_id);
+            copy[k] = createDefaultSlotSettings(existing);
           }
         });
         return copy;
@@ -1431,7 +1425,7 @@ export default function SlotCreationWizard({
       );
       return {
         ...currentMap,
-        [key]: createDefaultSlotSettings(existing?.product_id),
+        [key]: createDefaultSlotSettings(existing),
       };
     }
     return currentMap;
@@ -1522,119 +1516,15 @@ export default function SlotCreationWizard({
   };
 
 
-  const checkGoogleToken = async (): Promise<boolean> => {
+  const handleCopyConferenceLink = async (link: string) => {
+    if (!link) return;
     try {
-      const creds = sessionCreds();
-      const result = await invokeApi<{ hasToken: boolean }>('manage-schedules', { action: 'check_google_token', ...creds });
-      setHasGoogleToken(result.hasToken);
-      return result.hasToken;
+      await navigator.clipboard.writeText(link);
+      setCopiedLink(true);
+      toast.success(language === "ru" ? "Ссылка скопирована!" : "Сілтеме көшірілді!");
+      setTimeout(() => setCopiedLink(false), 2000);
     } catch {
-      setHasGoogleToken(false);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    if (open) {
-      void checkGoogleToken();
-    }
-  }, [open]);
-
-  const connectGoogleAccount = async () => {
-    setIsGeneratingMeet(true);
-
-    // Open popup synchronously during user gesture so modern browsers don't block it
-    const popup = window.open('about:blank', 'google_meet_auth', 'width=520,height=640,left=300,top=100');
-    if (popup) {
-      try {
-        popup.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head><meta charset="utf-8"><title>Google Meet</title></head>
-            <body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#ffffff;color:#374151;">
-              <div style="text-align:center;">
-                <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Подключение к Google...</div>
-                <div style="font-size:13px;color:#9ca3af;">Пожалуйста, подождите</div>
-              </div>
-            </body>
-          </html>
-        `);
-      } catch {
-        // ignore
-      }
-    }
-
-    try {
-      const creds = sessionCreds();
-      const result = await invokeApi<{ url: string }>('manage-schedules', { action: 'get_google_oauth_url', ...creds });
-      if (result.url) {
-        if (popup && !popup.closed) {
-          popup.location.href = result.url;
-        } else {
-          // If popup was blocked (e.g. mobile Safari / Chrome popup blocker), direct redirect fallback
-          window.location.href = result.url;
-          return;
-        }
-
-        const onStorage = (e: StorageEvent) => {
-          if (e.key === 'google_meet_auth_success') {
-            window.removeEventListener('storage', onStorage);
-            window.removeEventListener('message', handler);
-            localStorage.removeItem('google_meet_auth_success');
-            setHasGoogleToken(true);
-            generateGoogleMeetLink();
-          }
-        };
-        window.addEventListener('storage', onStorage);
-
-        const handler = (e: MessageEvent) => {
-          if (e.data?.type === 'GOOGLE_MEET_AUTH_SUCCESS') {
-            window.removeEventListener('message', handler);
-            window.removeEventListener('storage', onStorage);
-            setHasGoogleToken(true);
-            generateGoogleMeetLink();
-          }
-        };
-        window.addEventListener('message', handler);
-        const interval = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(interval);
-            window.removeEventListener('message', handler);
-            window.removeEventListener('storage', onStorage);
-            setIsGeneratingMeet(false);
-          }
-        }, 1000);
-      } else {
-        if (popup && !popup.closed) popup.close();
-        setIsGeneratingMeet(false);
-        toast.error(language === 'ru' ? 'Не удалось получить ссылку Google' : 'Google сілтемесі алынбады');
-      }
-    } catch (e: any) {
-      if (popup && !popup.closed) popup.close();
-      setIsGeneratingMeet(false);
-      toast.error(e?.message || (language === 'ru' ? 'Не удалось открыть Google' : 'Google ашылмады'));
-    }
-  };
-
-  const generateGoogleMeetLink = async () => {
-    setIsGeneratingMeet(true);
-    try {
-      const creds = sessionCreds();
-      const result = await invokeApi<{ meetLink: string }>("manage-schedules", {
-        action: "create_google_meet_link",
-        title: "Урок",
-        ...creds,
-      });
-      if (result.meetLink) {
-        updateSelectedSlotsField("conferenceType", "google_meet");
-        updateSelectedSlotsField("googleMeetLink", result.meetLink);
-      } else {
-        toast.error(language === "ru" ? "Не удалось создать ссылку Google Meet" : "Google Meet сілтемесін жасау мүмкін болмады");
-      }
-    } catch {
-      toast.error(language === "ru" ? "Не удалось создать ссылку Google Meet" : "Google Meet сілтемесін жасау мүмкін болмады");
-    } finally {
-      setIsGeneratingMeet(false);
+      toast.error(language === "ru" ? "Не удалось скопировать" : "Көшіру мүмкін болмады");
     }
   };
 
@@ -1672,7 +1562,7 @@ export default function SlotCreationWizard({
       const existing = existingSlots?.find(
         (es) => es.date === dStr && es.start_time.slice(0, 5) === sTime
       );
-      return createDefaultSlotSettings(existing?.product_id);
+      return createDefaultSlotSettings(existing);
     });
   }, [selectedSlotKeys, slotSettingsMap, existingSlots, defaultProductId, products]);
 
@@ -1724,7 +1614,7 @@ export default function SlotCreationWizard({
     const existing = existingSlots?.find(
       (es) => es.date === dStr && es.start_time.slice(0, 5) === sTime
     );
-    return createDefaultSlotSettings(existing?.product_id);
+    return createDefaultSlotSettings(existing);
   }, [selectedSlotKeys, slotSettingsMap, existingSlots, defaultProductId, products]);
 
   const handleReady = () => {
@@ -1781,6 +1671,7 @@ export default function SlotCreationWizard({
         repeatWeekly?: boolean;
         repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
         repeatUntil?: string | null;
+        lessonLink?: string;
       }[]
     > = {};
 
@@ -1793,7 +1684,7 @@ export default function SlotCreationWizard({
         const existing = existingSlots?.find(
           (es) => es.date === dateStr && es.start_time.slice(0, 5) === interval.start
         );
-        const settings = slotSettingsMap[key] || createDefaultSlotSettings(existing?.product_id);
+        const settings = slotSettingsMap[key] || createDefaultSlotSettings(existing);
         return {
           start: interval.start,
           end: interval.end,
@@ -1807,6 +1698,7 @@ export default function SlotCreationWizard({
           repeatWeekly: Boolean(settings.repeatWeekly),
           repeatPeriod: settings.repeatWeekly ? settings.repeatPeriod || "1week" : null,
           repeatUntil: settings.repeatWeekly && settings.repeatPeriod === "custom" ? settings.repeatUntil || null : null,
+          lessonLink: settings.customConferenceLink?.trim() || undefined,
         };
       });
     });
@@ -1831,6 +1723,7 @@ export default function SlotCreationWizard({
       description: currentPanelSettings?.description.trim() || undefined,
       imageUrl: currentPanelSettings?.imageUrl.trim() || undefined,
       location: currentPanelSettings?.location.trim() || undefined,
+      lessonLink: currentPanelSettings?.customConferenceLink?.trim() || undefined,
       deletedSlotIds,
     });
   };
@@ -3065,106 +2958,41 @@ export default function SlotCreationWizard({
                       <span>{t.conferenceLink}</span>
                     </Label>
 
-                    {/* Two toggle buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={isGeneratingMeet}
-                        onClick={() => {
-                          if (currentPanelSettings?.conferenceType !== "google_meet") {
-                            updateSelectedSlotsField("conferenceType", "google_meet");
-                          }
-                        }}
+                    <div className="relative flex items-center">
+                      <input
+                        type="url"
+                        placeholder={t.conferenceLinkPlaceholder}
+                        value={currentPanelSettings?.customConferenceLink || ""}
+                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
                         className={cn(
-                          "flex-1 h-11 min-h-[44px] rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                          currentPanelSettings?.conferenceType === "google_meet"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5"
+                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
+                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
                         )}
-                      >
-                        <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M34.5 24.5c0-.5 0-1-.1-1.5H24v2.8h5.9c-.3 1.4-1 2.6-2.1 3.4v2.8h3.4c2-1.8 3.3-4.5 3.3-7.5z" fill="#4285F4"/>
-                          <path d="M24 35c2.9 0 5.3-.9 7-2.5l-3.4-2.6c-.9.6-2.1 1-3.6 1-2.8 0-5.1-1.9-5.9-4.4h-3.5v2.7C16.3 32.8 19.9 35 24 35z" fill="#34A853"/>
-                          <path d="M18.1 26.5c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2v-2.7h-3.5C13.6 21.4 13 22.6 13 24s.6 2.6 1.6 3.6l3.5-2.1z" fill="#FBBC04"/>
-                          <path d="M24 17.1c1.6 0 3 .5 4.1 1.6l3-3C29.3 13.9 26.9 13 24 13c-4.1 0-7.7 2.2-9.5 5.5l3.5 2.7c.8-2.5 3.1-4.1 6-4.1z" fill="#EA4335"/>
-                        </svg>
-                        <span>{t.googleMeetOption}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (currentPanelSettings?.conferenceType !== "custom") {
-                            updateSelectedSlotsField("conferenceType", "custom");
-                          }
-                        }}
-                        className={cn(
-                          "flex-1 h-11 min-h-[44px] rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                          currentPanelSettings?.conferenceType === "custom"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5"
-                        )}
-                      >
-                        <Link className="w-4 h-4 shrink-0" />
-                        <span>{t.customLinkOption}</span>
-                      </button>
-                    </div>
-
-                    {/* Google Meet content */}
-                    {currentPanelSettings?.conferenceType === "google_meet" && (
-                      currentPanelSettings.googleMeetLink ? (
-                        <div className="flex items-center gap-2 h-10 px-3 rounded-xl border border-input bg-background">
-                          <a
-                            href={currentPanelSettings.googleMeetLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 text-xs text-primary underline truncate"
+                      />
+                      {Boolean(currentPanelSettings?.customConferenceLink) && (
+                        <div className="absolute right-1.5 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
                           >
-                            {currentPanelSettings.googleMeetLink}
-                          </a>
+                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
-                              updateSelectedSlotsField("googleMeetLink", "");
+                              updateSelectedSlotsField("customConferenceLink", "");
+                              setCopiedLink(false);
                             }}
-                            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isGeneratingMeet}
-                          onClick={() => {
-                            if (hasGoogleToken) {
-                              generateGoogleMeetLink();
-                            } else {
-                              connectGoogleAccount();
-                            }
-                          }}
-                          className="w-full h-10 px-3 rounded-xl border border-dashed border-border bg-background text-xs text-muted-foreground hover:border-primary/40 hover:text-primary transition-all flex items-center gap-2 cursor-pointer"
-                        >
-                          {isGeneratingMeet ? (
-                            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                          ) : (
-                            <Plus className="w-4 h-4 shrink-0" />
-                          )}
-                          <span>{hasGoogleToken ? t.addMeetLink : t.connectGoogle}</span>
-                        </button>
-                      )
-                    )}
-
-                    {/* Custom link content */}
-                    {currentPanelSettings?.conferenceType === "custom" && (
-                      <input
-                        type="url"
-                        placeholder={t.customLinkPlaceholder}
-                        value={currentPanelSettings?.customConferenceLink || ""}
-                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                        className="w-full h-10 px-3 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
-                      />
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Lesson Details Dialog Button */}
@@ -3727,110 +3555,45 @@ export default function SlotCreationWizard({
                         <span>{t.conferenceLink}</span>
                       </Label>
 
-                      {/* Two toggle buttons */}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={selectedSlotKeys.size === 0 || isGeneratingMeet}
-                          onClick={() => {
-                            if (currentPanelSettings?.conferenceType !== "google_meet") {
-                              updateSelectedSlotsField("conferenceType", "google_meet");
-                            }
-                          }}
-                          className={cn(
-                            "flex-1 h-11 sm:h-12 min-h-[44px] rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5",
-                            selectedSlotKeys.size === 0 ? "opacity-40 cursor-not-allowed border-border bg-background text-foreground" :
-                            currentPanelSettings?.conferenceType === "google_meet"
-                              ? "border-primary bg-primary/10 text-primary cursor-pointer"
-                              : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
-                          )}
-                        >
-                          <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M34.5 24.5c0-.5 0-1-.1-1.5H24v2.8h5.9c-.3 1.4-1 2.6-2.1 3.4v2.8h3.4c2-1.8 3.3-4.5 3.3-7.5z" fill="#4285F4"/>
-                            <path d="M24 35c2.9 0 5.3-.9 7-2.5l-3.4-2.6c-.9.6-2.1 1-3.6 1-2.8 0-5.1-1.9-5.9-4.4h-3.5v2.7C16.3 32.8 19.9 35 24 35z" fill="#34A853"/>
-                            <path d="M18.1 26.5c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2v-2.7h-3.5C13.6 21.4 13 22.6 13 24s.6 2.6 1.6 3.6l3.5-2.1z" fill="#FBBC04"/>
-                            <path d="M24 17.1c1.6 0 3 .5 4.1 1.6l3-3C29.3 13.9 26.9 13 24 13c-4.1 0-7.7 2.2-9.5 5.5l3.5 2.7c.8-2.5 3.1-4.1 6-4.1z" fill="#EA4335"/>
-                          </svg>
-                          <span>{t.googleMeetOption}</span>
-                        </button>
-
-                        <button
-                          type="button"
+                      <div className="relative flex items-center">
+                        <input
+                          type="url"
                           disabled={selectedSlotKeys.size === 0}
-                          onClick={() => {
-                            if (currentPanelSettings?.conferenceType !== "custom") {
-                              updateSelectedSlotsField("conferenceType", "custom");
-                            }
-                          }}
+                          placeholder={t.conferenceLinkPlaceholder}
+                          value={currentPanelSettings?.customConferenceLink || ""}
+                          onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
                           className={cn(
-                            "flex-1 h-11 sm:h-12 min-h-[44px] rounded-xl border text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5",
-                            selectedSlotKeys.size === 0 ? "opacity-40 cursor-not-allowed border-border bg-background text-foreground" :
-                            currentPanelSettings?.conferenceType === "custom"
-                              ? "border-primary bg-primary/10 text-primary cursor-pointer"
-                              : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/5 cursor-pointer"
+                            "w-full h-11 sm:h-12 min-h-[44px] pl-3.5 text-xs sm:text-sm rounded-xl border border-input bg-background outline-none transition-colors",
+                            selectedSlotKeys.size === 0
+                              ? "opacity-40 cursor-not-allowed border-border"
+                              : "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                            currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
                           )}
-                        >
-                          <Link className="w-4 h-4 shrink-0" />
-                          <span>{t.customLinkOption}</span>
-                        </button>
-                      </div>
-
-                      {/* Google Meet content */}
-                      {currentPanelSettings?.conferenceType === "google_meet" && (
-                        currentPanelSettings.googleMeetLink ? (
-                          <div className="flex items-center gap-2 h-11 sm:h-12 px-3 rounded-xl border border-input bg-background">
-                            <a
-                              href={currentPanelSettings.googleMeetLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 text-xs sm:text-sm text-primary underline truncate"
-                            >
-                              {currentPanelSettings.googleMeetLink}
-                            </a>
+                        />
+                        {selectedSlotKeys.size > 0 && Boolean(currentPanelSettings?.customConferenceLink) && (
+                          <div className="absolute right-1.5 flex items-center gap-1">
                             <button
                               type="button"
-                              onClick={() => updateSelectedSlotsField("googleMeetLink", "")}
-                              className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                              onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                              title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
+                            >
+                              {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateSelectedSlotsField("customConferenceLink", "");
+                                setCopiedLink(false);
+                              }}
+                              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={selectedSlotKeys.size === 0 || isGeneratingMeet}
-                            onClick={() => {
-                              if (hasGoogleToken) {
-                                generateGoogleMeetLink();
-                              } else {
-                                connectGoogleAccount();
-                              }
-                            }}
-                            className={cn(
-                              "w-full h-11 sm:h-12 px-3 rounded-xl border border-dashed border-border bg-background text-xs sm:text-sm text-muted-foreground transition-all flex items-center gap-2",
-                              selectedSlotKeys.size === 0 ? "opacity-40 cursor-not-allowed" : "hover:border-primary/40 hover:text-primary cursor-pointer"
-                            )}
-                          >
-                            {isGeneratingMeet ? (
-                              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                            ) : (
-                              <Plus className="w-4 h-4 shrink-0" />
-                            )}
-                            <span>{hasGoogleToken ? t.addMeetLink : t.connectGoogle}</span>
-                          </button>
-                        )
-                      )}
-
-                      {/* Custom link content */}
-                      {currentPanelSettings?.conferenceType === "custom" && (
-                        <input
-                          type="url"
-                          placeholder={t.customLinkPlaceholder}
-                          value={currentPanelSettings?.customConferenceLink || ""}
-                          onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                          className="w-full h-11 sm:h-12 px-3 text-xs sm:text-sm rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
-                        />
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     {/* Lesson Details Dialog Button with gray pencil */}
