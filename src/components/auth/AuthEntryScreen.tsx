@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { AuthMark } from "@/components/auth/AuthMark";
+import { getTestAccountEmail } from "@/lib/testAccounts";
 import { LOGIN_CARD_CLASS } from "@/lib/loginModal";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -14,7 +15,6 @@ interface AuthEntryScreenProps {
   onEmailChange: (value: string) => void;
   onContinue: (e: FormEvent) => void;
   onGoogle: () => void;
-  onPassword?: () => void;
   sending?: boolean;
   googleLoading?: boolean;
 }
@@ -24,12 +24,12 @@ const AuthEntryScreen = ({
   onEmailChange,
   onContinue,
   onGoogle,
-  onPassword,
   sending,
   googleLoading,
 }: AuthEntryScreenProps) => {
   const { t } = useLanguage();
-  const canSubmit = email.trim().includes("@") && email.trim().length >= 3;
+  const isTestLogin = Boolean(getTestAccountEmail(email));
+  const canSubmit = isTestLogin || (email.trim().includes("@") && email.trim().length >= 3);
   const busy = sending || googleLoading;
 
   return (
@@ -43,8 +43,8 @@ const AuthEntryScreen = ({
         <form onSubmit={onContinue} className="space-y-3">
           <Input
             id="entryEmail"
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             inputMode="email"
             placeholder={t("email")}
             value={email}
@@ -78,17 +78,6 @@ const AuthEntryScreen = ({
         </div>
 
         <GoogleSignInButton loading={googleLoading} disabled={sending} onClick={onGoogle} />
-
-        {onPassword && (
-          <button
-            type="button"
-            className="block w-full text-center text-xs text-muted-foreground hover:text-[#FF6B00] transition-colors"
-            onClick={onPassword}
-            disabled={busy}
-          >
-            {t("signInWithPassword")}
-          </button>
-        )}
 
         <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
           {t("authConsentPrefix")}{" "}
