@@ -77,7 +77,7 @@ export async function uploadProductMedia(
           continue;
         }
         if (msg.includes("Failed to send a request")) {
-          throw new Error("Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.");
+          throw new Error("Не удалось загрузить медиафайл. Попробуйте ещё раз.");
         }
         throw new Error(msg);
       }
@@ -191,7 +191,7 @@ export async function uploadProductMedia(
         continue;
       }
       if (err?.message?.includes("Failed to send a request")) {
-        throw new Error("Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.");
+        throw new Error("Не удалось загрузить медиафайл. Попробуйте ещё раз.");
       }
       throw err;
     }
