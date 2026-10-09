@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthEntryScreen from "@/components/auth/AuthEntryScreen";
 import EmailCodeScreen from "@/components/auth/EmailCodeScreen";
+import PasswordLoginScreen from "@/components/auth/PasswordLoginScreen";
 import LoginModal from "@/components/auth/LoginModal";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
@@ -18,7 +19,7 @@ import {
 import { LOGIN_CARD_CLASS, readLoginBackground } from "@/lib/loginModal";
 import { cn } from "@/lib/utils";
 
-type Screen = "entry" | "code";
+type Screen = "entry" | "code" | "password";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -50,6 +51,10 @@ const LoginPage = () => {
   const handleModalBack = useCallback(() => {
     if (screen === "code") {
       auth.setPendingEmail(null);
+      setScreen("entry");
+      return;
+    }
+    if (screen === "password") {
       setScreen("entry");
       return;
     }
@@ -127,12 +132,15 @@ const LoginPage = () => {
           await auth.retryExchange();
         }}
       />
+    ) : screen === "password" ? (
+      <PasswordLoginScreen onBack={() => setScreen("entry")} />
     ) : screen === "entry" && !signedIn ? (
       <AuthEntryScreen
         email={auth.email}
         onEmailChange={auth.setEmail}
         onContinue={(e) => void handleContinue(e)}
         onGoogle={() => void handleGoogle()}
+        onPassword={() => setScreen("password")}
         sending={auth.sending}
         googleLoading={auth.googleLoading}
       />

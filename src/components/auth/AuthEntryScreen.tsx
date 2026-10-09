@@ -14,6 +14,7 @@ interface AuthEntryScreenProps {
   onEmailChange: (value: string) => void;
   onContinue: (e: FormEvent) => void;
   onGoogle: () => void;
+  onPassword?: () => void;
   sending?: boolean;
   googleLoading?: boolean;
 }
@@ -23,6 +24,7 @@ const AuthEntryScreen = ({
   onEmailChange,
   onContinue,
   onGoogle,
+  onPassword,
   sending,
   googleLoading,
 }: AuthEntryScreenProps) => {
@@ -76,6 +78,17 @@ const AuthEntryScreen = ({
         </div>
 
         <GoogleSignInButton loading={googleLoading} disabled={sending} onClick={onGoogle} />
+
+        {onPassword && (
+          <button
+            type="button"
+            className="block w-full text-center text-xs text-muted-foreground hover:text-[#FF6B00] transition-colors"
+            onClick={onPassword}
+            disabled={busy}
+          >
+            {t("signInWithPassword")}
+          </button>
+        )}
 
         <p className="text-center text-[12px] leading-relaxed text-[#6B7280]">
           {t("authConsentPrefix")}{" "}
