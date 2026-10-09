@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dostup</string>
+    <string name="title_activity_main">Dostup</string>
+    <string name="package_name">kz.dostup.app</string>
+    <string name="custom_url_scheme">kz.dostup.app</string>
+</resources>

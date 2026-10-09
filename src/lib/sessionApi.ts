@@ -1,5 +1,89 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const CONNECTION_ERROR_MESSAGE = "Не удалось выполнить запрос. Проверьте интернет и попробуйте ещё раз.";
+const SERVER_ERROR_MESSAGE = "Сервис временно недоступен. Попробуйте ещё раз немного позже.";
+
+type InvokeErrorDetails = {
+  message: string;
+  status?: number;
+  retryable: boolean;
+};
+
+class ApiRequestError extends Error {
+  status?: number;
+  retryable: boolean;
+
+  constructor({ message, status, retryable }: InvokeErrorDetails) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
+
+function isConnectionError(message: string) {
+  const normalized = message.toLowerCase();
+  return [
+    "failed to send a request",
+    "failed to fetch",
+    "networkerror",
+    "network request failed",
+    "load failed",
+  ].some((fragment) => normalized.includes(fragment));
+}
+
+function responseFromError(error: unknown): Response | undefined {
+  if (error && typeof error === "object" && "context" in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context && typeof context === "object" && "status" in context && typeof (context as Response).json === "function") {
+      return context as Response;
+    }
+  }
+  return undefined;
+}
+
+async function describeInvokeError(error: unknown): Promise<InvokeErrorDetails> {
+  const response = responseFromError(error);
+  const status = response?.status;
+  let message = error instanceof Error ? error.message : "";
+
+  if (response) {
+    try {
+      const payload = await response.clone().json() as { error?: unknown; message?: unknown };
+      if (typeof payload.message === "string") message = payload.message;
+      else if (typeof payload.error === "string") message = payload.error;
+    } catch {
+      // Ответ без JSON оставляем с исходным сообщением SDK.
+    }
+  }
+
+  if (status === 401 || status === 403) {
+    return { message: "Сессия истекла. Войдите в аккаунт заново.", status, retryable: false };
+  }
+  if (status === 429) {
+    return { message: "Слишком много запросов. Подождите немного и повторите попытку.", status, retryable: true };
+  }
+  if (status && status >= 500) {
+    return { message: SERVER_ERROR_MESSAGE, status, retryable: true };
+  }
+  if (isConnectionError(message)) {
+    return { message: CONNECTION_ERROR_MESSAGE, status, retryable: true };
+  }
+
+  return { message: message || "Не удалось выполнить запрос.", status, retryable: false };
+}
+
+function canRetryRequest(fn: string, body: Record<string, unknown>) {
+  const action = typeof body.action === "string" ? body.action : "";
+  const safeActions = new Set(["list", "get", "get_product", "lookup_teacher", "list_student", "list_all_creator"]);
+  return safeActions.has(action) || ["validate-creator-session", "material-file-sizes"].includes(fn);
+}
+
+function reportInvokeFailure(fn: string, details: InvokeErrorDetails) {
+  // Без тела запроса и токенов: эти данные помогают отличить сбой сети от ответа сервера.
+  console.warn("[api] Edge Function request failed", { functionName: fn, status: details.status, retryable: details.retryable });
+}
+
 export function creatorCreds() {
   return {
     creatorToken: localStorage.getItem("creator_token") || "",
@@ -47,9 +131,10 @@ export async function invokeApi<T = Record<string, unknown>>(
     ...body,
   };
 
-  let lastError: any = null;
+  let lastError: Error | null = null;
+  const allowedRetries = canRetryRequest(fn, body) ? retries : 0;
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= allowedRetries; attempt++) {
     try {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
@@ -61,26 +146,13 @@ export async function invokeApi<T = Record<string, unknown>>(
       });
 
       if (error) {
-        let msg = error.message;
-        try {
-          if ("context" in error && typeof (error as any).context?.json === "function") {
-            const errJson = await (error as any).context.json();
-            if (errJson?.error) msg = String(errJson.error);
-          }
-        } catch {
-          // ignore
-        }
-
-        if (msg.includes("Failed to send a request") && attempt < retries) {
-          lastError = new Error(msg);
+        const details = await describeInvokeError(error);
+        reportInvokeFailure(fn, details);
+        lastError = new ApiRequestError(details);
+        if (details.retryable && attempt < allowedRetries) {
           continue;
         }
-
-        if (msg.includes("Failed to send a request")) {
-          throw new Error("Не удалось связаться с сервером. Пожалуйста, проверьте подключение к интернету или обновите страницу.");
-        }
-
-        throw new Error(msg);
+        throw lastError;
       }
 
       if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
@@ -88,20 +160,20 @@ export async function invokeApi<T = Record<string, unknown>>(
       }
 
       return data as T;
-    } catch (err: any) {
-      lastError = err;
-      const errMsg = err?.message || "";
-      if (errMsg.includes("Failed to send a request") && attempt < retries) {
+    } catch (err: unknown) {
+      if (err instanceof ApiRequestError) throw err;
+
+      const details = await describeInvokeError(err);
+      reportInvokeFailure(fn, details);
+      lastError = new ApiRequestError(details);
+      if (details.retryable && attempt < allowedRetries) {
         continue;
       }
-      if (errMsg.includes("Failed to send a request")) {
-        throw new Error("Не удалось связаться с сервером. Пожалуйста, проверьте подключение к интернету или обновите страницу.");
-      }
-      throw err;
+      throw lastError;
     }
   }
 
-  throw lastError || new Error("Не удалось связаться с сервером.");
+  throw lastError || new Error(CONNECTION_ERROR_MESSAGE);
 }
 
 export type FunctionFail = {
