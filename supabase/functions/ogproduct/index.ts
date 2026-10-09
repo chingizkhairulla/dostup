@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const APP_URL = "https://dostup.lovable.app"
-const DEFAULT_IMAGE = "https://storage.googleapis.com/gpt-engineer-file-uploads/YKkA8PHzyuUKyN7SwYoPKfgTbjI3/social-images/social-1770454720368-1200_на_700.png"
+const APP_URL = "https://www.trydostup.online"
+const DEFAULT_IMAGE = "https://www.trydostup.online/og-image.png"
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -58,7 +58,7 @@ serve(async (req) => {
     const desc = product?.headline || product?.description || ''
     const image = product?.image_url || DEFAULT_IMAGE
     const price = product?.price ? `${product.price} ₸` : ''
-    const ogDesc = price ? `${desc} — ${price}` : (desc || 'Доступ к вашим цифровым продуктам и курсам!')
+    const ogDesc = price ? `${desc} — ${price}` : (desc || 'Платформа для проведения уроков и продажи курсов!')
 
     const e = (s: string) => s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 

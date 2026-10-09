@@ -919,7 +919,6 @@ export default function SlotCreationWizard({
       selectAll: "Барлық слоттарды таңдау",
       unselectAll: "Таңдауды алып тастау",
       different: "Әртүрлі",
-      forProduct: "Өнімге қатысты",
       conferenceLink: "Конференцияға сілтеме",
       googleMeetOption: "Google Meet",
       googleMeetAuto: "Сілтеме автоматты түрде жасалады",
