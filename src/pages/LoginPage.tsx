@@ -90,8 +90,8 @@ const LoginPage = () => {
 
   const handleContinue = async (e: FormEvent) => {
     e.preventDefault();
-    const ok = await auth.sendCode(auth.email);
-    if (ok) setScreen("code");
+    const result = await auth.handleContinue(auth.email);
+    if (result === "code") setScreen("code");
   };
 
   const handleGoogle = async () => {

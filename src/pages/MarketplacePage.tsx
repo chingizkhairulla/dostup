@@ -21,7 +21,7 @@ import {
   useTopRatedProducts,
   type CatalogSort,
 } from "@/hooks/useCatalogSearch";
-import { categoryLabel, visibleTaxonomy, type LessonFormat } from "@/lib/catalog";
+import { categoryLabel, visibleTaxonomy } from "@/lib/catalog";
 import { profileHomePath } from "@/lib/creatorAuth";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,6 @@ const MarketplacePage = () => {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [categorySlug, setCategorySlug] = useState("");
   const [subcategorySlug, setSubcategorySlug] = useState("");
-  const [lessonFormat, setLessonFormat] = useState<LessonFormat | "">("");
   const sort: CatalogSort = "newest";
 
   useEffect(() => {
@@ -56,7 +55,6 @@ const MarketplacePage = () => {
       q: debouncedQuery,
       categorySlug,
       subcategorySlug,
-      lessonFormat,
       sort,
     },
     !isDefaultView,
@@ -78,13 +76,11 @@ const MarketplacePage = () => {
   const selectCategory = (slug: string) => {
     setCategorySlug((current) => (current === slug ? "" : slug));
     setSubcategorySlug("");
-    setLessonFormat("");
   };
 
   const selectFromMenu = (catSlug: string, subSlug: string) => {
     setCategorySlug(catSlug);
     setSubcategorySlug(subSlug);
-    setLessonFormat("");
   };
 
   const page = (
@@ -213,9 +209,7 @@ const MarketplacePage = () => {
                 categories={categories}
                 categorySlug={categorySlug}
                 subcategorySlug={subcategorySlug}
-                lessonFormat={lessonFormat}
                 onSubcategoryChange={setSubcategorySlug}
-                onLessonFormatChange={setLessonFormat}
               />
             )}
 

@@ -143,8 +143,8 @@ export const TAXONOMY_DEFINITIONS: CategoryDef[] = [
       },
       {
         slug: "group",
-        name_ru: "Групповые занятия",
-        name_kk: "Топтық сабақтар",
+        name_ru: "В группе",
+        name_kk: "Топта",
         topics: ONLINE_LESSONS_TOPICS,
       },
     ],

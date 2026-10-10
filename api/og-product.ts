@@ -27,10 +27,10 @@ export default async function handler(request: Request) {
 
   const title = escapeHtml(product?.title || "Dostup");
   const description = escapeHtml(
-    product ? buildOgDescription(product) : "Доступ к вашим цифровым продуктам и курсам!",
+    product ? buildOgDescription(product) : "Платформа для проведения уроков и продажи курсов!",
   );
   const image = escapeHtml(
-    product ? buildOgImageUrl(origin, product) : new URL("/api/og-default", origin).toString(),
+    product ? buildOgImageUrl(origin, product) : new URL("/og-image.png", origin).toString(),
   );
   const canonical = escapeHtml(pageUrl);
 

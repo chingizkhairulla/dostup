@@ -191,6 +191,36 @@ export async function fetchPublicProduct(idOrSlug: string): Promise<PublicProduc
   const productById = await fetchProductRow("id", idOrSlug, headers, url);
   if (productById) return await enrichProductRow(productById, headers, url);
 
+  try {
+    const res = await fetch(`${url}/functions/v1/catalog`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ action: "get_product", idOrSlug }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const p = data?.product;
+      if (p) {
+        return {
+          id: p.id,
+          slug: p.slug,
+          title: p.title || "Dostup",
+          headline: p.headline || null,
+          image_url: p.image_url || null,
+          price: Number(p.price) || 0,
+          seller_handle: p.seller_handle ?? null,
+          seller_display_name: p.author_name ?? null,
+        };
+      }
+    }
+  } catch {
+    // ignore fetch errors
+  }
+
   return null;
 }
 
@@ -240,9 +270,5 @@ export function buildOgImageUrl(origin: string, product: PublicProductRow): stri
   if (product.image_url) {
     return absoluteAssetUrl(origin, product.image_url);
   }
-  const params = new URLSearchParams({
-    id: product.id,
-    title: product.title,
-  });
-  return absoluteAssetUrl(origin, `/api/og-cover?${params.toString()}`);
+  return absoluteAssetUrl(origin, "/og-image.png");
 }

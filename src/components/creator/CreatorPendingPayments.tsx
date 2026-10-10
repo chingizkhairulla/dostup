@@ -1,12 +1,14 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Loader2, Eye, X, Check, ChevronRight } from "lucide-react";
+import { Clock, Loader2, Eye, X, Check, ChevronRight, Download } from "lucide-react";
 import { formatPriceTenge } from "@/lib/catalog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { creatorCreds, invokeApi, fetchCreatorReceiptBlob } from "@/lib/sessionApi";
 import { needsCreatorReview } from "@/lib/paymentReview";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import MediaViewer from "@/components/media/MediaViewer";
 
 export type CreatorPendingPurchase = {
   id: string;
@@ -62,6 +64,37 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: pendingPurchases = [], isLoading } = useCreatorPendingPurchases(creatorName);
+  const [receiptView, setReceiptView] = useState<{ url: string; kind: "image" | "pdf"; name: string } | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (receiptView) URL.revokeObjectURL(receiptView.url);
+  }, [receiptView]);
+
+  const openReceipt = async (submissionId: string, userName?: string) => {
+    setLoadingReceipt(submissionId);
+    try {
+      const blob = await fetchCreatorReceiptBlob(submissionId);
+      const mime = blob.type;
+      setReceiptView({
+        url: URL.createObjectURL(blob),
+        kind: mime.includes("pdf") ? "pdf" : "image",
+        name: `${t("buyerReceipt")}${userName ? ` - ${userName}` : ""}`,
+      });
+    } catch {
+      toast.error(language === "ru" ? "Не удалось открыть чек" : "Чекті ашу мүмкін болмады");
+    } finally {
+      setLoadingReceipt(null);
+    }
+  };
+
+  const downloadReceipt = () => {
+    if (!receiptView) return;
+    const a = document.createElement("a");
+    a.href = receiptView.url;
+    a.download = `${receiptView.name.replace(/\s+/g, "_")}.${receiptView.kind === "pdf" ? "pdf" : "jpg"}`;
+    a.click();
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["creator-pending-purchases"] });
@@ -111,9 +144,6 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           {t("pendingPayments")} ({pendingPurchases.length})
         </h2>
       </div>
-      <p className="text-sm text-muted-foreground">
-        {mode === "link" ? t("pendingGoToUsersHint") : t("pendingReceiptHint")}
-      </p>
 
       {mode === "link" && pendingPurchases.map((purchase, index) => (
         <Card
@@ -126,18 +156,20 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-bold text-warning">
                   {(purchase.user?.name || "?").charAt(0).toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium text-foreground truncate">
-                  {t("newPurchaseTitle")} · {purchase.user?.name || t("student")}
+                  {purchase.user?.name || t("student")}
                 </h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {purchase.product?.title} · {formatPriceTenge(Number(purchase.amount))}
+                <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                  <span className="truncate">{purchase.product?.title}</span>
+                  <span className="shrink-0">&nbsp;·&nbsp;</span>
+                  <span className="shrink-0 text-warning">{formatPriceTenge(Number(purchase.amount))}</span>
                 </p>
               </div>
               <span className="text-xs text-primary inline-flex items-center gap-0.5 flex-shrink-0">
@@ -156,8 +188,8 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <CardContent className="p-3">
-            <div className="flex items-start gap-2">
-              <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-bold text-warning">
                   {(purchase.user?.name || "?").charAt(0).toUpperCase()}
                 </span>
@@ -166,32 +198,33 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                 <h3 className="text-sm font-medium text-foreground truncate">
                   {purchase.user?.name || t("student")}
                 </h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {purchase.product?.title} · {formatPriceTenge(Number(purchase.amount))}
+                <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                  <span className="truncate">{purchase.product?.title}</span>
+                  <span className="shrink-0">&nbsp;·&nbsp;</span>
+                  <span className="shrink-0 text-warning">{formatPriceTenge(Number(purchase.amount))}</span>
                 </p>
-                {purchase.latest_submission?.id ? (
+                {purchase.latest_submission?.id && (
                   <button
                     type="button"
-                    className="mt-1 text-xs text-primary inline-flex items-center gap-1 hover:underline"
-                    onClick={async () => {
-                      try {
-                        const blob = await fetchCreatorReceiptBlob(purchase.latest_submission!.id);
-                        window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
-                      } catch {
-                        toast.error(language === "ru" ? "Не удалось открыть чек" : "Чекті ашу мүмкін болмады");
-                      }
-                    }}
+                    disabled={loadingReceipt === purchase.latest_submission.id}
+                    className="mt-0.5 text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+                    onClick={() => void openReceipt(purchase.latest_submission!.id, purchase.user?.name)}
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    {loadingReceipt === purchase.latest_submission.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
                     {t("viewReceipt")}
                   </button>
-                ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {language === "ru" ? "Чек ещё не прикреплён" : "Чек әлі тіркелмеген"}
-                  </p>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!purchase.latest_submission?.id && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {language === "ru" ? "Чек ещё не прикреплён" : "Чек әлі тіркелмеген"}
+                  </span>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -230,6 +263,23 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           </CardContent>
         </Card>
       ))}
+
+      <MediaViewer
+        align="center"
+        items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
+        index={receiptView ? 0 : null}
+        onIndexChange={(i) => i === null && setReceiptView(null)}
+        actions={
+          <Button
+            variant="outline"
+            className="h-10 gap-2 rounded-full border-white/20 bg-transparent px-4 text-white hover:bg-white/10 hover:text-white"
+            onClick={downloadReceipt}
+          >
+            <Download className="h-4 w-4" />
+            {t("download")}
+          </Button>
+        }
+      />
     </div>
   );
 }
