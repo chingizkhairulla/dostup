@@ -230,7 +230,6 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
   return (
     <div className="space-y-5">
       <h2 className="text-lg font-semibold text-foreground">{t("users")}</h2>
-      <CreatorPendingPayments creatorName={creatorName} />
 
       {creatorProducts.length > 0 && (
         <div className="space-y-3">
@@ -243,10 +242,16 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                   setSelectedProductId(id);
                   setAllProducts(false);
                 }}
+<<<<<<< Updated upstream
                 className={cn(
                   "w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
                   showAll && "opacity-60"
                 )}
+=======
+                inactive={showAll}
+                active={!showAll}
+                className="w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg"
+>>>>>>> Stashed changes
               />
             </div>
             {creatorProducts.length >= 2 && (
@@ -299,6 +304,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
           className="pl-10 h-12"
         />
       </div>
+
+      <CreatorPendingPayments creatorName={creatorName} />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">

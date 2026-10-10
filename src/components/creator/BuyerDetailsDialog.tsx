@@ -176,10 +176,74 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             <Row icon={Package} label={t("buyerProduct")}>
               {purchase.product.title}
             </Row>
+<<<<<<< Updated upstream
             <Row icon={Wallet} label={t("buyerPaid")}>
               <div className="flex flex-col">
                 <span>{formatPriceTenge(Number(purchase.amount))}</span>
                 <span className="text-xs text-muted-foreground font-normal">{fmt(paidAt)}</span>
+=======
+            {/* Receipts open right under the payment they belong to. */}
+            <Row
+              icon={Wallet}
+              label={t("buyerPaid")}
+              aside={
+                purchase.receipts.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">{t("buyerNoReceipts")}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setReceiptsOpen((v) => !v)}
+                    aria-expanded={receiptsOpen}
+                    className="flex items-center gap-1.5 rounded-sm text-sm font-medium focus-ring"
+                  >
+                    <Receipt className="h-4 w-4 text-muted-foreground" />
+                    {t("buyerReceipts")}
+                    <span className="text-muted-foreground">{purchase.receipts.length}</span>
+                    <ChevronDown
+                      className={cn("h-4 w-4 text-muted-foreground transition-transform", receiptsOpen && "rotate-180")}
+                    />
+                  </button>
+                )
+              }
+              below={
+                receiptsOpen &&
+                purchase.receipts.length > 0 && (
+                  <ul className="space-y-1.5 -ml-7 sm:-ml-7">
+                    {purchase.receipts.map((receipt) => (
+                      <li key={receipt.id}>
+                        <button
+                          type="button"
+                          onClick={() => void openReceipt(receipt)}
+                          disabled={loadingReceipt === receipt.id}
+                          className="flex w-full items-center gap-3 rounded-xl bg-muted/60 px-3 py-2 text-left transition-colors hover:bg-muted focus-ring"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            {loadingReceipt === receipt.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium">
+                              {format(new Date(receipt.created_at), "d MMMM yyyy, HH:mm", { locale })}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {receipt.detected_amount != null ? `${formatPriceTenge(Number(receipt.detected_amount))} · ` : ""}
+                              {t(`buyerReceiptStatus_${receipt.verification_status}` as "buyerReceiptStatus_confirmed")}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              }
+            >
+              <div className="flex flex-col">
+                <span className="leading-tight">{formatPriceTenge(Number(purchase.amount))}</span>
+                <span className="text-xs text-muted-foreground font-normal leading-tight mt-0.5">{fmt(paidAt)}</span>
+>>>>>>> Stashed changes
               </div>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
@@ -301,7 +365,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
       </Dialog>
 
       <MediaViewer
-        align="left"
+        align="center"
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}
