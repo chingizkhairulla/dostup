@@ -144,7 +144,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     enabled: !!creatorName,
   });
 
-  const setAccess = async (purchaseId: string, mode: "forever" | "until" | "revoke", until?: Date) => {
+  const setAccess = async (purchaseId: string, mode: "revoke" | "forever") => {
     if (purchaseId.startsWith("demo-")) {
       toast.success(t("buyerAccessSaved"));
       return;
@@ -154,7 +154,6 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       ...creatorCreds(),
       purchaseId,
       mode,
-      until: until?.toISOString(),
     });
     await queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
   };
@@ -242,16 +241,12 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                   setSelectedProductId(id);
                   setAllProducts(false);
                 }}
-<<<<<<< Updated upstream
-                className={cn(
-                  "w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
-                  showAll && "opacity-60"
-                )}
-=======
                 inactive={showAll}
                 active={!showAll}
-                className="w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg"
->>>>>>> Stashed changes
+                className={cn(
+                  "w-full sm:w-auto h-9 min-h-0 text-xs sm:text-sm md:h-10 md:min-h-10 md:text-sm rounded-lg",
+                  showAll && "opacity-60"
+                )}
               />
             </div>
             {creatorProducts.length >= 2 && (
@@ -347,15 +342,21 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium text-foreground truncate">{purchase.simple_user.name}</h4>
-                  <p className="text-xs text-muted-foreground line-clamp-1">
-                    {showAll && <>{purchase.product.title} · </>}
-                    <span className="text-success">{formatPriceTenge(Number(purchase.amount))}</span>
-                    {" · "}
-                    {new Date(purchase.created_at).toLocaleDateString(language === "kk" ? "kk-KZ" : "ru-RU")}
+                  <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                    {showAll && (
+                      <>
+                        <span className="truncate">{purchase.product.title}</span>
+                        <span className="shrink-0">&nbsp;·&nbsp;</span>
+                      </>
+                    )}
+                    <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
                   </p>
-                  <UrgencyBadge purchase={purchase} className="mt-1" />
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {/* Access status sits in the middle of the card's height, next to the arrow. */}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <UrgencyBadge purchase={purchase} />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
             </CardContent>
           </Card>

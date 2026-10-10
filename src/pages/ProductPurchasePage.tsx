@@ -53,7 +53,7 @@ const ProductPurchasePage = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
-  const { user, sessionToken } = useSimpleAuth();
+  const { user, sessionToken, status, profileType, profiles, switchProfile } = useSimpleAuth();
   const { data: product, isLoading } = useCheckoutProduct(productId);
   
   // Получить параметры тарифа и учителя из URL
@@ -86,6 +86,7 @@ const ProductPurchasePage = () => {
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const [receiptSubmission, setReceiptSubmission] = useState<ReceiptSubmission | null>(null);
   const [activatingTrial, setActivatingTrial] = useState(false);
+  const [switchingBuyer, setSwitchingBuyer] = useState(false);
   const [trialInfo, setTrialInfo] = useState<{
     hasFreeTrial: boolean;
     hasUsedTrial: boolean;
@@ -335,6 +336,16 @@ const ProductPurchasePage = () => {
     navigate(loginPath(checkoutPath), { state: loginState(location) });
   };
 
+  // Signed in as a seller: purchases belong to the buyer profile, so switch to it (or make one) right here.
+  const signedInAsSeller = status === "authenticated" && (profileType === "creator" || profileType === "school");
+  const switchToBuyer = async () => {
+    setSwitchingBuyer(true);
+    const buyer = profiles.find((p) => p.type === "buyer");
+    const result = buyer ? await switchProfile({ profileId: buyer.id }) : await switchProfile({ createType: "buyer" });
+    setSwitchingBuyer(false);
+    if ("error" in result) toast.error(t("switchProfileError"));
+  };
+
   const handleBackToPayment = async () => {
     // Удалить pending покупку чтобы можно было вернуться к оплате
     if (purchaseId) {
@@ -517,9 +528,18 @@ const ProductPurchasePage = () => {
         {!user ? (
           <Card className="animate-fade-in">
             <CardContent className="pt-6 pb-6 text-center space-y-4">
-              <p className="text-sm text-muted-foreground">{t("loginRequiredCheckout")}</p>
-              <Button type="button" variant="cta" className="w-full bg-[#FF6B00]" onClick={goToLogin}>
-                {t("loginToContinuePurchase")}
+              <p className="text-sm text-muted-foreground">
+                {signedInAsSeller ? t("switchToBuyerDescription") : t("loginRequiredCheckout")}
+              </p>
+              <Button
+                type="button"
+                variant="cta"
+                className="w-full bg-[#FF6B00]"
+                disabled={switchingBuyer}
+                onClick={signedInAsSeller ? () => void switchToBuyer() : goToLogin}
+              >
+                {switchingBuyer && <Loader2 className="w-4 h-4 animate-spin" />}
+                {signedInAsSeller ? t("switchToBuyerAction") : t("loginToContinuePurchase")}
               </Button>
             </CardContent>
           </Card>

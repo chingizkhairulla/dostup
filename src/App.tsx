@@ -40,7 +40,7 @@ import LegalPage from './pages/LegalPage'
 import RequireProfile from '@/components/auth/RequireProfile'
 import ScrollManager from '@/components/layout/ScrollManager'
 import { MARKETPLACE_LOCATION, readLoginBackground } from '@/lib/loginModal'
-import { ONBOARDING_PATH } from '@/lib/creatorAuth'
+import { isPurchaseIntentPath, ONBOARDING_PATH, rememberAuthNext } from '@/lib/creatorAuth'
 
 // Pages an identity without profiles may still open.
 const ONBOARDING_ALLOWED_PATHS = new Set([
@@ -89,8 +89,11 @@ function AppRoutes() {
 	useEffect(() => {
 		if (!needsOnboarding || status !== 'authenticated') return
 		if (ONBOARDING_ALLOWED_PATHS.has(location.pathname)) return
+		// Opened a product or its checkout: the welcome page makes a buyer profile and comes back here.
+		const here = `${location.pathname}${location.search}`
+		if (isPurchaseIntentPath(here)) rememberAuthNext(here)
 		navigate(ONBOARDING_PATH, { replace: true })
-	}, [location.pathname, navigate, needsOnboarding, status])
+	}, [location.pathname, location.search, navigate, needsOnboarding, status])
 
 	if (status === 'loading' && !isAuthCallback) {
 		return <AuthSplash />
