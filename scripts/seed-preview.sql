@@ -519,3 +519,106 @@ ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
   content = EXCLUDED.content,
   file_url = EXCLUDED.file_url;
+
+-- 8. Чеки об оплате
+INSERT INTO public.payment_submissions (
+  id, purchase_id, buyer_id, receipt_path, receipt_mime_type, receipt_sha256,
+  detected_amount, detected_currency, receipt_type, parsed_metadata,
+  verification_status, fingerprint, decided_at, decided_by, created_at, updated_at
+)
+VALUES
+(
+  '99999999-9999-9999-9999-999999999991',
+  '55555555-5555-5555-5555-555555555551',
+  '44444444-4444-4444-4444-444444444441',
+  'receipts/preview-receipt-alikhan.jpg',
+  'image/jpeg',
+  'preview-sha256-alikhan',
+  15000,
+  'KZT',
+  'kaspi_payment',
+  '{"bank": "kaspi", "title": "Оплата курса"}'::jsonb,
+  'confirmed',
+  'preview-fingerprint-alikhan',
+  now() - interval '3 days',
+  'creator',
+  now() - interval '3 days',
+  now() - interval '3 days'
+),
+(
+  '99999999-9999-9999-9999-999999999992',
+  '55555555-5555-5555-5555-555555555552',
+  '44444444-4444-4444-4444-444444444442',
+  'receipts/preview-receipt-dinara.jpg',
+  'image/jpeg',
+  'preview-sha256-dinara',
+  5000,
+  'KZT',
+  'kaspi_payment',
+  '{"bank": "kaspi", "title": "Оплата урока"}'::jsonb,
+  'confirmed',
+  'preview-fingerprint-dinara',
+  now() - interval '2 days',
+  'creator',
+  now() - interval '2 days',
+  now() - interval '2 days'
+),
+(
+  '99999999-9999-9999-9999-999999999993',
+  '55555555-5555-5555-5555-555555555553',
+  '44444444-4444-4444-4444-444444444443',
+  'receipts/preview-receipt-erlan.jpg',
+  'image/jpeg',
+  'preview-sha256-erlan',
+  15000,
+  'KZT',
+  'kaspi_payment',
+  '{"bank": "kaspi", "title": "Оплата курса"}'::jsonb,
+  'manual_review',
+  'preview-fingerprint-erlan',
+  null,
+  null,
+  now() - interval '4 hours',
+  now() - interval '4 hours'
+),
+(
+  '99999999-9999-9999-9999-999999999994',
+  '55555555-5555-5555-5555-555555555554',
+  '44444444-4444-4444-4444-444444444444',
+  'receipts/preview-receipt-aigerim-1.jpg',
+  'image/jpeg',
+  'preview-sha256-aigerim-1',
+  15000,
+  'KZT',
+  'kaspi_payment',
+  '{"bank": "kaspi", "title": "Оплата веб-курса"}'::jsonb,
+  'confirmed',
+  'preview-fingerprint-aigerim-1',
+  now() - interval '5 days',
+  'creator',
+  now() - interval '5 days',
+  now() - interval '5 days'
+),
+(
+  '99999999-9999-9999-9999-999999999995',
+  '55555555-5555-5555-5555-555555555555',
+  '44444444-4444-4444-4444-444444444444',
+  'receipts/preview-receipt-aigerim-2.jpg',
+  'image/jpeg',
+  'preview-sha256-aigerim-2',
+  20000,
+  'KZT',
+  'kaspi_payment',
+  '{"bank": "kaspi", "title": "Оплата Figma интенсива"}'::jsonb,
+  'confirmed',
+  'preview-fingerprint-aigerim-2',
+  now() - interval '1 day',
+  'creator',
+  now() - interval '1 day',
+  now() - interval '1 day'
+)
+ON CONFLICT (id) DO UPDATE SET
+  receipt_path = EXCLUDED.receipt_path,
+  verification_status = EXCLUDED.verification_status,
+  detected_amount = EXCLUDED.detected_amount;
+
