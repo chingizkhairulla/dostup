@@ -21,9 +21,10 @@ interface Props {
   hideIcon?: boolean;
   /** Dimmed while another filter ("all products") is on: a tap picks the shown product instead of opening the list. */
   inactive?: boolean;
+  active?: boolean;
 }
 
-const ProductSwitcher = ({ products, selectedId, onChange, className, placeholder, disabled, hideIcon, inactive = false }: Props) => {
+const ProductSwitcher = ({ products, selectedId, onChange, className, placeholder, disabled, hideIcon, inactive = false, active = false }: Props) => {
   const [open, setOpen] = useState(false);
   const selected = products.find((p) => p.id === selectedId);
   const displayTitle = selected ? selected.title : (placeholder || products[0]?.title || "");
@@ -38,11 +39,24 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
         variant="outline"
         size="sm"
         disabled={disabled}
-        className={cn("group gap-2 max-w-full font-medium cursor-default hover:bg-transparent hover:text-foreground", className)}
+        className={cn(
+          "group gap-2 max-w-full font-medium cursor-default",
+          active
+            ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white hover:border-primary"
+            : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+          className
+        )}
         title={displayTitle}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {!hideIcon && <Package className="w-4 h-4 text-primary flex-shrink-0 transition-colors group-hover:text-inherit" />}
+          {!hideIcon && (
+            <Package
+              className={cn(
+                "w-4 h-4 flex-shrink-0 transition-colors",
+                active ? "text-white" : "text-primary group-hover:text-primary"
+              )}
+            />
+          )}
           <span className="truncate text-left">{displayTitle}</span>
         </div>
       </Button>
@@ -56,16 +70,34 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
       variant="outline"
       size="sm"
       disabled={disabled}
-      className={cn("group gap-2 max-w-full font-medium", className)}
+      className={cn(
+        "group gap-2 max-w-full font-medium",
+        active
+          ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white hover:border-primary"
+          : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+        className
+      )}
       title={displayTitle}
       onClick={inactive && shown ? () => onChange(shown.id) : undefined}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {/* text-inherit on hover: the trigger turns orange, so an orange icon would vanish. */}
-        {!hideIcon && <Package className="w-4 h-4 text-primary flex-shrink-0 transition-colors group-hover:text-inherit" />}
+        {!hideIcon && (
+          <Package
+            className={cn(
+              "w-4 h-4 flex-shrink-0 transition-colors",
+              active ? "text-white" : "text-primary group-hover:text-primary"
+            )}
+          />
+        )}
         <span className="truncate text-left">{displayTitle}</span>
       </div>
-      <ChevronRight className={cn("w-4 h-4 flex-shrink-0 opacity-60 transition-transform duration-200 ml-auto", open && "rotate-90")} />
+      <ChevronRight
+        className={cn(
+          "w-4 h-4 flex-shrink-0 transition-transform duration-200 ml-auto",
+          active ? "text-white/80" : "opacity-60 group-hover:text-primary group-hover:opacity-100",
+          open && "rotate-90"
+        )}
+      />
     </Button>
   );
 
@@ -82,9 +114,16 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
               onChange(p.id);
               setOpen(false);
             }}
-            className="gap-2 cursor-pointer items-start py-2"
+            className="group gap-2 cursor-pointer items-start py-2 focus:bg-primary focus:text-white"
           >
-            <Check className={`w-4 h-4 mt-0.5 flex-shrink-0 ${p.id === selectedId ? "opacity-100 text-primary" : "opacity-0"}`} />
+            <Check
+              className={cn(
+                "w-4 h-4 mt-0.5 flex-shrink-0 transition-colors",
+                p.id === selectedId
+                  ? "opacity-100 text-primary group-focus:text-white group-hover:text-white"
+                  : "opacity-0"
+              )}
+            />
             <span className="truncate font-medium">{p.title}</span>
           </DropdownMenuItem>
         ))}

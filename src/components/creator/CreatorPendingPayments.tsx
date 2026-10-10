@@ -144,9 +144,6 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           {t("pendingPayments")} ({pendingPurchases.length})
         </h2>
       </div>
-      <p className="text-sm text-muted-foreground">
-        {mode === "link" ? t("pendingGoToUsersHint") : t("pendingReceiptHint")}
-      </p>
 
       {mode === "link" && pendingPurchases.map((purchase, index) => (
         <Card
@@ -159,18 +156,20 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-bold text-warning">
                   {(purchase.user?.name || "?").charAt(0).toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium text-foreground truncate">
-                  {t("newPurchaseTitle")} · {purchase.user?.name || t("student")}
+                  {purchase.user?.name || t("student")}
                 </h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {purchase.product?.title} · {formatPriceTenge(Number(purchase.amount))}
+                <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                  <span className="truncate">{purchase.product?.title}</span>
+                  <span className="shrink-0">&nbsp;·&nbsp;</span>
+                  <span className="shrink-0 text-warning">{formatPriceTenge(Number(purchase.amount))}</span>
                 </p>
               </div>
               <span className="text-xs text-primary inline-flex items-center gap-0.5 flex-shrink-0">
@@ -189,8 +188,8 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <CardContent className="p-3">
-            <div className="flex items-start gap-2">
-              <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-warning/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-bold text-warning">
                   {(purchase.user?.name || "?").charAt(0).toUpperCase()}
                 </span>
@@ -199,14 +198,16 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                 <h3 className="text-sm font-medium text-foreground truncate">
                   {purchase.user?.name || t("student")}
                 </h3>
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {purchase.product?.title} · {formatPriceTenge(Number(purchase.amount))}
+                <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                  <span className="truncate">{purchase.product?.title}</span>
+                  <span className="shrink-0">&nbsp;·&nbsp;</span>
+                  <span className="shrink-0 text-warning">{formatPriceTenge(Number(purchase.amount))}</span>
                 </p>
-                {purchase.latest_submission?.id ? (
+                {purchase.latest_submission?.id && (
                   <button
                     type="button"
                     disabled={loadingReceipt === purchase.latest_submission.id}
-                    className="mt-1 text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+                    className="mt-0.5 text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
                     onClick={() => void openReceipt(purchase.latest_submission!.id, purchase.user?.name)}
                   >
                     {loadingReceipt === purchase.latest_submission.id ? (
@@ -216,13 +217,14 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                     )}
                     {t("viewReceipt")}
                   </button>
-                ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {language === "ru" ? "Чек ещё не прикреплён" : "Чек әлі тіркелмеген"}
-                  </p>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!purchase.latest_submission?.id && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {language === "ru" ? "Чек ещё не прикреплён" : "Чек әлі тіркелмеген"}
+                  </span>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -263,7 +265,7 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
       ))}
 
       <MediaViewer
-        align="left"
+        align="center"
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}

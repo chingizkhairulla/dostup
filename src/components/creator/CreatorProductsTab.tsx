@@ -3154,8 +3154,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
   return (
     <div className="space-y-6">
-      <CreatorPendingPayments creatorName={creatorName} mode="link" onOpenUsers={onOpenUsers} />
-
       {subscriptionRows.length > 0 && (
         <Card>
           <CardContent className="p-4 space-y-3">
