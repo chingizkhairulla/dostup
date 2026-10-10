@@ -144,11 +144,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     enabled: !!creatorName,
   });
 
-<<<<<<< HEAD
   const setAccess = async (purchaseId: string, mode: "forever" | "until" | "revoke", until?: Date) => {
-=======
-  const setAccess = async (purchaseId: string, mode: "revoke" | "forever") => {
->>>>>>> origin/copilot-fix
     if (purchaseId.startsWith("demo-")) {
       toast.success(t("buyerAccessSaved"));
       return;

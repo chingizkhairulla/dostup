@@ -140,7 +140,7 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Clock className="w-5 h-5 text-warning" />
-        <h2 className="text-lg font-semibold text-foreground">
+        <h2 className="text-base font-semibold text-foreground">
           {t("pendingPayments")} ({pendingPurchases.length})
         </h2>
       </div>
@@ -184,7 +184,7 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
       {mode === "actions" && pendingPurchases.map((purchase, index) => (
         <Card
           key={purchase.id}
-          className="border-warning/40 bg-warning/5 animate-fade-in"
+          className="animate-fade-in border-warning/40 bg-warning/5"
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <CardContent className="p-3">
@@ -195,19 +195,21 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-foreground truncate">
+                <h4 className="text-sm font-medium text-foreground truncate">
                   {purchase.user?.name || t("student")}
-                </h3>
-                <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                </h4>
+                <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground truncate">
                   <span className="truncate">{purchase.product?.title}</span>
-                  <span className="shrink-0">&nbsp;·&nbsp;</span>
-                  <span className="shrink-0 text-warning">{formatPriceTenge(Number(purchase.amount))}</span>
+                  <span className="shrink-0">·</span>
+                  <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
                 </p>
-                {purchase.latest_submission?.id && (
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {purchase.latest_submission?.id ? (
                   <button
                     type="button"
                     disabled={loadingReceipt === purchase.latest_submission.id}
-                    className="mt-0.5 text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+                    className="text-xs text-primary inline-flex items-center gap-1 hover:underline disabled:opacity-50"
                     onClick={() => void openReceipt(purchase.latest_submission!.id, purchase.user?.name)}
                   >
                     {loadingReceipt === purchase.latest_submission.id ? (
@@ -215,20 +217,17 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                     ) : (
                       <Eye className="w-3.5 h-3.5" />
                     )}
-                    {t("viewReceipt")}
+                    <span>{t("viewReceipt")}</span>
                   </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {!purchase.latest_submission?.id && (
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                ) : (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
                     {language === "ru" ? "Чек ещё не прикреплён" : "Чек әлі тіркелмеген"}
                   </span>
                 )}
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 w-8 p-0 text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground"
+                  className="h-8 w-8 p-0 text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground min-h-0"
                   title={t("rejectPayment")}
                   aria-label={t("rejectPayment")}
                   onClick={() => {
@@ -246,7 +245,7 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
                 </Button>
                 <Button
                   size="sm"
-                  className="h-8 w-8 p-0"
+                  className="h-8 w-8 p-0 min-h-0"
                   title={t("confirmPayment")}
                   aria-label={t("confirmPayment")}
                   onClick={() => confirmPayment.mutate(purchase.id)}
