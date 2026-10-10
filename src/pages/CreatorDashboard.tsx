@@ -17,6 +17,7 @@ import AppShell from "@/components/layout/BuyerAppShell";
 import {
   HeaderAccountControl,
   HeaderNotificationsButton,
+  HeaderSupportButton,
 } from "@/components/layout/HeaderControls";
 import DisplayNameSetupDialog from "@/components/account/DisplayNameSetupDialog";
 import { creatorTabFromPath, SELLER_NAV_ITEMS } from "@/lib/navigation";
@@ -43,7 +44,6 @@ const CreatorDashboard = () => {
   // Notifications open over the current tab and close back onto it, like account settings.
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [creatorName, setCreatorName] = useState<string | null>(null);
-  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(() => localStorage.getItem("profile_id"));
   const [needsDisplayName, setNeedsDisplayName] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -221,7 +221,6 @@ const CreatorDashboard = () => {
         const displayName =
           typeof data.displayName === "string" ? data.displayName.trim() : localStorage.getItem("profile_display_name") || "";
         if (displayName) localStorage.setItem("profile_display_name", displayName);
-        setProfileDisplayName(displayName || null);
         const email = typeof data.email === "string" ? data.email : readAuthEmail();
         setNeedsDisplayName(needsDisplayNamePrompt(displayName, email));
         setIsLoading(false);
@@ -253,10 +252,7 @@ const CreatorDashboard = () => {
       <div className="min-h-screen bg-background">
         <DisplayNameSetupDialog
           open
-          onSaved={(saved) => {
-            setProfileDisplayName(saved);
-            setNeedsDisplayName(false);
-          }}
+          onSaved={() => setNeedsDisplayName(false)}
         />
       </div>
     );
@@ -272,6 +268,9 @@ const CreatorDashboard = () => {
       )}
     >
       <AppHeader>
+        <HeaderSupportButton
+          mobileNav={(close) => <CreatorMobileNav activeTab={activeTab} onTabChange={handleTabChange} onNavigate={close} />}
+        />
         <HeaderNotificationsButton
           active={notificationsOpen}
           count={newNotificationsCount}
@@ -296,8 +295,6 @@ const CreatorDashboard = () => {
           {isMessages && (
             <div className="h-full animate-fade-in">
               <CreatorMessagesTab
-                creatorName={creatorName}
-                supportDisplayName={profileDisplayName || creatorName}
                 onGoToProducts={() => handleTabChange("products")}
               />
             </div>

@@ -319,6 +319,78 @@ Deno.serve(async (req) => {
       return json({ message })
     }
 
+    if (action === 'edit_message' || action === 'delete_message') {
+      const thread = await findThread(supabase, pair.creatorAccountId, pair.buyerProfileId)
+      if (!thread) return json({ error: 'Not found' }, 404)
+      const messageId = String(body.messageId || '')
+      const { data: message } = await supabase
+        .from('direct_messages')
+        .select('id, sender, text, attachments')
+        .eq('id', messageId)
+        .eq('thread_id', thread.id)
+        .maybeSingle()
+      // Only the sender may change or remove a message.
+      if (!message || message.sender !== me.side) return forbidden()
+
+      if (action === 'edit_message') {
+        const text = typeof body.text === 'string' ? body.text.trim() : ''
+        if (text.length > 4000) return json({ error: 'Bad text' }, 400)
+        const files = (message.attachments ?? []) as { kind: keyof typeof ATTACHMENT_LABEL }[]
+        if (!text && !files.length) return json({ error: 'Empty message' }, 400)
+        const { error } = await supabase
+          .from('direct_messages')
+          .update({ text, edited_at: new Date().toISOString() })
+          .eq('id', message.id)
+        if (error) return json({ error: error.message }, 500)
+      } else {
+        // The peer's unread count covers the sender's latest messages; if this is one of
+        // them, it stops counting once it is gone.
+        const peerUnread = me.side === 'creator' ? 'unread_for_buyer' : 'unread_for_creator'
+        const unread = Number(thread[peerUnread] ?? 0)
+        let wasUnread = false
+        if (unread > 0) {
+          const { data: recent } = await supabase
+            .from('direct_messages')
+            .select('id')
+            .eq('thread_id', thread.id)
+            .eq('sender', me.side)
+            .order('created_at', { ascending: false })
+            .limit(unread)
+          wasUnread = (recent ?? []).some((r: { id: string }) => r.id === message.id)
+        }
+
+        const { error } = await supabase.from('direct_messages').delete().eq('id', message.id)
+        if (error) return json({ error: error.message }, 500)
+        if (wasUnread) {
+          await supabase.from('direct_threads').update({ [peerUnread]: unread - 1 }).eq('id', thread.id)
+        }
+        const stored = ((message.attachments ?? []) as { path: string }[])
+          .map((a) => a.path)
+          .filter((p) => !p.startsWith('s3://'))
+        if (stored.length) await supabase.storage.from(BUCKET).remove(stored)
+      }
+
+      // The chat list shows the newest message, which may just have changed or gone.
+      const { data: last } = await supabase
+        .from('direct_messages')
+        .select('text, attachments, created_at')
+        .eq('thread_id', thread.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const lastFiles = (last?.attachments ?? []) as { kind: keyof typeof ATTACHMENT_LABEL }[]
+      await supabase
+        .from('direct_threads')
+        .update({
+          last_message_at: last?.created_at ?? null,
+          last_message_preview: last
+            ? (last.text || lastFiles.map((f) => ATTACHMENT_LABEL[f.kind]).join(', ')).slice(0, 200)
+            : null,
+        })
+        .eq('id', thread.id)
+      return json({ ok: true })
+    }
+
     return json({ error: 'Unknown action' }, 400)
   } catch (e) {
     console.error('direct-messages error', e)

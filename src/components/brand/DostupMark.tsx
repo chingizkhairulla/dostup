@@ -1,17 +1,19 @@
 import { cn } from "@/lib/utils";
 
 /**
- * The Dostup logo mark (the orange square "D") used as the support chat's avatar. It is the
- * real logo file rather than the full wordmark, whose lettering would be a smudge at this size.
+ * The full "Dostup" wordmark in a round avatar, the same circle every other chat has —
+ * used as the support chat's picture.
  */
 const DostupMark = ({ className }: { className?: string }) => (
-  <img
-    src="/icon-source.png"
-    alt=""
+  <span
     aria-hidden
-    draggable={false}
-    className={cn("h-10 w-10 shrink-0 rounded-[28%] object-cover", className)}
-  />
+    className={cn(
+      "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-white",
+      className,
+    )}
+  >
+    <img src="/logo-wordmark.png" alt="" draggable={false} className="w-[84%] object-contain" />
+  </span>
 );
 
 export default DostupMark;

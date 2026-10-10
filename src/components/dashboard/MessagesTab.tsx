@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, Loader2, Megaphone, Package, Radio, UserRound } from "lucide-react";
+import { Loader2, Megaphone, Package, Radio, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
-import { DIRECT_PREFIX, previewOf, SUPPORT_CHAT_ID } from "@/components/messages/chatPreview";
+import { DIRECT_PREFIX, previewOf } from "@/components/messages/chatPreview";
 import DirectChat, { useDirectContacts } from "@/components/messages/DirectChat";
 import MessengerLayout, { type ChatCategory } from "@/components/messages/MessengerLayout";
-import DostupMark from "@/components/brand/DostupMark";
-import SupportChat from "@/components/SupportChat";
 import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
 import { useAnnouncementsForProducts } from "@/hooks/useAnnouncements";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
-import { useSupportUnread } from "@/hooks/useSupportUnread";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 
@@ -19,15 +16,14 @@ interface Props {
 }
 
 /**
- * Buyer's messenger: purchased products are read-only channels on the left and the
- * support thread sits under personal chats. The open chat fills the right pane.
+ * Buyer's messenger: purchased products are read-only channels and the sellers are personal
+ * chats on the left; the open chat fills the right pane. Support has its own header button.
  */
 const MessagesTab = ({ onBrowseCourses }: Props) => {
   const { t } = useLanguage();
   const { user } = useSimpleAuth();
   const { accessiblePurchases, productIds, isLoading: productsLoading } = useAccessibleProducts();
   const { data: announcements = [], isLoading: announcementsLoading } = useAnnouncementsForProducts(productIds);
-  const supportUnread = useSupportUnread("student", user?.id ?? "");
   const { data: sellers = [] } = useDirectContacts("buyer", !!user);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -70,53 +66,43 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
         key: "direct",
         label: t("messagesDirect"),
         icon: UserRound,
-        items: [
-          {
-            id: SUPPORT_CHAT_ID,
-            title: t("messagesSupport"),
-            subtitle: t("messagesSupportSubtitle"),
-            unread: supportUnread,
-            avatar: <DostupMark className="h-10 w-10" />,
-            verified: true,
-          },
-          ...[...sellers]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
-            .map((seller) => ({
-              id: `${DIRECT_PREFIX}${seller.peer_id}`,
-              title: seller.name,
-              subtitle: seller.last_message_preview || t("messagesSeller"),
-              timestamp: seller.last_message_at ? new Date(seller.last_message_at).getTime() : undefined,
-              unread: seller.unread,
-              avatarUrl: seller.avatar_url,
-            })),
-        ],
+        items: [...sellers]
+          .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+          .map((seller) => ({
+            id: `${DIRECT_PREFIX}${seller.peer_id}`,
+            title: seller.name,
+            subtitle: seller.last_message_preview || t("messagesSeller"),
+            timestamp: seller.last_message_at ? new Date(seller.last_message_at).getTime() : undefined,
+            unread: seller.unread,
+            avatarUrl: seller.avatar_url,
+          })),
+        emptyText: t("messagesNoDirect"),
       },
     ],
-    [channels, supportUnread, t, sellers],
+    [channels, t, sellers],
   );
 
-  // Open the freshest channel by default, or the support thread when nothing was bought.
+  // Open the freshest channel by default.
   useEffect(() => {
     if (loading) return;
     const stillThere =
-      selectedId === SUPPORT_CHAT_ID ||
       channels.some((c) => c.id === selectedId) ||
       sellers.some((c) => `${DIRECT_PREFIX}${c.peer_id}` === selectedId);
-    if (!stillThere) setSelectedId(channels[0]?.id ?? SUPPORT_CHAT_ID);
+    if (!stillThere) setSelectedId(channels[0]?.id ?? null);
   }, [channels, sellers, loading, selectedId]);
 
   const directPeer = selectedId?.startsWith(DIRECT_PREFIX) ? selectedId.slice(DIRECT_PREFIX.length) : null;
   const openSeller = directPeer ? sellers.find((c) => c.peer_id === directPeer) : undefined;
-  // Personal chats behave like support: no channel feed, their own composer.
-  const isSupport = selectedId === SUPPORT_CHAT_ID || !!directPeer;
+  // A personal chat has no channel feed; it brings its own composer.
+  const isPersonal = !!directPeer;
   const channelPosts = useMemo(
-    () => (isSupport ? [] : announcements.filter((a) => a.product_id === selectedId)),
-    [announcements, selectedId, isSupport],
+    () => (isPersonal ? [] : announcements.filter((a) => a.product_id === selectedId)),
+    [announcements, selectedId, isPersonal],
   );
 
   const openChannel = channels.find((c) => c.id === selectedId);
 
-  useStickToBottom(!loading && !isSupport, isSupport ? null : selectedId, channelPosts.length, bodyRef);
+  useStickToBottom(!loading && !isPersonal, isPersonal ? null : selectedId, channelPosts.length, bodyRef);
 
   const header = directPeer ? (
     <div className="flex min-w-0 items-center gap-3">
@@ -130,17 +116,6 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-foreground">{openSeller?.name}</span>
         <span className="block truncate text-xs text-muted-foreground">{t("messagesSeller")}</span>
-      </span>
-    </div>
-  ) : isSupport ? (
-    <div className="flex min-w-0 items-center gap-3">
-      <DostupMark className="h-9 w-9" />
-      <span className="min-w-0">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-foreground">{t("messagesSupport")}</span>
-          <BadgeCheck className="h-4 w-4 shrink-0 text-[#FF6B00]" strokeWidth={2} />
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">{t("messagesSupportSubtitle")}</span>
       </span>
     </div>
   ) : (
@@ -163,11 +138,6 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
     }
     if (directPeer) {
       return <DirectChat key={directPeer} side="buyer" peerId={directPeer} />;
-    }
-    if (isSupport) {
-      return user ? (
-        <SupportChat userType="student" userRef={user.id} displayName={user.name} variant="embedded" />
-      ) : null;
     }
     if (channels.length === 0) {
       return (
@@ -200,7 +170,7 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
       bodyRef={bodyRef}
       footer={
         // A channel only the author writes in: say so, or the empty bottom reads as a bug.
-        isSupport || loading || channels.length === 0 ? undefined : (
+        isPersonal || loading || channels.length === 0 ? undefined : (
           <p className="flex items-center justify-center gap-2 py-2 text-center text-xs text-muted-foreground">
             <Radio className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {t("messagesChannelReadOnly")}

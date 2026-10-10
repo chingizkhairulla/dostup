@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, Loader2, Megaphone, MoreVertical, Package, Pencil, Trash2, UserRound } from "lucide-react";
+import { Loader2, Megaphone, MoreVertical, Package, Pencil, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -19,13 +19,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
 import MessengerLayout, { type ChatCategory } from "@/components/messages/MessengerLayout";
-import SupportChat from "@/components/SupportChat";
 import DirectChat, { useDirectContacts } from "@/components/messages/DirectChat";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import AnnouncementComposer from "./AnnouncementComposer";
-import DostupMark from "@/components/brand/DostupMark";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
-import { DIRECT_PREFIX, previewOf, SUPPORT_CHAT_ID } from "@/components/messages/chatPreview";
+import { DIRECT_PREFIX, previewOf } from "@/components/messages/chatPreview";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import {
   useAnnouncements,
@@ -36,25 +34,21 @@ import {
   type Announcement,
 } from "@/hooks/useAnnouncements";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
-import { useSupportUnread } from "@/hooks/useSupportUnread";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const errorMessage = (e: unknown) => (e instanceof Error && e.message ? e.message : null);
 
 interface Props {
-  creatorName: string;
-  supportDisplayName?: string;
   onGoToProducts?: () => void;
 }
 
 /**
- * Author's messenger: one channel per product on the left, the support thread under
- * personal chats, and the open channel with its composer on the right.
+ * Author's messenger: one channel per product and the personal chats with buyers on the left,
+ * the open chat with its composer on the right. Support lives behind its own header button.
  */
-const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }: Props) => {
+const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
   const { t } = useLanguage();
   const { data: products = [], isLoading: productsLoading } = useCreatorProducts();
-  const supportUnread = useSupportUnread("creator", creatorName);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -63,9 +57,8 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
 
   const { data: contacts = [] } = useDirectContacts("creator", !productsLoading && products.length > 0);
 
-  const isSupport = selectedId === SUPPORT_CHAT_ID;
   const directPeer = selectedId?.startsWith(DIRECT_PREFIX) ? selectedId.slice(DIRECT_PREFIX.length) : null;
-  const isChannel = !isSupport && !directPeer;
+  const isChannel = !directPeer;
   const productId = isChannel ? selectedId ?? undefined : undefined;
 
   const { data: announcements = [], isLoading: channelLoading } = useAnnouncements(productId);
@@ -112,48 +105,36 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
         key: "direct",
         label: t("messagesDirect"),
         icon: UserRound,
-        // "All" and each product show buyers who still have access; lapsed ones sit under "Inactive".
+        // Each product shows its buyers who still have access; lapsed ones sit under "Inactive".
         filters: [
-          { key: "all", label: t("messagesFilterAll") },
           ...products
             .filter((p) => contacts.some((c) => c.active && c.product_ids.includes(p.id)))
             .map((p) => ({ key: p.id, label: p.title })),
-          ...(contacts.some((c) => !c.active) ? [{ key: "inactive", label: t("messagesFilterInactive") }] : []),
+          ...(contacts.some((c) => !c.active) ? [{ key: "inactive", label: t("messagesFilterInactive"), full: true }] : []),
         ],
-        items: [
-          {
-            id: SUPPORT_CHAT_ID,
-            title: t("messagesSupport"),
-            subtitle: t("messagesSupportSubtitle"),
-            unread: supportUnread,
-            avatar: <DostupMark className="h-10 w-10" />,
-            verified: true,
-            filterKeys: ["all"],
-          },
-          ...[...contacts]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
-            .map((c) => ({
-              id: `${DIRECT_PREFIX}${c.peer_id}`,
-              title: c.name,
-              subtitle: c.last_message_preview || productTitles(c.product_ids),
-              timestamp: c.last_message_at ? new Date(c.last_message_at).getTime() : undefined,
-              unread: c.unread,
-              avatarUrl: c.avatar_url,
-              filterKeys: c.active ? ["all", ...c.product_ids] : ["inactive"],
-            })),
-        ],
+        items: [...contacts]
+          .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+          .map((c) => ({
+            id: `${DIRECT_PREFIX}${c.peer_id}`,
+            title: c.name,
+            subtitle: c.last_message_preview || productTitles(c.product_ids),
+            timestamp: c.last_message_at ? new Date(c.last_message_at).getTime() : undefined,
+            unread: c.unread,
+            avatarUrl: c.avatar_url,
+            filterKeys: c.active ? c.product_ids : ["inactive"],
+          })),
+        emptyText: t("messagesNoDirect"),
       },
     ],
-    [channels, supportUnread, t, contacts, products, productTitles],
+    [channels, t, contacts, products, productTitles],
   );
 
   useEffect(() => {
     if (productsLoading) return;
     const stillThere =
-      selectedId === SUPPORT_CHAT_ID ||
       channels.some((c) => c.id === selectedId) ||
       contacts.some((c) => `${DIRECT_PREFIX}${c.peer_id}` === selectedId);
-    if (!stillThere) setSelectedId(channels[0]?.id ?? SUPPORT_CHAT_ID);
+    if (!stillThere) setSelectedId(channels[0]?.id ?? null);
   }, [channels, contacts, productsLoading, selectedId]);
 
   // Switching channels must not carry an unfinished edit over to another product.
@@ -257,17 +238,6 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
         </span>
       </span>
     </div>
-  ) : isSupport ? (
-    <div className="flex min-w-0 items-center gap-3">
-      <DostupMark className="h-9 w-9" />
-      <span className="min-w-0">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-foreground">{t("messagesSupport")}</span>
-          <BadgeCheck className="h-4 w-4 shrink-0 text-[#FF6B00]" strokeWidth={2} />
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">{t("messagesSupportSubtitle")}</span>
-      </span>
-    </div>
   ) : (
     // The chip list already names the channel, so the bar just states the product in full.
     <div className="flex min-w-0 items-center gap-2.5">
@@ -301,13 +271,6 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
       >
         {directPeer ? (
           <DirectChat key={directPeer} side="creator" peerId={directPeer} />
-        ) : isSupport ? (
-          <SupportChat
-            userType="creator"
-            userRef={creatorName}
-            displayName={supportDisplayName || creatorName}
-            variant="embedded"
-          />
         ) : channelLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

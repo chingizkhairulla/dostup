@@ -89,6 +89,10 @@ serve(async (req) => {
 
     // get or create thread
     let { data: thread } = await supabase.from('support_threads').select('*').eq('user_type', user_type).eq('user_ref', user_ref).maybeSingle()
+
+    // Header badge: the tables are closed to the browser, so the count comes from here. No thread yet means nothing unread.
+    if (action === 'unread') return json({ success: true, unread: Number(thread?.unread_for_user ?? 0) })
+
     if (!thread) {
       const { data: created, error } = await supabase.from('support_threads').insert({
         user_type, user_ref, display_name: display_name || user_ref,
