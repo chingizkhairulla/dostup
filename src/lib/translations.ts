@@ -203,7 +203,7 @@ export const translations = {
     createFirstProduct: "Создайте свой первый продукт",
     
     // Creator Users Tab
-    paidUsers: "Оплатившие покупатели",
+    paidUsers: "Оплатившие",
     noPaidUsers: "Пока нет покупателей",
     usersWillAppear: "Покупатели появятся здесь после оплаты",
     phone: "Телефон",
@@ -313,7 +313,7 @@ export const translations = {
     
     // Creator actions
     confirmPayment: "Подтвердить оплату",
-    pendingPayments: "Ожидающие подтверждения",
+    pendingPayments: "Ожидающие доступа",
     kaspiLink: "Ссылка Kaspi",
     kaspiLinkPlaceholder: "https://kaspi.kz/pay/...",
     paymentConfirmed: "Оплата подтверждена!",
@@ -644,7 +644,7 @@ export const translations = {
     download: "Скачать",
     buyersAllProducts: "Все продукты",
     buyersPeriod: "Период покупки",
-    buyersPeriod_month: "Этот месяц",
+    buyersPeriod_month: "Месяц",
     buyersPeriod_quarter: "3 месяца",
     buyersPeriod_half: "Полгода",
     buyersPeriod_year: "Год",
@@ -887,7 +887,7 @@ export const translations = {
     createFirstProduct: "Бірінші өніміңізді жасаңыз",
     
     // Creator Users Tab
-    paidUsers: "Төлеген сатып алушылар",
+    paidUsers: "Төлегендер",
     noPaidUsers: "Сатып алушылар әзірге жоқ",
     usersWillAppear: "Сатып алушылар төлегеннен кейін мұнда пайда болады",
     phone: "Телефон",
@@ -997,7 +997,7 @@ export const translations = {
     
     // Creator actions
     confirmPayment: "Төлемді растау",
-    pendingPayments: "Растауды күтуде",
+    pendingPayments: "Қол жеткізуді күтуде",
     kaspiLink: "Kaspi сілтемесі",
     kaspiLinkPlaceholder: "https://kaspi.kz/pay/...",
     paymentConfirmed: "Төлем расталды!",
@@ -1328,7 +1328,7 @@ export const translations = {
     download: "Жүктеп алу",
     buyersAllProducts: "Барлық өнімдер",
     buyersPeriod: "Сатып алу кезеңі",
-    buyersPeriod_month: "Осы ай",
+    buyersPeriod_month: "Ай",
     buyersPeriod_quarter: "3 ай",
     buyersPeriod_half: "Жарты жыл",
     buyersPeriod_year: "Жыл",
