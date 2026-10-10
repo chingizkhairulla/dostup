@@ -36,7 +36,7 @@ import {
 import MediaViewer from "@/components/media/MediaViewer";
 import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { formatFileSize } from "@/lib/announcementHtml";
-import type { ChatAttachment, ChatAttachmentKind } from "@/lib/chatUpload";
+import { ChatUploadError, isVideoFileName, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
 import { cn } from "@/lib/utils";
@@ -86,9 +86,15 @@ const newId = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const kindOf = (file: File, source: "media" | "documents"): ChatAttachmentKind => {
   if (source === "documents") return "file";
   if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("video/") || (!file.type && isVideoFileName(file.name))) return "video";
   return "file";
 };
+
+const UPLOAD_FAILURE_TEXT = {
+  too_large: "chatUploadTooLarge",
+  unsupported: "chatUploadUnsupported",
+  network: "chatUploadNetwork",
+} as const;
 
 /** Message list plus the "+ / field / send" composer shared by every personal chat. */
 const ChatThread = ({
@@ -191,7 +197,10 @@ const ChatThread = ({
           // Cancelling is not a failure — the tile simply disappears.
           if (!entry.controller.signal.aborted) {
             console.error(e);
-            toast.error(t("announcementUploadError", { name: file.name }));
+            // The reason goes under the title; an unexpected one is shown as is, so it can be reported.
+            const reason =
+              e instanceof ChatUploadError ? t(UPLOAD_FAILURE_TEXT[e.reason]) : e instanceof Error ? e.message.slice(0, 160) : undefined;
+            toast.error(t("announcementUploadError", { name: file.name }), { description: reason });
           }
         } finally {
           setPending((prev) => prev.filter((p) => p.id !== entry.id));

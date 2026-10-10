@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
+import { isVideoFileName } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { buildAnnouncementHtml, formatFileSize, type AnnouncementAttachment } from "@/lib/announcementHtml";
@@ -129,7 +130,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
             ? "file"
             : file.type.startsWith("image/")
               ? "image"
-              : file.type.startsWith("video/")
+              : file.type.startsWith("video/") || (!file.type && isVideoFileName(file.name))
                 ? "video"
                 : "file";
         const entry: PendingUpload = {
@@ -150,7 +151,9 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
           // Cancelling is not a failure — the tile simply disappears.
           if (!entry.controller.signal.aborted) {
             console.error(e);
-            toast.error(t("announcementUploadError", { name: file.name }));
+            toast.error(t("announcementUploadError", { name: file.name }), {
+              description: e instanceof Error ? e.message.slice(0, 160) : undefined,
+            });
           }
         } finally {
           dropPending(entry.id);

@@ -23,8 +23,8 @@ export async function compressVideoIfNeeded(
   onProgress?: CompressProgressCallback,
   signal?: AbortSignal
 ): Promise<File> {
-  // Обрабатываем только видеофайлы
-  if (!file.type.startsWith("video/")) {
+  // Обрабатываем только видеофайлы (.mov на некоторых Windows приходит без типа)
+  if (!file.type.startsWith("video/") && !/\.(mov|qt|mp4|m4v|webm)$/i.test(file.name)) {
     return file;
   }
 
@@ -87,11 +87,15 @@ export async function compressVideoIfNeeded(
 
     const audioTrack = await input.getPrimaryAudioTrack();
     const hasAudio = Boolean(audioTrack);
+    // Звук AAC с iPhone начинается на ~0,04 с раньше нуля (служебная задержка кодека). Обрезка по
+    // нулю заставила бы его перекодировать; начало с первого сэмпла позволяет скопировать звук как есть.
+    const firstTimestamp = await input.getFirstTimestamp(audioTrack ? [videoTrack, audioTrack] : [videoTrack]);
 
     const conversion = await Conversion.init({
       input,
       output,
       tracks: "primary",
+      trim: firstTimestamp < 0 ? { start: firstTimestamp } : undefined,
       video: {
         width: targetWidth,
         height: targetHeight,
@@ -99,10 +103,12 @@ export async function compressVideoIfNeeded(
         codec: "avc",
         bitrate: 2_200_000, // 2.2 Мбит/с — отличное качество для мобильных экранов
       },
+      // Без битрейта звук AAC (так снимает iPhone) копируется как есть. Safari на iPhone не умеет
+      // кодировать AAC: при перекодировании звук отбрасывался, сжатие отменялось целиком, и на
+      // сервер уходил исходный 4K-файл в сотни мегабайт.
       audio: hasAudio
         ? {
             codec: "aac",
-            bitrate: 128_000,
           }
         : {
             discard: true,
