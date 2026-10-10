@@ -3452,7 +3452,8 @@ export default function SlotCreationWizard({
                               const durationM = Math.max(30, endM - startM);
                               const pixelsPerMinute = 48 / 60;
                               const topPx = startM * pixelsPerMinute;
-                              const heightPx = Math.max(44, durationM * pixelsPerMinute);
+                              const heightPx = Math.max(24, durationM * pixelsPerMinute);
+                              const isShortSlot = heightPx <= 32;
 
                               return (
                                 <div
@@ -3462,11 +3463,12 @@ export default function SlotCreationWizard({
                                    toggleSlotSelection(key);
                                   }}
                                   style={{
-                                    top: `${topPx + 2}px`,
-                                    height: `${heightPx - 4}px`,
+                                    top: `${topPx + 1}px`,
+                                    height: `${heightPx - 2}px`,
                                   }}
                                   className={cn(
-                                    "group absolute left-1 right-1 rounded-xl transition-all cursor-pointer select-none flex items-center justify-center p-1.5 text-center overflow-hidden",
+                                    "group absolute left-1 right-1 transition-all cursor-pointer select-none flex items-center justify-center text-center overflow-hidden",
+                                    isShortSlot ? "p-0.5 rounded-lg" : "p-1.5 rounded-xl",
                                     isSelected
                                       ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
                                       : "bg-card text-primary border-2 border-primary/40 hover:border-primary/60 z-10"
@@ -3476,7 +3478,10 @@ export default function SlotCreationWizard({
                                   {!isSelected && (
                                     <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
                                   )}
-                                  <span className="relative z-10 font-mono font-bold text-xs sm:text-sm leading-tight">
+                                  <span className={cn(
+                                    "relative z-10 font-mono font-bold whitespace-nowrap",
+                                    isShortSlot ? "text-[11px] leading-none" : "text-xs sm:text-sm leading-tight"
+                                  )}>
                                     {interval.start} – {interval.end}
                                   </span>
                                 </div>
