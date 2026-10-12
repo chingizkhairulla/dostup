@@ -92,8 +92,8 @@ class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-md w-full text-center space-y-6">
             {/* Icon */}
             <div className="flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-warning/10 flex items-center justify-center">
-                <AlertTriangle className="w-10 h-10 text-warning" />
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-primary" />
               </div>
             </div>
 
@@ -123,12 +123,19 @@ class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={this.handleReload} className="gap-2">
-                <RefreshCw className="w-4 h-4" />
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
+              <Button
+                onClick={this.handleReload}
+                className="gap-2 bg-primary hover:bg-primary/90 text-white font-medium"
+              >
+                <RefreshCw className="w-4 h-4 text-white" />
                 {t.reloadButton}
               </Button>
-              <Button variant="outline" onClick={openSupportChat} className="gap-2">
+              <Button
+                variant="outline"
+                onClick={openSupportChat}
+                className="gap-2 border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 font-medium"
+              >
                 <MessageCircle className="w-4 h-4" />
                 {t.supportButton}
               </Button>
