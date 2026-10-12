@@ -141,11 +141,6 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
           hideCloseButton
           className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl sm:rounded-2xl"
         >
-          {/* On a computer the card closes by clicking outside or Esc; phones keep the cross. */}
-          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-ring md:hidden">
-            <X className="h-4 w-4" />
-            <span className="sr-only">{t("close")}</span>
-          </DialogClose>
           <DialogHeader className="text-left">
             <DialogTitle className="flex items-center gap-3 pr-6 md:pr-0">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
@@ -217,9 +212,10 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
                 )
               }
             >
-              {/* Wraps between the price and the date, never inside the date. */}
-              <span className="whitespace-nowrap">{formatPriceTenge(Number(purchase.amount))} ·</span>{" "}
-              <span className="whitespace-nowrap">{fmt(paidAt)}</span>
+              <div className="flex flex-col">
+                <span className="font-semibold text-foreground">{formatPriceTenge(Number(purchase.amount))}</span>
+                <span className="text-xs text-muted-foreground">{fmt(paidAt)}</span>
+              </div>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
               {/* "Forever" and "closed" are said once; a date gets its countdown badge. */}
@@ -280,7 +276,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
       </Dialog>
 
       <MediaViewer
-        align="left"
+        align="center"
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}
@@ -331,18 +327,20 @@ const Row = ({
   below?: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <div className="flex items-start gap-3">
-    <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className="break-words font-medium text-foreground">{children}</dd>
+  <div className="flex flex-col gap-2">
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="break-words font-medium text-foreground">{children}</dd>
+          </div>
+          {aside && <div className="shrink-0">{aside}</div>}
         </div>
-        {aside && <div className="shrink-0">{aside}</div>}
       </div>
-      {below && <dd className="mt-2">{below}</dd>}
     </div>
+    {below && <div className="w-full">{below}</div>}
   </div>
 );
 
