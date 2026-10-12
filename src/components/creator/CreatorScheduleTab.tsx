@@ -17,6 +17,7 @@ import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
 import { convertUserTimeToSlotTime } from "@/lib/timezones";
+import { getLessonCycleMinutes, sendSlotsDroppingMissingColumns } from "@/lib/timeSlots";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -882,15 +883,16 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           description?: string;
           imageUrl?: string;
           location?: string;
+          lessonLink?: string;
           repeatWeekly?: boolean;
-          repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+          repeatPeriod?: "1week" | "2weeks" | "1month" | "custom" | null;
           repeatUntil?: string | null;
         }[]
       >;
       timeIntervals: { start: string; end: string }[];
       repeatDays: number[];
       repeatWeekly: boolean;
-      repeatPeriod: "1week" | "1month" | "2months" | "custom" | null;
+      repeatPeriod: "1week" | "2weeks" | "1month" | "custom" | null;
       repeatUntil: string | null;
       slotDuration: number;
       maxParticipants: number;
@@ -952,7 +954,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           let intervalEnd = addDays(startDate, 6);
           if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
           else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
-          else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+          else if (repPeriod === "2weeks") intervalEnd = addDays(startDate, 20);
           else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
           if (intervalEnd > maxEndDate) {
             maxEndDate = intervalEnd;
@@ -963,7 +965,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       if (params.repeatWeekly && params.repeatPeriod && maxEndDate <= addDays(startDate, 6)) {
         if (params.repeatPeriod === "1week") maxEndDate = addDays(startDate, 13);
         else if (params.repeatPeriod === "1month") maxEndDate = addMonths(startDate, 1);
-        else if (params.repeatPeriod === "2months") maxEndDate = addMonths(startDate, 2);
+        else if (params.repeatPeriod === "2weeks") maxEndDate = addDays(startDate, 20);
         else if (params.repeatPeriod === "custom" && params.repeatUntil) maxEndDate = parseISO(params.repeatUntil);
       }
 
@@ -1018,7 +1020,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               let intervalEnd = addDays(startDate, 6);
               if (repPeriod === "1week") intervalEnd = addDays(startDate, 13);
               else if (repPeriod === "1month") intervalEnd = addMonths(startDate, 1);
-              else if (repPeriod === "2months") intervalEnd = addMonths(startDate, 2);
+              else if (repPeriod === "2weeks") intervalEnd = addDays(startDate, 20);
               else if (repPeriod === "custom" && repUntil) intervalEnd = parseISO(repUntil);
 
               return currentDate <= intervalEnd;
@@ -1034,6 +1036,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           const targetProdId = (interval as any).productId || (params as any).productId || selectedProductId || products[0]?.id;
           const targetScheduleId = scheduleMap.get(targetProdId) || defaultScheduleId;
           const duration = (interval as any).slotDuration || params.slotDuration || 60;
+          const lessonCycle = getLessonCycleMinutes(duration);
           const maxPart = (interval as any).maxParticipants || params.maxParticipants || 1;
           const slotTitle = (interval as any).title ?? params.title;
           const slotDesc = (interval as any).description ?? params.description;
@@ -1063,7 +1066,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
               const [sh, sm] = slotStart.split(":").map(Number);
               const now = new Date();
               if (sh < now.getHours() || (sh === now.getHours() && sm < now.getMinutes())) {
-                currentMinutes = slotEndMinutes;
+                currentMinutes += lessonCycle;
                 continue;
               }
             }
@@ -1095,10 +1098,11 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 description: slotDesc || null,
                 image_url: slotImg || null,
                 location: slotLoc || null,
+                lesson_link: (interval as any).lessonLink || null,
               });
             }
 
-            currentMinutes = slotEndMinutes;
+            currentMinutes += lessonCycle;
           }
         }
 
@@ -1116,12 +1120,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         }
 
         for (const [sId, scheduleSlots] of slotsBySchedule.entries()) {
-          await invokeApi("manage-schedules", {
-            action: "create_slots",
-            ...creatorCreds(),
-            slots: scheduleSlots,
-            scheduleId: sId,
-          });
+          await sendSlotsDroppingMissingColumns(scheduleSlots, (s) =>
+            invokeApi("manage-schedules", {
+              action: "create_slots",
+              ...creatorCreds(),
+              slots: s,
+              scheduleId: sId,
+            })
+          );
         }
       }
 
@@ -1307,27 +1313,27 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 onClick={() => setEditingSlotDetails(slot)}
                 title={language === "ru" ? "Нажмите для редактирования деталей" : "Мәліметтерді өңдеу үшін басыңыз"}
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
                   <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
                   <Badge variant="outline" className="text-xs shrink-0 font-medium">
                     {timeLabel}
                   </Badge>
-                  {slot.title && (
-                    <span className="font-medium text-sm truncate" title={slot.title}>
-                      {slot.title}
-                    </span>
-                  )}
                   {isGroup ? (
                     <Badge variant="secondary" className="text-[11px] shrink-0">
                       {slotBookings.length}/{maxParticipants >= 9999 ? "∞" : maxParticipants} {language === "ru" ? "группа" : "топ"}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[11px] shrink-0">
-                      {hasBookings 
+                      {hasBookings
                         ? (language === "ru" ? "Занято" : "Бос емес")
                         : (language === "ru" ? "Свободно" : "Бос")
                       }
                     </Badge>
+                  )}
+                  {slot.title && (
+                    <span className="font-medium text-sm min-w-0 truncate" title={slot.title}>
+                      {slot.title}
+                    </span>
                   )}
                 </div>
 
@@ -1660,14 +1666,13 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-foreground">
-        {language === "kk" ? "Кесте" : "Расписание"}
-      </h2>
-
-      {/* Top Bar: Actions */}
-      <div className="flex items-center justify-end gap-3 flex-wrap">
+      {/* Header row: title + actions */}
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-semibold text-foreground leading-7">
+          {language === "kk" ? "Кесте" : "Расписание"}
+        </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button 
+          <Button
             size="sm"
             onClick={() => setIsWizardOpen(true)}
             className="gap-1.5 bg-primary text-primary-foreground font-semibold shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -1710,7 +1715,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1 sm:gap-2">
+              <div className="flex items-center justify-center gap-1 sm:gap-2 w-full sm:w-auto">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1775,7 +1780,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                         setSelectedDate(day);
                       }
                     }}
-                    className={`p-2 sm:p-2.5 rounded-xl text-center transition-all relative border flex flex-col justify-between items-center min-h-[56px] sm:min-h-[68px] ${
+                    className={`p-2 sm:p-2.5 rounded-xl text-center transition-all relative border flex flex-col justify-start gap-1 items-center min-h-[56px] sm:min-h-[68px] ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
                         : isTodayDate
@@ -1786,14 +1791,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     <span className={`text-sm sm:text-base font-semibold ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
                       {format(day, "d")}
                     </span>
-                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                    <div className="flex items-start justify-center gap-0.5 flex-wrap max-w-full px-0.5">
                       {daySlots.map((slot) => {
                         const slotStatus = getSlotStatus(slot.id);
                         return (
                           <span
                             key={slot.id}
                             className={cn(
-                              "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0",
+                              "w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full shrink-0",
                               slotStatus === "full"
                                 ? "bg-green-500"
                                 : slotStatus === "partial"
@@ -1867,7 +1872,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1 sm:gap-2">
+              <div className="flex items-center justify-center gap-1 sm:gap-2 w-full sm:w-auto">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1920,7 +1925,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                       setSelectedDate(day);
                       setIsDayScheduleDialogOpen(true);
                     }}
-                    className={`min-h-[56px] sm:min-h-[68px] p-1.5 rounded-xl flex flex-col justify-between items-center transition-all relative border text-center ${
+                    className={`min-h-[56px] sm:min-h-[68px] p-1.5 rounded-xl flex flex-col justify-start gap-1 items-center transition-all relative border text-center ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
                         : isTodayDate
@@ -1935,14 +1940,14 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     </span>
                     
                     {/* Indicators */}
-                    <div className="flex items-center justify-center gap-1 flex-wrap max-w-full px-0.5 min-h-[14px]">
+                    <div className="flex items-start justify-center gap-0.5 flex-wrap max-w-full px-0.5">
                       {daySlots.map((slot) => {
                         const slotStatus = getSlotStatus(slot.id);
                         return (
                           <span
                             key={slot.id}
                             className={cn(
-                              "w-1.5 h-1.5 rounded-full shrink-0",
+                              "w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full shrink-0",
                               slotStatus === "full"
                                 ? "bg-green-500"
                                 : slotStatus === "partial"
