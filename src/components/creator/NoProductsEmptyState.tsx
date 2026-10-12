@@ -12,11 +12,11 @@ const NoProductsEmptyState = ({ section, onGoToProducts }: Props) => {
   const { language, l } = useLanguage();
 
   const titleMap = {
-    materials: { ru: "Сначала создайте продукт, чтобы прикрепить материалы", kk: "Материалдар қосу үшін алдымен өнім жасаңыз" },
-    announcements: { ru: "Сначала создайте продукт, чтобы публиковать объявления", kk: "Хабарландыру жариялау үшін алдымен өнім жасаңыз" },
-    schedule: { ru: "Сначала создайте продукт, чтобы добавить расписание", kk: "Кесте жасау үшін алдымен өнім жасаңыз" },
+    materials: { ru: "Сначала создайте продукт, чтобы прикрепить материалы", kk: "Материалдар қосу үшін алдымен өнім жасаңыз", en: "Create a product first to attach materials" },
+    announcements: { ru: "Сначала создайте продукт, чтобы публиковать объявления", kk: "Хабарландыру жариялау үшін алдымен өнім жасаңыз", en: "Create a product first to publish announcements" },
+    schedule: { ru: "Сначала создайте продукт, чтобы добавить расписание", kk: "Кесте жасау үшін алдымен өнім жасаңыз", en: "Create a product first to add a schedule" },
   };
-  const text = titleMap[section][l({ ru: "ru", kk: "kk", en: "ru" })];
+  const text = titleMap[section][language];
 
   return (
     <Card>

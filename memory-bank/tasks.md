@@ -136,7 +136,7 @@ Tests: `_shared/i18n.ts` picks the recipient's language with `ru` fallback; migr
 | Longer English strings breaking fixed-width buttons/labels | medium | Included in the Phase 6 screenshot matrix explicitly |
 
 ### Status
-VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD in progress: Phase 0 ✅, Phase 1 ✅, Phase 2 next.**
+VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD in progress: Phases 0–5 ✅ (Phase 5 as files — the migration and edge-function deploy are the user's to apply), Phase 6 and the raw-literal sweep (Phase 4b) open.** Current detail is in the Build Log below; this line is the summary.
 
 Two creative decisions changed the plan and must be carried into the build:
 1. The taxonomy migration is **cancelled** (C2) — Phase 5 shrinks to server-side notification language only.
@@ -242,6 +242,49 @@ Also worth recording: a raw `grep 'en: "…[а-я]'` suggests 6 leftovers, but a
 | `npm run build` | green |
 | Real browser, 3 languages × 1280px and 390px | headings, chips and toggle all translate; **no overflowing control in any language at either width** |
 
+**Correction (found 2026-10-03, during Phase 5):** "0 still Russian" was true only of `l({…})` phrases. It said nothing about Russian written **outside** `l()` — plain JSX text, `toast` strings, `title=`/`placeholder=`, option tables keyed `{ ru, kk }` with no `en`. Roughly 600 such lines remain in about 45 files, mostly seller screens (`CreatorProductsTab`, `ProductMaterialsManager`, `SlotCreationWizard`, `ProductScheduleManager`). The parser also missed a second shape: where `ru` was Latin text — `l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" })` — the codemod's `en` seed contains no Cyrillic, so it looked translated; that is why English product pages printed "3 октября 2026 г.". Both are tracked as Phase 4b below.
+
+## Phase 5 — Server text ✅ as files (2026-10-03) — migration and deploy are the user's to apply
+
+**Design, and one deliberate deviation from the plan.** The plan put the language on `profiles` only. Reading the code showed push notifications are not addressed to profiles at all: every `notify-*` function selects rows from `push_tokens` by `user_id` (a `simple_users` id) and `user_role`, and creators are matched by role alone. A per-profile language could not reach those devices. So the language lives in two places:
+- `push_tokens.language` — per device, written by `manage-push-token` on every registration; the app registers again whenever its language changes (`useFCMRegistration` depends on `language`). This mirrors the app itself, where the language is a per-device setting in `localStorage`.
+- `profiles.language` — per person, for email only; written by a new `manage-profile` action `set_language` (updates every profile under the same `auth_user_id`, since the language belongs to the person, not one role), called by `useSyncProfileLanguage` after sign-in and on each switch, at most once per session+language pair.
+- Request-scoped where there is no recipient row: the login-code email (`send-email-code` body `language`) and receipt-upload errors (`submit-payment-receipt` form field `language`). A form field rather than a header on purpose: a new header needs a CORS change, and a frontend deployed before the function would then fail the preflight and break receipt upload.
+
+**`supabase/functions/_shared/i18n.ts`** — no imports, so Deno runs it and vitest tests it. Holds `LANGUAGES` (a test fails if it drifts from `src/lib/language.ts`), `toLang`/`localize`, locale-aware dates, and every message: 13 push builders returning all three languages (each device then picks its own), two emails, and the receipt error table keyed by the codes the function already returned. Russian wording is unchanged. It also fixes the Russian plural in the materials push (it always said «материала»: now 2 материала / 5 материалов / 21 материал) and HTML-escapes the product title in the renewal email, which was interpolated raw.
+
+**Functions changed** (each now has no Russian literal of its own, test-enforced): `notify-booking-change`, `notify-purchase-change`, `notify-reschedule`, `notify-reschedule-request`, `notify-reschedule-response`, `unlock-materials`, `send-push-notification` (accepts `localized`, falls back to `title`/`body`), `send-reminders`, `process-subscriptions`, `submit-payment-receipt`, `send-email-code` (+ `_shared/email-otp.ts`), `manage-push-token`, `manage-profile`. Callers of `send-push-notification` still send Russian `title`/`body` alongside `localized`, so an older deploy of it keeps working mid-rollout.
+
+**Deliberately still Russian:** moderator pushes from `support-api` (staff; the moderator dashboard is Russian-only by plan); the `"Запрос ученика подтверждён"` marker (`manage-bookings` writes it, `notify-reschedule` keys on it — data, not text); the `"Продукт"` fallback stored in `material_unlocks.product_title`; `ogproduct` social-card text (crawlers have no language); `checkout`'s `message` (the client no longer displays it — see below); `receipt-classify`/`receipt-parse` (they match Russian words on Kaspi receipts — logic). The GoTrue fallback path of the login code uses Supabase's own template, which code cannot localize.
+
+**Migration** `supabase/migrations/20261003120000_recipient_language.sql`: two `ADD COLUMN IF NOT EXISTS language text NOT NULL DEFAULT 'ru'` with CHECK (`ru|kk|en`), guarded `DO $$` blocks, no DROP/UPDATE/DELETE — existing rows read as Russian, i.e. today's behaviour. **Order matters: migration → edge functions → frontend.** The functions select the new column; deployed before the migration, those selects fail.
+
+**Client:** `storedLanguage()` in `language.ts` (for non-React code; `LanguageContext` now uses it too); `firebase.ts` builds the registration body in `pushRegistrationBody` and includes `language`; `useSyncProfileLanguage` mounted in `AppRoutes`; `sendEmailCode` sends `language`; `ReceiptUploadCard` appends `language`.
+
+**Found and fixed on the way (client text that showed Russian, or a raw code, regardless of language):** the trial-activation error toast showed the server's code `trial_already_used` verbatim (`invokeApi` surfaces `error`, not `message`) — now mapped to `trialAlreadyUsed` / `trialActivationFailed`; the "name taken" error in three places; `sessionApi`'s network error; on the public buyer path — product page, checkout page, report dialog — the pricing-option labels (`pricingOptionLabel` in `catalog.ts`, replacing two identical Russian-only copies), trial labels (`trialDays`, which also fixes «дня» being used only for exactly 3), and the whole report dialog (the reason is still *sent* in Russian, for moderators). Five `en:` slots seeded with Russian Latin text (`"ru-RU"`, `"ru"`) fixed, and a new slot test fails on that shape — confirmed failing on the pre-fix code via `git stash`, passing after.
+
+**Not TDD for all of it, honestly:** the server-message tests were written after `i18n.ts`, not before; the catalog label tests, the header/headline tests and the orange guard were written first and seen failing.
+
+| Gate | Result |
+|---|---|
+| `npm test` | **508 passed / 37 files** (`[i18n] 667/667`) |
+| `npm run typecheck` | **18** — identical set to baseline (diffed) |
+| `npm run build` | green |
+| `deno check` (via `npx deno` 2.9.6) on all 14 changed function files + `i18n.ts` | **5 errors, all in untouched `_shared/receipt-parse.ts`; the same 5 on the pre-change code** — 0 new |
+| esbuild syntax check, each changed function | all ok |
+| Real browser, product page in English | **0 visible Cyrillic** (was: "Пожаловаться", "3 октября 2026 г.") |
+
+## Phase 1 step 3 — one orange ✅ (2026-10-03)
+The user chose to apply what the plan said. All raw `#FF6B00` → the `primary` token (`bg-primary`, `text-primary`, `/10`, `/30`… unchanged opacities), hover shades `#E86000`/`#E86200` → `primary/90` (what `Button` already used), `theme-color` in `index.html`/`offline.html` → `#f97015`, offline page gradient end → the token gradient's `#f24a0d`. A guard test now fails on any raw orange hex in `src` (except `orangeSurfaces.ts`, which names them so the white-text rule still recognises them) and checks `theme-color` equals the token, computed from `index.css`. Measured in Chrome: every orange background on the page is now `rgb(249, 112, 21)`; `audit-orange.mjs` still PASS, 0 dark-on-orange.
+
+## Customer fixes ✅ (2026-10-03)
+1. **Signed-out header, `RU / KK / EN` moved left of "Sign in"** with a small gap: `mr-3` on the toggle (the header's own gap is 4px on desktop). Measured from the EN glyphs to the button edge: **8 → 20px** at 1280, **12 → 24px** at 390, all three languages.
+2. **"Buy. Learn. Sell." — more space between words, English only:** `:lang(en) .hero-headline { word-spacing: 0.2em }`, following the existing `:lang(kk) .hero-headline` rule. Measured word gaps: **19 → 35px** at 1280, **9 → 15px** at 390; Russian and Kazakh unchanged (19px / 9px), and a test pins that only the English rule sets `word-spacing`.
+
 ### What is left
-- **Phase 5** — server-generated text (`profiles.language` column + `_shared/i18n.ts` for the edge functions). Notifications and emails are still Russian-only for everyone, which already under-serves Kazakh users; this is the one part of the task that needs a production migration, prepared here but applied by the user.
-- **Phase 6** — the final verification matrix on authenticated seller screens, which is where most of the 716 translated phrases actually live. They are covered by typecheck, tests and the parser, but have not been seen on screen in English.
+- ✅ **Migration applied to production 2026-10-03** (on the user's instruction, via the Management API `database/query` with the personal access token from `.env` — only this file's SQL, not `db push`). Verified: both columns `text NOT NULL DEFAULT 'ru'`, both CHECK constraints present, all 24 profiles and 4 push tokens read `ru`. Recorded in `supabase_migrations.schema_migrations` as `20261003120000 / recipient_language`.
+- **Still to deploy:** the 14 changed edge functions, then the frontend (the migration they depend on is now in place).
+- ⚠️ **Version collision found while checking history:** production's history already has `20260917120000` named `product_marketplace_visibility`, but this branch's file with that version is `private_products_and_seller_metrics.sql` (memory bank had it as unapplied). `supabase db push` would therefore skip this branch's file as already applied. Needs a look before that migration is relied on — not touched.
+- **Phase 4b** — the ~600 raw Russian lines outside `l()`, mostly seller screens. The buyer path is done; this is the seller side.
+- **Phase 6** — the verification matrix on authenticated seller screens (needs a logged-in session); Phase 4b should land first, since that is where the remaining Russian is.
+- Pre-existing, noticed, not changed (outside this task): booking/payment pushes to creators are sent to **every** creator device (`user_role = 'creator'` with no user filter), and `process-subscriptions` passes a *profile* id as `push_tokens.user_id`, which `manage-push-token` fills with `simple_users` ids — unless those ids coincide, renewal pushes reach no device (not verified against the data).

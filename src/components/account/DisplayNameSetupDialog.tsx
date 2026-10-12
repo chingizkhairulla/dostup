@@ -52,8 +52,8 @@ const DisplayNameSetupDialog = ({ open, onSaved }: DisplayNameSetupDialogProps) 
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("name_taken") || err?.status === 409) {
-        setErrorText("Это название уже используется. Выберите другое.");
-        toast.error("Это название уже используется. Выберите другое.");
+        setErrorText(t("displayNameTaken"));
+        toast.error(t("displayNameTaken"));
       } else {
         toast.error(t("displayNameSaveError"));
       }

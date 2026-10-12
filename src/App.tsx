@@ -37,6 +37,7 @@ import NotFound from './pages/NotFound'
 import LegalPage from './pages/LegalPage'
 import RequireProfile from '@/components/auth/RequireProfile'
 import { MARKETPLACE_LOCATION, readLoginBackground } from '@/lib/loginModal'
+import { useSyncProfileLanguage } from '@/hooks/useSyncProfileLanguage'
 
 const queryClient = new QueryClient()
 
@@ -44,6 +45,7 @@ function AppRoutes() {
 	const location = useLocation()
 	const navigate = useNavigate()
 	const { status } = useSimpleAuth()
+	useSyncProfileLanguage()
 	const isLogin = location.pathname === '/login'
 	const isAuthCallback = location.pathname === '/auth/callback'
 	const background = readLoginBackground(location.state)

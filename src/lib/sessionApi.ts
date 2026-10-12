@@ -1,4 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
+import { storedLanguage } from "@/lib/language";
+import { translations } from "@/lib/translations";
+
+/** Shown in toasts as-is, so it is written in the app's current language. */
+function serverUnreachable(): Error {
+  return new Error(translations[storedLanguage()].serverUnreachable);
+}
 
 export function creatorCreds() {
   return {
@@ -77,7 +84,7 @@ export async function invokeApi<T = Record<string, unknown>>(
         }
 
         if (msg.includes("Failed to send a request")) {
-          throw new Error("Не удалось связаться с сервером. Пожалуйста, проверьте подключение к интернету или обновите страницу.");
+          throw serverUnreachable();
         }
 
         throw new Error(msg);
@@ -95,13 +102,13 @@ export async function invokeApi<T = Record<string, unknown>>(
         continue;
       }
       if (errMsg.includes("Failed to send a request")) {
-        throw new Error("Не удалось связаться с сервером. Пожалуйста, проверьте подключение к интернету или обновите страницу.");
+        throw serverUnreachable();
       }
       throw err;
     }
   }
 
-  throw lastError || new Error("Не удалось связаться с сервером.");
+  throw lastError || serverUnreachable();
 }
 
 export type FunctionFail = {

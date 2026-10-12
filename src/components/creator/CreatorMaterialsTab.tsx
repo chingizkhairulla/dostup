@@ -1580,7 +1580,7 @@ const CreatorTrashList = ({
                         {l({ ru: "Удалено", kk: "Жойылған", en: "Deleted" })}:{" "}
                         {m.deleted_at
                           ? new Date(m.deleted_at).toLocaleDateString(
-                              l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }),
+                              l({ ru: "ru-RU", kk: "kk-KZ", en: "en-GB" }),
                             )
                           : "—"}
                       </span>

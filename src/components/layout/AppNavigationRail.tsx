@@ -90,7 +90,7 @@ const AppNavigationRail = ({ activeSection, sellerTab }: AppNavigationRailProps)
       )}
     >
       {active && (
-        <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#FF6B00]" aria-hidden />
+        <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-primary" aria-hidden />
       )}
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
         <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />

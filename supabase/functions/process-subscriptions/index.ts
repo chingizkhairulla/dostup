@@ -2,47 +2,43 @@ import { json, optionsResponse } from '../_shared/http.ts'
 import { serviceClient } from '../_shared/session.ts'
 import { subscriptionGrantsAccess, type SubscriptionRow } from '../_shared/subscription.ts'
 import { appBaseUrl, sendTransactionalEmail } from '../_shared/transactional-email.ts'
+import { email as emails, push, toLang, type Lang, type Localized, type Push } from '../_shared/i18n.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function formatDateRu(iso: string): string {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(iso))
-}
-
-async function buyerEmail(
+/** The buyer's address and the language they last used the app in. */
+async function buyerContact(
   supabase: ReturnType<typeof serviceClient>,
   profileId: string,
-): Promise<string | null> {
+): Promise<{ email: string; lang: Lang } | null> {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('auth_user_id')
+    .select('auth_user_id, language')
     .eq('id', profileId)
     .maybeSingle()
   if (!profile?.auth_user_id) return null
   const { data, error } = await supabase.auth.admin.getUserById(profile.auth_user_id)
   if (error || !data.user?.email) return null
-  return data.user.email
+  return { email: data.user.email, lang: toLang(profile.language) }
 }
 
 async function sendRenewalPush(
   supabase: ReturnType<typeof serviceClient>,
   profileId: string,
-  title: string,
-  body: string,
+  localized: Localized<Push>,
   productId: string,
 ): Promise<void> {
+  // Russian title/body ride along for an older send-push-notification that only
+  // knows those two fields; a current one gives each device its own language.
   const { error } = await supabase.functions.invoke('send-push-notification', {
     body: {
       userId: profileId,
-      title,
-      body,
+      title: localized.ru.title,
+      body: localized.ru.body,
+      localized,
       data: { type: 'subscription_renewal', productId },
       targetRole: 'student',
     },
@@ -90,25 +86,14 @@ Deno.serve(async (req) => {
       if (!product) continue
 
       const paymentUrl = `${baseUrl}/checkout/${encodeURIComponent(product.slug || product.id)}`
-      const endLabel = formatDateRu(sub.current_period_end)
-      const title = 'Скоро продление подписки'
-      const body = `${product.title}: оплатите следующий период до ${endLabel}`
+      const renewal = { product: product.title, periodEnd: sub.current_period_end }
 
-      await sendRenewalPush(supabase, sub.buyer_profile_id, title, body, sub.product_id)
+      await sendRenewalPush(supabase, sub.buyer_profile_id, push.subscriptionRenewal(renewal), sub.product_id)
 
-      const email = await buyerEmail(supabase, sub.buyer_profile_id)
-      if (email) {
-        await sendTransactionalEmail({
-          to: email,
-          subject: title,
-          html: `
-            <p>Здравствуйте!</p>
-            <p>Подписка на «${product.title}» заканчивается ${endLabel}.</p>
-            <p>Оплатите следующий период, чтобы сохранить доступ:</p>
-            <p><a href="${paymentUrl}">${paymentUrl}</a></p>
-            <p>Доступ продолжается, пока вы оплачиваете подписку.</p>
-          `,
-        })
+      const contact = await buyerContact(supabase, sub.buyer_profile_id)
+      if (contact) {
+        const message = emails.subscriptionRenewal({ ...renewal, paymentUrl }, contact.lang)
+        await sendTransactionalEmail({ to: contact.email, ...message })
       }
 
       await supabase

@@ -8,6 +8,7 @@ import {
   type ProfileRow,
 } from '../_shared/profiles.ts'
 import { serviceClient } from '../_shared/session.ts'
+import { isLanguage } from '../_shared/i18n.ts'
 
 const HANDLE_RE = /^[a-z0-9-]{3,30}$/
 
@@ -162,6 +163,21 @@ Deno.serve(async (req) => {
     if (!row) return json({ error: 'Profile not found' }, 404)
 
     // ---- ACTIONS ----
+
+    // The language emails are written in. It is the person's choice, not one
+    // profile's, so every profile under the same login follows it.
+    if (action === 'set_language') {
+      if (!isLanguage(body.language)) return json({ error: 'invalid_language' }, 400)
+      const { error } = await supabase
+        .from('profiles')
+        .update({ language: body.language })
+        .eq('auth_user_id', authUserId)
+      if (error) {
+        console.error('set_language error:', error)
+        return json({ error: 'Failed to save language' }, 500)
+      }
+      return json({ ok: true, language: body.language })
+    }
 
     if (action === 'get_handle') {
       return json({

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,8 +104,7 @@ async function sendFCMToUser(
   supabase: any,
   userId: string | null,
   userRole: string,
-  title: string,
-  body: string,
+  message: Localized<Push>,
   data?: Record<string, string>
 ): Promise<number> {
   const projectId = Deno.env.get("FCM_PROJECT_ID");
@@ -115,7 +115,7 @@ async function sendFCMToUser(
 
   let query = supabase
     .from("push_tokens")
-    .select("id, fcm_token")
+    .select("id, fcm_token, language")
     .eq("user_role", userRole);
 
   if (userId) {
@@ -134,7 +134,9 @@ async function sendFCMToUser(
 
   for (const tokenRecord of tokens) {
     try {
-      const message = {
+      // Each device reads the language it registered with.
+      const { title, body } = localize(message, tokenRecord.language);
+      const fcmMessage = {
         message: {
           token: tokenRecord.fcm_token,
           data: { title, body, ...(data || {}) },
@@ -152,7 +154,7 @@ async function sendFCMToUser(
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(message)
+          body: JSON.stringify(fcmMessage)
         }
       );
 
@@ -215,12 +217,11 @@ serve(async (req) => {
         });
       }
 
-      const studentName = purchase.user?.name || "Ученик";
-      const productTitle = purchase.product?.title || "";
-      const amount = purchase.amount || 0;
-
-      const title = "Новая оплата!";
-      const description = `${studentName} оплатил "${productTitle}" (${amount}₸)`;
+      const message = push.newPayment({
+        student: purchase.user?.name,
+        product: purchase.product?.title,
+        amount: purchase.amount || 0,
+      });
 
       const notificationData = {
         type: "payment",
@@ -232,8 +233,7 @@ serve(async (req) => {
         supabase,
         null,
         "creator",
-        title,
-        description,
+        message,
         notificationData
       );
 
@@ -260,15 +260,13 @@ serve(async (req) => {
           .single();
 
         // Notify student by user_id
-        const title = "Оплата подтверждена!";
-        const description = `Ваша оплата за "${purchase?.product?.title || "продукт"}" подтверждена. Теперь вы можете записаться на занятия.`;
+        const message = push.paymentConfirmed({ product: purchase?.product?.title });
 
         const sent = await sendFCMToUser(
           supabase,
           studentUserId,
           "student",
-          title,
-          description,
+          message,
           { type: "purchase_confirmed", purchaseId }
         );
 

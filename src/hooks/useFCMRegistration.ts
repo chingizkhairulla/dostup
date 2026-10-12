@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { initializeFirebaseMessaging, registerPushToken, onForegroundMessage } from "@/lib/firebase";
 
 interface UseFCMRegistrationOptions {
@@ -14,6 +15,9 @@ export const useFCMRegistration = ({
 }: UseFCMRegistrationOptions) => {
   const [isRegistered, setIsRegistered] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  // The token is stored with the app's language, so switching language
+  // registers again and later notifications arrive in the new one.
+  const { language } = useLanguage();
 
   useEffect(() => {
     if (!enabled || !userId) return;
@@ -37,7 +41,7 @@ export const useFCMRegistration = ({
         }
 
         // Register push token
-        const success = await registerPushToken(userId, userRole);
+        const success = await registerPushToken(userId, userRole, language);
         setIsRegistered(success);
 
         if (success) {
@@ -53,7 +57,7 @@ export const useFCMRegistration = ({
     // Delay registration to not block initial render
     const timeout = setTimeout(registerFCM, 2000);
     return () => clearTimeout(timeout);
-  }, [enabled, userId, userRole]);
+  }, [enabled, userId, userRole, language]);
 
   // Foreground message handler — logging only.
   // Notification display is handled by the Service Worker push event handler.

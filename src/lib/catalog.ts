@@ -1,4 +1,4 @@
-import type { Language, Translated } from "./language";
+import { pluralForm, type Language, type Translated } from "./language";
 import { CATEGORY_NAMES_EN, SUBCATEGORY_NAMES_EN } from "./taxonomyEn";
 
 export type LessonFormat = "individual" | "group";
@@ -187,6 +187,48 @@ export function formatCatalogPrice(
     return `${price} ${billingPeriodLabel(product.billing_period, language)}`;
   }
   return price;
+}
+
+/** "1 день / 3 дня / 7 дней", "7 күн", "1 day / 7 days". */
+export function trialDays(days: number, language: Language) {
+  const form = pluralForm(language, days);
+  if (language === "ru") {
+    const word = form === "one" ? "день" : form === "few" ? "дня" : "дней";
+    return `${days} ${word}`;
+  }
+  if (language === "kk") return `${days} күн`;
+  return `${days} ${form === "one" ? "day" : "days"}`;
+}
+
+type PricingOption = {
+  price: number | string;
+  payment_type?: string | null;
+  recurring_interval?: string | null;
+  access_duration_days?: number | null;
+};
+
+/** One pricing option as the product and checkout pages list it: "5 000 ₸ / в месяц". */
+export function pricingOptionLabel(option: PricingOption, language: Language) {
+  const price = formatPriceTenge(Number(option.price));
+  if (option.payment_type === "one_time") {
+    const once: Translated = { ru: "(разово)", kk: "(бір рет)", en: "(one-time)" };
+    return `${price} ${once[language]}`;
+  }
+  const every = (days: number): Translated => ({
+    ru: `каждые ${days} дн.`,
+    kk: `әр ${days} күн сайын`,
+    en: `every ${days} days`,
+  });
+  const periods: Record<string, Translated> = {
+    "7d": every(7),
+    "14d": every(14),
+    "1m": { ru: "в месяц", kk: "айына", en: "per month" },
+    "3m": { ru: "каждые 3 месяца", kk: "әр 3 ай сайын", en: "every 3 months" },
+    "1y": { ru: "в год", kk: "жылына", en: "per year" },
+    custom: every(option.access_duration_days || 30),
+  };
+  const period = periods[option.recurring_interval ?? ""] ?? periods["1m"];
+  return `${price} / ${period[language]}`;
 }
 
 export function formatEventDate(iso: string, language: Language) {

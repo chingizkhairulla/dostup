@@ -174,9 +174,9 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
     <div className="space-y-10">
       {nextLesson && (
         <section>
-          <Card className="overflow-hidden border-[#FF6B00]/30 bg-gradient-to-br from-[#FF6B00]/10 to-background">
+          <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 to-background">
             <CardContent className="space-y-4 p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#FF6B00]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                 {t("nextLesson")}
               </p>
               <div>

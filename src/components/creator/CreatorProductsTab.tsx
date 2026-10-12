@@ -185,7 +185,7 @@ function stripHtml(html: string): string {
 }
 
 const ReqStar = () => (
-  <span className="text-[#FF6B00] font-bold ml-1 text-sm select-none" aria-hidden="true">
+  <span className="text-primary font-bold ml-1 text-sm select-none" aria-hidden="true">
     *
   </span>
 );
@@ -1000,9 +1000,9 @@ const ProductForm = ({
           target.focus?.();
         }
 
-        target.classList.add("ring-2", "ring-[#FF6B00]", "transition-all");
+        target.classList.add("ring-2", "ring-primary", "transition-all");
         setTimeout(() => {
-          target.classList.remove("ring-2", "ring-[#FF6B00]");
+          target.classList.remove("ring-2", "ring-primary");
         }, 2000);
       }
     }, 200);
@@ -1576,7 +1576,7 @@ const ProductForm = ({
                 setTimeout(() => {
                   const el = document.getElementById("field-category");
                   if (el) {
-                    el.classList.remove("ring-2", "ring-[#FF6B00]");
+                    el.classList.remove("ring-2", "ring-primary");
                     el.blur();
                   }
                   if (document.activeElement instanceof HTMLElement) {
@@ -1587,7 +1587,7 @@ const ProductForm = ({
             >
               <SelectTrigger
                 id="field-category"
-                className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
+                className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-primary hover:ring-1 hover:ring-primary hover:bg-primary/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
               >
                 <SelectValue placeholder={t("selectCategory")} />
               </SelectTrigger>
@@ -1627,7 +1627,7 @@ const ProductForm = ({
                   setTimeout(() => {
                     const el = document.getElementById("field-subcategory");
                     if (el) {
-                      el.classList.remove("ring-2", "ring-[#FF6B00]");
+                      el.classList.remove("ring-2", "ring-primary");
                       el.blur();
                     }
                     if (document.activeElement instanceof HTMLElement) {
@@ -1638,7 +1638,7 @@ const ProductForm = ({
               >
                 <SelectTrigger
                   id="field-subcategory"
-                  className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-[#FF6B00] hover:ring-1 hover:ring-[#FF6B00] hover:bg-[#FF6B00]/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
+                  className="h-12 bg-background cursor-pointer transition-colors border-border hover:border-primary hover:ring-1 hover:ring-primary hover:bg-primary/5 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none text-base"
                 >
                   <SelectValue placeholder={t("selectSubcategory")} />
                 </SelectTrigger>
@@ -2791,7 +2791,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                     </div>
                     <p className="text-muted-foreground whitespace-nowrap">
                       {t("nextRenewal")}:{" "}
-                      {new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }), {
+                      {new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "en-GB" }), {
                         day: "numeric",
                         month: "short",
                         year: "numeric",
@@ -2884,7 +2884,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
                     <div className="w-full h-full relative flex items-center justify-center bg-black/5 isolate">
                       <video src={coverVid} className="w-full h-full object-cover pointer-events-none" preload="auto" muted playsInline webkit-playsinline="true" />
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10" style={{ transform: "translate3d(0, 0, 10px)" }}>
-                        <div className="w-6 h-6 rounded-full bg-[#FF6B00] flex items-center justify-center shadow-xs">
+                        <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-xs">
                           <Play className="w-3 h-3 text-white fill-white ml-0.5" />
                         </div>
                       </div>

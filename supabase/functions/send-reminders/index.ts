@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { push, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,9 +72,9 @@ serve(async (req) => {
     // Process regular reminders (24h and 2h)
     for (const reminder of regularReminders) {
       try {
-        const { title, body } = getReminderText(reminder);
+        const localized = getReminderText(reminder);
 
-        const pushSuccess = await sendReminderPush(supabase, reminder, title, body);
+        const pushSuccess = await sendReminderPush(supabase, reminder, localized);
 
         if (!pushSuccess) {
           failCount++;
@@ -110,32 +111,26 @@ serve(async (req) => {
 });
 
 // Get notification text based on role and type
-function getReminderText(reminder: Reminder): { title: string; body: string } {
-  const isCreatorOrTeacher = reminder.target_role === "creator" || reminder.target_role === "teacher";
-
-  if (reminder.reminder_type === "24h") {
-    return {
-      title: isCreatorOrTeacher ? "Завтра урок!" : "Завтра занятие!",
-      body: `"${reminder.product_title}" состоится ${formatDate(reminder.slot_date)} в ${formatTime(reminder.slot_time)}`
-    };
-  } else {
-    // 2h
-    return {
-      title: isCreatorOrTeacher ? "Скоро урок!" : "Скоро занятие!",
-      body: isCreatorOrTeacher
-        ? `"${reminder.product_title}" через 2 часа`
-        : `"${reminder.product_title}" начнётся через 2 часа`
-    };
-  }
+// All three languages; send-push-notification gives each device its own.
+function getReminderText(reminder: Reminder): Localized<Push> {
+  return push.reminder({
+    kind: reminder.reminder_type === "24h" ? "24h" : "2h",
+    staff: reminder.target_role === "creator" || reminder.target_role === "teacher",
+    product: reminder.product_title,
+    date: reminder.slot_date,
+    time: reminder.slot_time,
+  });
 }
 
 // Send push notification based on target_role
 async function sendReminderPush(
   supabase: any,
   reminder: Reminder,
-  title: string,
-  body: string
+  localized: Localized<Push>
 ): Promise<boolean> {
+  // Russian title/body ride along so an older send-push-notification, which
+  // only knows those two fields, still delivers something during a deploy.
+  const { title, body } = localized.ru;
   const data = {
     type: "reminder",
     reminderType: reminder.reminder_type,
@@ -173,7 +168,7 @@ async function sendReminderPush(
     
     // Best approach: pass targetRole=creator and let send-push-notification handle null user_id
     const { error: pushError } = await supabase.functions.invoke("send-push-notification", {
-      body: { userId: null, title, body, data, targetRole: "creator" }
+      body: { userId: null, title, body, localized, data, targetRole: "creator" }
     });
 
     if (pushError) {
@@ -183,7 +178,7 @@ async function sendReminderPush(
     return true;
   } else if (reminder.target_role === "teacher") {
     const { error: pushError } = await supabase.functions.invoke("send-push-notification", {
-      body: { userId: reminder.simple_user_id, title, body, data, targetRole: "teacher" }
+      body: { userId: reminder.simple_user_id, title, body, localized, data, targetRole: "teacher" }
     });
     if (pushError) {
       console.error(`Error sending teacher reminder:`, pushError);
@@ -193,7 +188,7 @@ async function sendReminderPush(
   } else {
     // Student — existing behavior
     const { error: pushError } = await supabase.functions.invoke("send-push-notification", {
-      body: { userId: reminder.simple_user_id, title, body, data }
+      body: { userId: reminder.simple_user_id, title, body, localized, data }
     });
     if (pushError) {
       console.error(`Error sending student reminder ${reminder.id}:`, pushError);
@@ -201,15 +196,4 @@ async function sendReminderPush(
     }
     return true;
   }
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-}
-
-function formatTime(timeStr: string | null): string {
-  if (!timeStr) return "";
-  return timeStr.substring(0, 5);
 }

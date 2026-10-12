@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,10 +114,11 @@ serve(async (req) => {
 
       const studentIds = [...new Set(purchases.map(p => p.simple_user_id))];
 
-      const title = "Новый материал доступен! 📚";
-      const body = materialsForProduct.length === 1
-        ? `Материал "${materialsForProduct[0].title}" теперь доступен в "${productTitleMap[productId] || "продукте"}"`
-        : `${materialsForProduct.length} новых материала доступны в "${productTitleMap[productId] || "продукте"}"`;
+      // Built in every language; each device reads the one it registered with.
+      const localized = push.materialsUnlocked({
+        product: productTitleMap[productId],
+        titles: materialsForProduct.map((m) => m.title),
+      });
 
       for (const studentId of studentIds) {
         // Dedup key: studentId + productId
@@ -127,7 +129,7 @@ serve(async (req) => {
         // Get tokens by user_id
         const { data: tokens } = await supabase
           .from("push_tokens")
-          .select("id, fcm_token")
+          .select("id, fcm_token, language")
           .eq("user_id", studentId)
           .eq("user_role", "student");
 
@@ -150,6 +152,7 @@ serve(async (req) => {
 
         for (const tokenRecord of tokens) {
           try {
+            const { title, body } = localize(localized, tokenRecord.language);
             const message = {
               message: {
                 token: tokenRecord.fcm_token,

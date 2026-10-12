@@ -12,7 +12,7 @@
 - [x] CREATIVE — both flagged decisions settled (`memory-bank/creative/`):
   - **C1** (`creative-i18n-architecture.md`): hybrid `l({ru,kk,en})` helper + the existing 615 `t()` calls kept; real count is 730 sites (not ~800), and the codemod runs as two passes because 155 are KK-first with inverted operands; completeness is measured by "no Cyrillic in any `en:` value".
   - **C2** (`creative-taxonomy-english.md`): **reverses** the plan's original Phase 5a — no `name_en` DB migration; a client-side slug→English map instead, since category names are display-only (search/filter use `title`/`headline`/slug, never category name) and the tables are seed-only config.
-- [ ] BUILD — **in progress**: Phases 0-4 done (baseline, white-on-orange, settings renames, i18n foundation, English coverage — 716 phrases, 0 left in Russian). Remaining: Phase 5 (server-generated notification text, needs a production migration) and Phase 6 (verification on authenticated seller screens). Per-phase detail and gate results are in the Build Log at the end of `tasks.md`.
+- [ ] BUILD — **in progress**: Phases 0-5 done (baseline, white-on-orange incl. the one-orange unification, settings renames, i18n foundation, English coverage of `l()` phrases, server text RU/KK/EN as files) plus two customer fixes (toggle spacing, English headline word spacing), all 2026-10-03 for the last three. Remaining: migration `20261003120000` **applied to production 2026-10-03** (verified) → still to deploy: 14 edge functions → frontend; **Phase 4b** (~600 raw Russian lines outside `l()`, mostly seller screens — Phase 4's "0 left" only ever counted `l()` phrases); **Phase 6** (verification on authenticated seller screens). Per-phase detail and gate results are in the Build Log at the end of `tasks.md`.
 - [ ] REFLECT
 - [ ] ARCHIVE
 
@@ -20,18 +20,20 @@
 - Baseline: 310 tests / 27 files, 18 pre-existing type errors, build green.
 - After Phase 1: **327 tests / 28 files**, still 18 type errors, build green, `node scripts/audit-orange.mjs` passes with 0 dark-on-orange elements.
 - After Phase 3: **375 tests / 34 files**, still 18 type errors, build green, and the running app verified in a real browser in all three languages with no text overflow.
+- After Phase 5 + customer fixes (2026-10-03): **508 tests / 37 files**, still the same 18 type errors (diffed), build green, `deno check` adds 0 errors to the edge functions (5 pre-existing in `_shared/receipt-parse.ts`), English product page shows 0 Cyrillic in real Chrome.
+- Deno is not installed, but `npx -y deno check --no-lock <files>` works (deno 2.9.6 from npm) — the way to type-check edge functions here; compare against `git stash` to separate new errors from old.
 - New permanent dev tooling, all outside `public/` and outside the `src` typecheck scope, so none of it ships or affects the build:
   - `scripts/audit-orange.mjs` + `scripts/orange-harness/` — real-Chrome colour audit.
   - `scripts/codemod-l.mjs` — the two-pass ternary rewrite, kept because it is also how a fourth language would be seeded.
   - `scripts/i18n-phrases.mjs` — the one correct way to parse an `l({…})` phrase out of source; the extract/apply/report scripts all import it, after an earlier duplicated regex mis-paired multi-line phrases.
   - `scripts/i18n-extract.mjs` / `scripts/i18n-apply.mjs` / `scripts/i18n-todo.mjs` — dump the distinct untranslated phrases, write translations back into the `en` slot only, and report what is left.
   - `scripts/shoot-languages.mjs` — screenshots the running app in every language and reports overflowing controls.
-- Open decision for the user, deliberately not applied: whether to unify raw `#FF6B00` (55 uses) with the `--primary` token `#F97015`. Measured as visually near-identical (same luminance), so it is a brand preference, not a correctness issue.
+- Resolved 2026-10-03: the user said to apply what the plan wrote, so raw `#FF6B00` is now the `primary` token everywhere (guard test forbids reintroducing it).
 
 ## Repo-wide technical notes
 - Test infrastructure exists: vitest + jsdom + testing-library, `npm test`. This branch started at 310 tests / 27 files — the 338 figure belongs to `предпросмотер`, whose round-2 tests are not here. Config in `vitest.config.ts`, setup in `src/test/setup.ts` (jest-dom matchers, cleanup, stubs for `matchMedia`, `ResizeObserver`, `hasPointerCapture`, `scrollIntoView` — the last two needed by Radix).
 - `npx tsc --noEmit` fails on the project-references setup — use `npm run typecheck` (`tsc -p tsconfig.app.json --noEmit`).
-- Baseline of 22 pre-existing type errors and roughly 253 pre-existing lint problems, unrelated to this task; fix only what this task's own changes cause.
+- Baseline of 18 pre-existing type errors on this branch (`npm run typecheck`; 22 was an older count) and roughly 253 pre-existing lint problems, unrelated to this task; fix only what this task's own changes cause.
 - The app cannot start without `VITE_SUPABASE_*` env vars; there is no `.env` committed (the user has one locally).
 - **jsdom has no real layout engine.** This task's Phase 6 headless-Chrome matrix (ru/kk/en × two widths, five routes) exists specifically because component tests alone cannot catch layout issues — e.g. English strings running longer than Russian/Kazakh in a fixed-width button.
 

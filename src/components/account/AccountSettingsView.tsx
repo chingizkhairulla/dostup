@@ -156,8 +156,8 @@ export const AccountSettingsView = ({
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("name_taken") || err?.status === 409) {
-        setNameError("Это название уже используется. Выберите другое.");
-        toast.error("Это название уже используется. Выберите другое.");
+        setNameError(t("displayNameTaken"));
+        toast.error(t("displayNameTaken"));
       } else {
         toast.error(l({ ru: "Не удалось сохранить имя", kk: "Атын сақтау мүмкін болмады", en: "Could not save the name" }));
       }

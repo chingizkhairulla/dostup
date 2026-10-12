@@ -35,6 +35,19 @@ export function toLanguage(value: unknown): Language {
   return isLanguage(value) ? value : DEFAULT_LANGUAGE;
 }
 
+/**
+ * The language this device last chose, as LanguageContext stores it — for code
+ * outside React (server calls that need to say which language to answer in).
+ * Anything unrecognised, or a blocked storage, is Russian.
+ */
+export function storedLanguage(): Language {
+  try {
+    return toLanguage(localStorage.getItem("language"));
+  } catch {
+    return DEFAULT_LANGUAGE;
+  }
+}
+
 /** Picks one phrase. Pure, so non-React code can use it too. */
 export function pickLanguage(language: Language, phrase: Translated): string {
   return phrase[language];

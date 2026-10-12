@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push, shortTime, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,13 +96,20 @@ serve(async (req) => {
 
     const requestedBy = record.requested_by || "student";
     
-    let title: string;
-    let body: string;
+    // Built in every language; each device reads the one it registered with.
+    let message: Localized<Push>;
     let targetLink: string;
+    const move = {
+      product: record.product_title,
+      oldDate: record.old_date,
+      oldTime: shortTime(record.old_time),
+      newDate: record.new_date,
+      newTime: shortTime(record.new_time),
+    };
 
     if (requestedBy === "student") {
       // Student requests reschedule → notify teacher/creator
-      let studentName = "Ученик";
+      let studentName: string | null = null;
       if (record.simple_user_id) {
         const { data: studentData } = await supabase
           .from("simple_users")
@@ -111,8 +119,7 @@ serve(async (req) => {
         if (studentData) studentName = studentData.name;
       }
 
-      title = "Запрос на перенос";
-      body = `${studentName} просит перенести "${record.product_title}" с ${record.old_date} ${record.old_time?.slice(0, 5)} на ${record.new_date} ${record.new_time?.slice(0, 5)}`;
+      message = push.rescheduleRequestFromStudent({ ...move, student: studentName });
 
       // Determine who to notify: teacher or creator
       let targetUserId: string | null = null;
@@ -137,7 +144,7 @@ serve(async (req) => {
       let totalSent = 0;
 
       const sendToRole = async (userId: string | null, role: string) => {
-        const query = supabase.from("push_tokens").select("id, fcm_token").eq("user_role", role);
+        const query = supabase.from("push_tokens").select("id, fcm_token, language").eq("user_role", role);
         if (userId) query.eq("user_id", userId);
         const { data: tokens } = await query;
         if (!tokens?.length) return 0;
@@ -145,6 +152,7 @@ serve(async (req) => {
         let sent = 0;
         for (const tokenRecord of tokens) {
           try {
+            const { title, body } = localize(message, tokenRecord.language);
             const response = await fetch(
               `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
               {
@@ -193,13 +201,12 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      title = "Запрос на перенос от преподавателя";
-      body = `Преподаватель просит перенести "${record.product_title}" с ${record.old_date} ${record.old_time?.slice(0, 5)} на ${record.new_date} ${record.new_time?.slice(0, 5)}`;
+      message = push.rescheduleRequestFromTeacher(move);
       targetLink = "/dashboard";
 
       const { data: tokens } = await supabase
         .from("push_tokens")
-        .select("id, fcm_token")
+        .select("id, fcm_token, language")
         .eq("user_id", studentUserId)
         .eq("user_role", "student");
 
@@ -214,6 +221,7 @@ serve(async (req) => {
 
       for (const tokenRecord of tokens) {
         try {
+          const { title, body } = localize(message, tokenRecord.language);
           const response = await fetch(
             `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
             {

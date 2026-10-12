@@ -39,7 +39,7 @@ function reasonText(
 }
 
 const ReceiptUploadCard = ({ purchaseId, sessionToken, expectedAmount, submission, onSubmitted }: Props) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -92,6 +92,8 @@ const ReceiptUploadCard = ({ purchaseId, sessionToken, expectedAmount, submissio
       form.append("sessionToken", sessionToken);
       form.append("purchaseId", purchaseId);
       form.append("file", file);
+      // The server's error messages are shown as-is below, so ask for them in ours.
+      form.append("language", language);
       const result = await invokeForm<{
         verification_status: string
         purchase_status: string

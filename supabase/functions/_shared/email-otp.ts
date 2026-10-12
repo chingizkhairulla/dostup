@@ -1,3 +1,5 @@
+import { email, type Lang } from './i18n.ts'
+
 export type AuthUser = {
   id: string
   email?: string | null
@@ -60,10 +62,7 @@ export function pickEmailOtp(data: unknown): string | null {
   return /^\d{6}$/.test(trimmed) ? trimmed : null
 }
 
-export function loginCodeEmailHtml(otp: string): string {
-  return [
-    '<p>Ваш код для входа:</p>',
-    `<p style="font-size:28px;letter-spacing:8px;font-weight:700">${otp}</p>`,
-    '<p>Код действует несколько минут. Если вы не запрашивали вход, просто игнорируйте письмо.</p>',
-  ].join('')
+/** The wording lives with the other server-side text in i18n.ts. */
+export function loginCodeEmailHtml(otp: string, lang: Lang = 'ru'): string {
+  return email.loginCode(otp, lang).html
 }

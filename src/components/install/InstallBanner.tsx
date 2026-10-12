@@ -39,7 +39,7 @@ const InstallBanner = () => {
           <button
             type="button"
             onClick={() => void handleInstall()}
-            className="shrink-0 rounded-full bg-[#FF6B00] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#E86200] focus-ring"
+            className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 focus-ring"
           >
             {t("installBannerInstall")}
           </button>

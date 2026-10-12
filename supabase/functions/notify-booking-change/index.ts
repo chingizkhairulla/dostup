@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,13 +124,13 @@ async function getAccessToken(): Promise<string> {
 /**
  * Send FCM notification to a user by user_id and role.
  * For creators (no user_id), pass userId=null to match by role only.
+ * Each device gets the message in the language it registered with.
  */
 async function sendFCMToUser(
   supabase: any,
   userId: string | null,
   userRole: string,
-  title: string,
-  body: string,
+  message: Localized<Push>,
   data?: Record<string, string>
 ): Promise<number> {
   const projectId = Deno.env.get("FCM_PROJECT_ID");
@@ -140,7 +141,7 @@ async function sendFCMToUser(
 
   let query = supabase
     .from("push_tokens")
-    .select("id, fcm_token")
+    .select("id, fcm_token, language")
     .eq("user_role", userRole);
 
   if (userId) {
@@ -159,7 +160,8 @@ async function sendFCMToUser(
 
   for (const tokenRecord of tokens) {
     try {
-      const message = {
+      const { title, body } = localize(message, tokenRecord.language);
+      const fcmMessage = {
         message: {
           token: tokenRecord.fcm_token,
           data: { title, body, ...(data || {}) },
@@ -177,7 +179,7 @@ async function sendFCMToUser(
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(message)
+          body: JSON.stringify(fcmMessage)
         }
       );
 
@@ -252,13 +254,12 @@ serve(async (req) => {
         });
       }
 
-      const studentName = booking.user?.name || "Ученик";
-      const productTitle = booking.schedule?.product?.title || "";
-      const date = booking.time_slot?.date || "";
-      const time = booking.time_slot?.start_time || "";
-
-      const title = "Новая запись!";
-      const description = `${studentName} записался на "${productTitle}" на ${date} в ${time}`;
+      const message = push.newBooking({
+        student: booking.user?.name,
+        product: booking.schedule?.product?.title,
+        date: booking.time_slot?.date || "",
+        time: booking.time_slot?.start_time || "",
+      });
 
       const notificationData = {
         type: "booking",
@@ -273,8 +274,7 @@ serve(async (req) => {
           supabase,
           booking.schedule.teacher_id,
           "teacher",
-          title,
-          description,
+          message,
           notificationData
         );
         totalSent += sent;
@@ -285,8 +285,7 @@ serve(async (req) => {
         supabase,
         null,
         "creator",
-        title,
-        description,
+        message,
         notificationData
       );
       totalSent += sent;
@@ -323,14 +322,20 @@ serve(async (req) => {
         );
       }
 
-      const title = "Запись отменена";
-      let description = `${cancellation.user_name} отменил запись на "${cancellation.product_title}" на ${cancellation.slot_date} в ${cancellation.slot_time}`;
-
-      if (cancellation.cancellation_comment) {
-        description += `\n"${cancellation.cancellation_comment}"`;
-      } else if (cancellation.cancellation_reasons?.length > 0) {
-        description += `\n${cancellation.cancellation_reasons.join(", ")}`;
-      }
+      // The comment and the chosen reasons are the canceller's own words, so they
+      // are passed through as written rather than translated.
+      const note = cancellation.cancellation_comment
+        ? `"${cancellation.cancellation_comment}"`
+        : cancellation.cancellation_reasons?.length > 0
+          ? cancellation.cancellation_reasons.join(", ")
+          : undefined;
+      const message = push.bookingCancelled({
+        student: cancellation.user_name,
+        product: cancellation.product_title,
+        date: cancellation.slot_date,
+        time: cancellation.slot_time,
+        note,
+      });
 
       const notificationData = {
         type: "cancellation",
@@ -354,8 +359,7 @@ serve(async (req) => {
             supabase,
             schedule.teacher_id,
             "teacher",
-            title,
-            description,
+            message,
             notificationData
           );
           totalSent += sent;
@@ -367,24 +371,25 @@ serve(async (req) => {
         supabase,
         null,
         "creator",
-        title,
-        description,
+        message,
         notificationData
       );
       totalSent += sent;
 
       // 3. Notify student if cancelled by creator/teacher
       if (cancellation.cancelled_by !== "student" && cancellation.simple_user_id) {
-        const cancellerLabel = cancellation.cancelled_by === "teacher" ? "Учитель" : "Автор";
-        const studentTitle = `${cancellerLabel} отменил занятие`;
-        const studentBody = `Занятие "${cancellation.product_title}" на ${cancellation.slot_date} в ${cancellation.slot_time} отменено`;
+        const studentMessage = push.lessonCancelledByStaff({
+          by: cancellation.cancelled_by === "teacher" ? "teacher" : "creator",
+          product: cancellation.product_title,
+          date: cancellation.slot_date,
+          time: cancellation.slot_time,
+        });
         
         const sentStudent = await sendFCMToUser(
           supabase,
           cancellation.simple_user_id,
           "student",
-          studentTitle,
-          studentBody,
+          studentMessage,
           { ...notificationData, type: "creator_cancellation" }
         );
         totalSent += sentStudent;

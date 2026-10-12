@@ -1,7 +1,6 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import {
   alreadyRegisteredMessage,
-  loginCodeEmailHtml,
   parseAdminUsers,
   pickEmailOtp,
   type AuthUser,
@@ -9,6 +8,7 @@ import {
 import { normalizeEmail } from '../_shared/profiles.ts'
 import { serviceClient } from '../_shared/session.ts'
 import { hasTransactionalEmail, sendTransactionalEmail } from '../_shared/transactional-email.ts'
+import { email as emails, toLang, type Lang } from '../_shared/i18n.ts'
 
 async function authHeaders(key: string): Promise<Record<string, string>> {
   return {
@@ -73,6 +73,7 @@ async function ensureConfirmedUser(
 async function sendCodeViaResend(
   supabase: ReturnType<typeof serviceClient>,
   email: string,
+  lang: Lang,
 ): Promise<boolean> {
   const { data, error } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
@@ -87,11 +88,7 @@ async function sendCodeViaResend(
     console.error('generateLink missing email_otp')
     return false
   }
-  return await sendTransactionalEmail({
-    to: email,
-    subject: `${otp} — код входа`,
-    html: loginCodeEmailHtml(otp),
-  })
+  return await sendTransactionalEmail({ to: email, ...emails.loginCode(otp, lang) })
 }
 
 async function sendCodeViaGoTrue(
@@ -119,6 +116,10 @@ Deno.serve(async (req) => {
   try {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
     const email = normalizeEmail(typeof body.email === 'string' ? body.email : '')
+    // The language the person was using when they asked for the code; there is
+    // no profile to read it from yet. (The GoTrue fallback below uses Supabase's
+    // own email template, which this cannot reach.)
+    const lang = toLang(body.language)
     if (!email || !email.includes('@')) {
       return json({ error: 'Invalid email' }, 400)
     }
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
       return json({ error: error instanceof Error ? error.message : 'Failed to prepare user' }, 400)
     }
 
-    if (hasTransactionalEmail() && await sendCodeViaResend(supabase, email)) {
+    if (hasTransactionalEmail() && await sendCodeViaResend(supabase, email, lang)) {
       return json({ success: true })
     }
 

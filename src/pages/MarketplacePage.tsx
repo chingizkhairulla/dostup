@@ -117,7 +117,7 @@ const MarketplacePage = () => {
                     className={cn(
                       "inline-flex h-11 items-center rounded-full border px-6 text-[15px] font-medium focus-ring",
                       active
-                        ? "border-[#FF6B00]/30 bg-[#FF6B00]/10 text-[#1F2328]"
+                        ? "border-primary/30 bg-primary/10 text-[#1F2328]"
                         : "border-[#E3E5E8] bg-white text-[#1F2328] hover:border-[#D0D3D8]",
                     )}
                   >

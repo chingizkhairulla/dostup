@@ -672,30 +672,30 @@ const ModeratorDashboard = () => {
                 className={cn(
                   "w-full relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors text-left",
                   active
-                    ? "bg-[#FF6B00]/10 text-[#FF6B00] font-semibold"
+                    ? "bg-primary/10 text-primary font-semibold"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 )}
               >
                 {active && (
                   <span
-                    className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#FF6B00]"
+                    className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-primary"
                     aria-hidden
                   />
                 )}
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="truncate">{item.label}</span>
                 {item.key === "topic_suggestions" && pendingTopicsCount > 0 && (
-                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {pendingTopicsCount}
                   </span>
                 )}
                 {item.key === "reports" && pendingReportsCount > 0 && (
-                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {pendingReportsCount}
                   </span>
                 )}
                 {item.key === "support" && unreadChatsCount > 0 && (
-                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {unreadChatsCount}
                   </span>
                 )}
@@ -718,23 +718,23 @@ const ModeratorDashboard = () => {
                 onClick={() => setActiveSection(item.key)}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 transition-colors",
-                  active ? "text-[#FF6B00]" : "text-muted-foreground hover:text-foreground"
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="relative">
                   <Icon className="h-5 w-5" />
                   {item.key === "topic_suggestions" && pendingTopicsCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF6B00] px-1 text-[10px] font-bold text-white shadow-xs">
+                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs">
                       {pendingTopicsCount}
                     </span>
                   )}
                   {item.key === "reports" && pendingReportsCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF6B00] px-1 text-[10px] font-bold text-white shadow-xs">
+                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs">
                       {pendingReportsCount}
                     </span>
                   )}
                   {item.key === "support" && unreadChatsCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF6B00] px-1 text-[10px] font-bold text-white shadow-xs">
+                    <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs">
                       {unreadChatsCount}
                     </span>
                   )}
@@ -1027,7 +1027,7 @@ const ModeratorDashboard = () => {
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold">Предложения новых тем</h2>
                   {pendingTopicsCount > 0 && (
-                    <Badge variant="secondary" className="bg-[#FF6B00]/10 text-[#FF6B00] border-[#FF6B00]/20 font-semibold">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 font-semibold">
                       🔔 {pendingTopicsCount === 1 ? "1 новая тема" : `${pendingTopicsCount} новых тем`}
                     </Badge>
                   )}
@@ -1204,7 +1204,7 @@ const ModeratorDashboard = () => {
                     onClick={() => setReportsFilter("pending")}
                     className={cn(
                       "h-8 px-3 text-xs rounded-lg font-medium",
-                      reportsFilter === "pending" ? "bg-[#FF6B00] hover:bg-[#E86000] text-white shadow-xs" : ""
+                      reportsFilter === "pending" ? "bg-primary hover:bg-primary/90 text-white shadow-xs" : ""
                     )}
                   >
                     На рассмотрении
@@ -1221,7 +1221,7 @@ const ModeratorDashboard = () => {
                     onClick={() => setReportsFilter("all")}
                     className={cn(
                       "h-8 px-3 text-xs rounded-lg font-medium",
-                      reportsFilter === "all" ? "bg-[#FF6B00] hover:bg-[#E86000] text-white shadow-xs" : ""
+                      reportsFilter === "all" ? "bg-primary hover:bg-primary/90 text-white shadow-xs" : ""
                     )}
                   >
                     Все ({reports.length})
@@ -1233,7 +1233,7 @@ const ModeratorDashboard = () => {
                     onClick={() => setReportsFilter("resolved")}
                     className={cn(
                       "h-8 px-3 text-xs rounded-lg font-medium",
-                      reportsFilter === "resolved" ? "bg-[#FF6B00] hover:bg-[#E86000] text-white shadow-xs" : ""
+                      reportsFilter === "resolved" ? "bg-primary hover:bg-primary/90 text-white shadow-xs" : ""
                     )}
                   >
                     Решенные
@@ -1245,7 +1245,7 @@ const ModeratorDashboard = () => {
                     onClick={() => setReportsFilter("dismissed")}
                     className={cn(
                       "h-8 px-3 text-xs rounded-lg font-medium",
-                      reportsFilter === "dismissed" ? "bg-[#FF6B00] hover:bg-[#E86000] text-white shadow-xs" : ""
+                      reportsFilter === "dismissed" ? "bg-primary hover:bg-primary/90 text-white shadow-xs" : ""
                     )}
                   >
                     Отклоненные
@@ -1303,7 +1303,7 @@ const ModeratorDashboard = () => {
                             </div>
                             <div className="shrink-0">
                               {item.status === "pending" && (
-                                <Badge className="bg-[#FF6B00] text-white border-none text-[11px]">
+                                <Badge className="bg-primary text-white border-none text-[11px]">
                                   На рассмотрении
                                 </Badge>
                               )}
@@ -1428,7 +1428,7 @@ const ModeratorDashboard = () => {
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-medium truncate">{t.display_name}</div>
                           {t.unread_for_moderator > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-xs font-bold bg-[#FF6B00] text-white shadow-xs">
+                            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-xs font-bold bg-primary text-white shadow-xs">
                               {t.unread_for_moderator}
                             </span>
                           )}
@@ -1560,9 +1560,9 @@ const ModeratorDashboard = () => {
           </DialogHeader>
           <div className="py-2 space-y-2">
             {!pushEnabled ? (
-              <div className="p-3 rounded-xl border border-[#FF6B00]/30 bg-[#FF6B00]/5 flex items-center justify-between gap-3">
+              <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#FF6B00]/15 text-[#FF6B00] flex items-center justify-center font-medium shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center font-medium shrink-0">
                     <Bell className="w-4 h-4" />
                   </div>
                   <div>
@@ -1574,7 +1574,7 @@ const ModeratorDashboard = () => {
                   size="sm"
                   type="button"
                   onClick={handleEnablePushNotifications}
-                  className="h-8 px-3 text-xs bg-[#FF6B00] hover:bg-[#FF6B00]/90 text-white font-medium rounded-lg shrink-0 shadow-xs"
+                  className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-white font-medium rounded-lg shrink-0 shadow-xs"
                 >
                   Включить
                 </Button>
@@ -1611,7 +1611,7 @@ const ModeratorDashboard = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {pendingTopicsCount}
                   </span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />
@@ -1644,7 +1644,7 @@ const ModeratorDashboard = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {pendingReportsCount}
                   </span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />
@@ -1677,7 +1677,7 @@ const ModeratorDashboard = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF6B00] text-white text-[11px] font-bold shadow-xs">
+                  <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[11px] font-bold shadow-xs">
                     {unreadChatsCount}
                   </span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />

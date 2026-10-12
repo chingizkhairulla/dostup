@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { translations, TranslationKey } from "@/lib/translations";
-import { Language, Translated, toLanguage } from "@/lib/language";
+import { Language, Translated, storedLanguage } from "@/lib/language";
 
 interface LanguageContextType {
   language: Language;
@@ -29,18 +29,10 @@ interface LanguageProviderProps {
   children: ReactNode;
 }
 
-function readStoredLanguage(): Language {
-  try {
-    // Anything unrecognised — an old value, a hand-edited one — becomes
-    // Russian rather than indexing the dictionaries with rubbish.
-    return toLanguage(localStorage.getItem("language"));
-  } catch {
-    return toLanguage(null);
-  }
-}
-
 export const LanguageProvider = ({ children }: LanguageProviderProps) => {
-  const [language, setLanguageState] = useState<Language>(readStoredLanguage);
+  // Anything unrecognised — an old value, a hand-edited one — becomes Russian
+  // rather than indexing the dictionaries with rubbish.
+  const [language, setLanguageState] = useState<Language>(storedLanguage);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

@@ -164,7 +164,7 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
             type="submit"
             variant="cta"
             size="lg"
-            className="w-full bg-[#FF6B00]"
+            className="w-full bg-primary"
             disabled={isSubmitting || !isFormValid}
           >
             {isSubmitting ? (

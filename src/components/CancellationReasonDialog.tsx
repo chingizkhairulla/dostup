@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const CANCELLATION_REASONS = {
-  plans_changed: { ru: "Изменились планы", kk: "Жоспарлар өзгерді" },
-  felt_unwell: { ru: "Стало плохо", kk: "Жаман болды" },
-  family: { ru: "Семейные обстоятельства", kk: "Отбасылық жағдайлар" },
-  schedule_changed: { ru: "Поменялся график", kk: "Кестем өзгерді" },
-  reschedule: { ru: "Хочу перенести запись", kk: "Жазбаны ауыстырғым келеді" },
+  plans_changed: { ru: "Изменились планы", kk: "Жоспарлар өзгерді", en: "My plans changed" },
+  felt_unwell: { ru: "Стало плохо", kk: "Жаман болды", en: "I am not feeling well" },
+  family: { ru: "Семейные обстоятельства", kk: "Отбасылық жағдайлар", en: "Family circumstances" },
+  schedule_changed: { ru: "Поменялся график", kk: "Кестем өзгерді", en: "My schedule changed" },
+  reschedule: { ru: "Хочу перенести запись", kk: "Жазбаны ауыстырғым келеді", en: "I want to reschedule" },
 };
 
 export type CancellationReasonKey = keyof typeof CANCELLATION_REASONS;
@@ -54,7 +54,7 @@ const CancellationReasonDialog = ({
 
   const handleConfirm = () => {
     const reasonTexts = selectedReasons.map(
-      (key) => CANCELLATION_REASONS[key][l({ ru: "ru", kk: "kk", en: "ru" })]
+      (key) => CANCELLATION_REASONS[key][language]
     );
     onConfirm(reasonTexts, comment.trim());
   };
@@ -91,7 +91,7 @@ const CancellationReasonDialog = ({
                   onCheckedChange={() => handleReasonToggle(key)}
                 />
                 <span className="text-sm">
-                  {CANCELLATION_REASONS[key][l({ ru: "ru", kk: "kk", en: "ru" })]}
+                  {CANCELLATION_REASONS[key][language]}
                 </span>
               </label>
             )

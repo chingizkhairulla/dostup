@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { toLang } from '../_shared/i18n.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -78,7 +79,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, userId, userRole, fcmToken, deviceInfo, creatorToken, creatorName } = await req.json()
+    const { action, userId, userRole, fcmToken, deviceInfo, creatorToken, creatorName, language } = await req.json()
 
     if (!action || !userId) {
       return new Response(
@@ -155,6 +156,9 @@ serve(async (req) => {
             user_role: userRole || 'student',
             fcm_token: fcmToken,
             device_info: deviceInfo || null,
+            // The app's language on this device; notifications to it are written in it.
+            // The client registers again whenever the language is switched.
+            language: toLang(language),
             updated_at: new Date().toISOString()
           })
 

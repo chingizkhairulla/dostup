@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyAuthError } from "@/lib/authErrors";
+import { storedLanguage } from "@/lib/language";
 
 export const OAUTH_ACCOUNT_TYPE_KEY = "dostup_oauth_account_type";
 export const OAUTH_PROFILE_TYPE_KEY = "dostup_oauth_profile_type";
@@ -523,8 +524,9 @@ export async function sendEmailCode(email: string, profileType?: ProfileType) {
     } catch {
       // leftover Supabase session must not block a new code
     }
+    // The code email is written in the language the person is using right now.
     const { data, error } = await supabase.functions.invoke("send-email-code", {
-      body: { email: address },
+      body: { email: address, language: storedLanguage() },
     });
     if (error || (data && typeof data === "object" && "error" in data && data.error)) {
       const message =

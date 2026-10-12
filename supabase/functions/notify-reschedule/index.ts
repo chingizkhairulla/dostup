@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push, shortTime, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,8 +100,7 @@ async function sendFCMToUser(
   supabase: any,
   userId: string,
   userRole: string,
-  title: string,
-  body: string,
+  message: Localized<Push>,
   data?: Record<string, string>
 ): Promise<number> {
   const projectId = Deno.env.get("FCM_PROJECT_ID");
@@ -111,7 +111,7 @@ async function sendFCMToUser(
 
   const { data: tokens, error } = await supabase
     .from("push_tokens")
-    .select("id, fcm_token")
+    .select("id, fcm_token, language")
     .eq("user_id", userId)
     .eq("user_role", userRole);
 
@@ -125,7 +125,9 @@ async function sendFCMToUser(
 
   for (const tokenRecord of tokens) {
     try {
-      const message = {
+      // Each device reads the language it registered with.
+      const { title, body } = localize(message, tokenRecord.language);
+      const fcmMessage = {
         message: {
           token: tokenRecord.fcm_token,
           data: { title, body, ...(data || {}) },
@@ -143,7 +145,7 @@ async function sendFCMToUser(
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(message)
+          body: JSON.stringify(fcmMessage)
         }
       );
 
@@ -212,6 +214,7 @@ serve(async (req) => {
       );
     }
 
+    // The comment and chosen reasons are the teacher's own words: passed through as written.
     let reasonText = "";
     if (record.comment) {
       reasonText = record.comment;
@@ -219,12 +222,14 @@ serve(async (req) => {
       reasonText = record.reasons.join(", ");
     }
 
-    const title = "Урок перенесён";
-    let body = `Урок "${record.product_title}" перенесён с ${record.old_date} ${record.old_time?.slice(0, 5)} на ${record.new_date} ${record.new_time?.slice(0, 5)}`;
-    
-    if (reasonText) {
-      body += `. Причина: ${reasonText}`;
-    }
+    const message = push.lessonRescheduled({
+      product: record.product_title,
+      oldDate: record.old_date,
+      oldTime: shortTime(record.old_time),
+      newDate: record.new_date,
+      newTime: shortTime(record.new_time),
+      reason: reasonText || undefined,
+    });
 
     const notificationData = {
       type: "reschedule",
@@ -235,8 +240,7 @@ serve(async (req) => {
       supabase,
       studentUserId,
       "student",
-      title,
-      body,
+      message,
       notificationData
     );
 

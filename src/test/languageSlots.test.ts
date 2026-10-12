@@ -78,6 +78,20 @@ describe("the three-language phrases", () => {
     expect(suspicious).toEqual([]);
   });
 
+  it("never leaves a Latin-script Russian value in the English slot", () => {
+    // The Cyrillic check above cannot see this case: the codemod seeded `en`
+    // from `ru`, and when `ru` holds Latin text — a locale ("ru-RU") or a
+    // language code ("ru") — the seed looks translated. Five such phrases made
+    // English pages print dates as "3 октября 2026 г." and pick Russian option
+    // labels. Where Kazakh differs from Russian, English copying Russian is the
+    // seed, not a translation.
+    const copiedFromRussian = all
+      .filter((phrase) => phrase.ru !== phrase.kk && phrase.en === phrase.ru)
+      .map((phrase) => `${phrase.file}: en="${phrase.en}" (ru="${phrase.ru}", kk="${phrase.kk}")`);
+
+    expect(copiedFromRussian).toEqual([]);
+  });
+
   it("seeds English from Russian, never from Kazakh", () => {
     // Until a phrase is translated, `en` holds the Russian text — the language
     // most of the audience reads. It must never hold the Kazakh text.

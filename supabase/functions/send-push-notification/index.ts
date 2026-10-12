@@ -1,5 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { LANGUAGES, localize, type Localized, type Push } from "../_shared/i18n.ts";
+
+/** A `localized` payload counts only if every language has a title and a body. */
+function parseLocalized(raw: unknown): Localized<Push> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, Partial<Push> | undefined>;
+  return LANGUAGES.every((lang) => value[lang]?.title && value[lang]?.body)
+    ? (value as Localized<Push>)
+    : null;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -212,11 +222,18 @@ serve(async (req) => {
       );
     }
 
-    const { userId, title, body, data, targetRole } = await req.json();
+    const { userId, data, targetRole, ...payload } = await req.json();
+
+    // Callers either pass `localized` (all three languages — each device then
+    // reads the one it registered with) or a single `title`/`body`, which every
+    // device gets as-is; moderator notifications still use the latter.
+    const localized = parseLocalized(payload.localized);
+    const title: string | undefined = localized?.ru.title ?? payload.title;
+    const body: string | undefined = localized?.ru.body ?? payload.body;
 
     if (!title || !body) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: title, body" }),
+        JSON.stringify({ error: "Missing required fields: title, body (or localized)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -242,7 +259,7 @@ serve(async (req) => {
 
     let query = supabase
       .from("push_tokens")
-      .select("id, fcm_token, user_role");
+      .select("id, fcm_token, user_role, language");
 
     if (userId) {
       query = query.eq("user_id", userId);
@@ -277,10 +294,11 @@ serve(async (req) => {
 
     const results = await Promise.all(
       tokens.map(async (tokenRecord) => {
+        const text = localized ? localize(localized, tokenRecord.language) : { title, body };
         const result = await sendFCMNotification(
           tokenRecord.fcm_token,
-          title,
-          body,
+          text.title,
+          text.body,
           data
         );
 

@@ -63,7 +63,8 @@ const MarketplaceHeader = ({
         </>
       ) : (
         <>
-          <PublicLocaleToggle />
+          {/* A small space before "Sign in" (customer request) — the header's own gap is only 4px on desktop. */}
+          <PublicLocaleToggle className="mr-3" />
           <Link
             to="/login"
             state={loginState(location)}

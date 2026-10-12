@@ -1,6 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging, isSupported } from "firebase/messaging";
 import { supabase } from "@/integrations/supabase/client";
+import { storedLanguage, type Language } from "@/lib/language";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBU7eLriaqnhOIDrd7O4wQmCAwqEqj-kZ4",
@@ -88,12 +89,46 @@ export const getFCMToken = async (): Promise<string | null> => {
   }
 };
 
+type PushRole = "creator" | "student" | "teacher" | "moderator";
+
 /**
- * Register FCM token on the server
+ * The manage-push-token "register" request. `language` is stored with the
+ * token, and the server writes every notification to this device in it.
+ */
+export const pushRegistrationBody = (
+  userId: string,
+  userRole: PushRole,
+  fcmToken: string,
+  language: Language
+): Record<string, string | null | undefined> => {
+  const body: Record<string, string | null | undefined> = {
+    action: "register",
+    userId,
+    userRole,
+    fcmToken,
+    deviceInfo: navigator.userAgent.substring(0, 100),
+    language,
+  };
+
+  // Session credentials for identity validation
+  if (userRole === "creator") {
+    body.creatorToken = localStorage.getItem("creator_token");
+    body.creatorName = localStorage.getItem("creator_name");
+  } else if (userRole === "moderator") {
+    body.creatorToken = localStorage.getItem("moderator_token");
+  }
+
+  return body;
+};
+
+/**
+ * Register FCM token on the server. Called again when the language changes,
+ * so notifications follow the app's language.
  */
 export const registerPushToken = async (
   userId: string,
-  userRole: "creator" | "student" | "teacher" | "moderator"
+  userRole: PushRole,
+  language: Language = storedLanguage()
 ): Promise<boolean> => {
   try {
     const fcmToken = await getFCMToken();
@@ -102,25 +137,7 @@ export const registerPushToken = async (
       return false;
     }
 
-    // Get device info
-    const deviceInfo = `${navigator.userAgent.substring(0, 100)}`;
-
-    // Build request body with session credentials for identity validation
-    const body: Record<string, string | null | undefined> = {
-      action: "register",
-      userId,
-      userRole,
-      fcmToken,
-      deviceInfo
-    };
-
-    // For creators, include session token for validation
-    if (userRole === "creator") {
-      body.creatorToken = localStorage.getItem("creator_token");
-      body.creatorName = localStorage.getItem("creator_name");
-    } else if (userRole === "moderator") {
-      body.creatorToken = localStorage.getItem("moderator_token");
-    }
+    const body = pushRegistrationBody(userId, userRole, fcmToken, language);
 
     // Call edge function to register token
     const { data, error } = await supabase.functions.invoke("manage-push-token", {

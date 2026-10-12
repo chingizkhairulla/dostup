@@ -65,7 +65,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
   return (
     <div className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card motion-safe:transition-shadow motion-safe:hover:shadow-md">
       {isNew && (
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-[#FF6B00] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
           {t("newProductBadge")}
         </span>
       )}
@@ -90,7 +90,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
                 className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none z-10"
                 style={{ transform: "translate3d(0, 0, 10px)" }}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FF6B00] shadow-md transform transition-transform duration-200 ease-out group-hover:scale-110">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary shadow-md transform transition-transform duration-200 ease-out group-hover:scale-110">
                   <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
                 </span>
               </div>

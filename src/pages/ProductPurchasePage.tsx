@@ -15,24 +15,10 @@ import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import PublicFooter from "@/components/layout/PublicFooter";
 import { rememberAuthNext } from "@/lib/creatorAuth";
 import { loginPath, loginState } from "@/lib/loginModal";
-import { formatPriceTenge } from "@/lib/catalog";
+import { formatPriceTenge, pricingOptionLabel, trialDays } from "@/lib/catalog";
 import ReceiptUploadCard, { ReceiptSubmission } from "@/components/checkout/ReceiptUploadCard";
 import { cn } from "@/lib/utils";
 
-function getOptionDisplay(opt: any) {
-  const priceStr = formatPriceTenge(Number(opt.price));
-  if (opt.payment_type === "one_time") {
-    return `${priceStr} (разово)`;
-  }
-  let periodStr = "в месяц";
-  if (opt.recurring_interval === "7d") periodStr = "каждые 7 дней";
-  else if (opt.recurring_interval === "14d") periodStr = "каждые 14 дней";
-  else if (opt.recurring_interval === "1m") periodStr = "в месяц";
-  else if (opt.recurring_interval === "3m") periodStr = "каждые 3 месяца";
-  else if (opt.recurring_interval === "1y") periodStr = "в год";
-  else if (opt.recurring_interval === "custom") periodStr = `каждые ${opt.access_duration_days || 30} дн.`;
-  return `${priceStr} / ${periodStr}`;
-}
 // Push notifications are now sent from the server via database triggers
 
 const formatKaspiPhone = (phone: string) => {
@@ -51,7 +37,7 @@ const ProductPurchasePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { t } = useLanguage();
+  const { t, l, language } = useLanguage();
   const { user, sessionToken } = useSimpleAuth();
   const { data: product, isLoading } = useCheckoutProduct(productId);
   
@@ -126,11 +112,13 @@ const ProductPurchasePage = () => {
         sessionToken: token,
       });
       if (res.ok) {
-        toast.success(`Пробный период на ${effectiveTrialDays || product?.trial_days || trialInfo?.trialDays} дн. активирован!`);
+        toast.success(t("trialActivated", { days: effectiveTrialDays || product?.trial_days || trialInfo?.trialDays || "" }));
         navigate("/dashboard");
       }
     } catch (err: any) {
-      toast.error(err?.message || "Пробный период уже был использован");
+      // invokeApi surfaces the server's error code; never show the code itself.
+      const code = String(err?.message || "");
+      toast.error(t(code.includes("trial_already_used") ? "trialAlreadyUsed" : "trialActivationFailed"));
     } finally {
       setActivatingTrial(false);
     }
@@ -243,7 +231,7 @@ const ProductPurchasePage = () => {
     
     // Подождать загрузки teacherId если ещё грузится
     if (teacherLoading) {
-      toast.error("Подождите, идёт загрузка...");
+      toast.error(l({ ru: "Подождите, идёт загрузка...", kk: "Күте тұрыңыз, жүктелуде...", en: "Please wait, still loading..." }));
       return;
     }
     
@@ -279,7 +267,7 @@ const ProductPurchasePage = () => {
       setPurchaseId(purchase.id);
       setPurchaseStatus("pending");
     } catch {
-      toast.error("Ошибка создания заказа");
+      toast.error(l({ ru: "Ошибка создания заказа", kk: "Тапсырыс жасау мүмкін болмады", en: "Could not create the order" }));
     }
     setIsProcessing(false);
   };
@@ -417,11 +405,11 @@ const ProductPurchasePage = () => {
 
             {product.pricing_options && product.pricing_options.length > 1 && (
               <div className="pt-3 border-t border-border space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">Выберите вариант тарифа:</p>
+                <p className="text-xs font-semibold text-muted-foreground">{l({ ru: "Выберите вариант тарифа:", kk: "Тариф нұсқасын таңдаңыз:", en: "Choose a plan:" })}</p>
                 <div className="space-y-2">
                   {product.pricing_options.map((opt: any) => {
                     const isSelected = activeOption?.id === opt.id;
-                    const summary = getOptionDisplay(opt);
+                    const summary = pricingOptionLabel(opt, language);
                     return (
                       <div
                         key={opt.id}
@@ -437,7 +425,7 @@ const ProductPurchasePage = () => {
                           <span className="text-sm font-semibold text-foreground truncate">{summary}</span>
                           {opt.has_free_trial && (
                             <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium shrink-0">
-                              {opt.trial_days} дн. триал
+                              {l({ ru: `${opt.trial_days} дн. триал`, kk: `${opt.trial_days} күн сынақ`, en: `${opt.trial_days}-day trial` })}
                             </span>
                           )}
                         </div>
@@ -466,12 +454,24 @@ const ProductPurchasePage = () => {
                 <div>
                   <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-primary" />
-                    Бесплатный пробный период на {effectiveTrialDays} {effectiveTrialDays === 3 ? "дня" : "дней"}
+                    {l({
+                      ru: `Бесплатный пробный период на ${trialDays(effectiveTrialDays, "ru")}`,
+                      kk: `${trialDays(effectiveTrialDays, "kk")} тегін сынақ мерзімі`,
+                      en: `Free trial for ${trialDays(effectiveTrialDays, "en")}`,
+                    })}
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1">
                     {trialInfo?.hasUsedTrial
-                      ? "Вы уже использовали пробный период для этого продукта. Доступно только приобретение."
-                      : "Получите полный доступ к продукту на весь пробный период бесплатно."}
+                      ? l({
+                          ru: "Вы уже использовали пробный период для этого продукта. Доступно только приобретение.",
+                          kk: "Бұл өнімнің сынақ мерзімін пайдаланып қойдыңыз. Тек сатып алу қолжетімді.",
+                          en: "You have already used the free trial for this product. Only purchase is available.",
+                        })
+                      : l({
+                          ru: "Получите полный доступ к продукту на весь пробный период бесплатно.",
+                          kk: "Сынақ мерзімі бойы өнімге толық қолжетімділікті тегін алыңыз.",
+                          en: "Get full access to the product for the whole trial period, free of charge.",
+                        })}
                   </p>
                 </div>
                 {user && !trialInfo?.hasUsedTrial && (
@@ -485,7 +485,7 @@ const ProductPurchasePage = () => {
                     {activatingTrial ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     ) : (
-                      "Попробовать бесплатно"
+                      l({ ru: "Попробовать бесплатно", kk: "Тегін байқап көру", en: "Try it free" })
                     )}
                   </Button>
                 )}
@@ -498,7 +498,7 @@ const ProductPurchasePage = () => {
           <Card className="animate-fade-in">
             <CardContent className="pt-6 pb-6 text-center space-y-4">
               <p className="text-sm text-muted-foreground">{t("loginRequiredCheckout")}</p>
-              <Button type="button" variant="cta" className="w-full bg-[#FF6B00]" onClick={goToLogin}>
+              <Button type="button" variant="cta" className="w-full bg-primary" onClick={goToLogin}>
                 {t("loginToContinuePurchase")}
               </Button>
             </CardContent>

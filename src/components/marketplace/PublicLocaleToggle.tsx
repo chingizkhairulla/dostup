@@ -5,14 +5,14 @@ import { Fragment } from "react";
 
 // The header toggle a signed-out visitor sees. Driven by LANGUAGES so it can
 // never fall out of step with the languages the platform actually speaks.
-const PublicLocaleToggle = () => {
+const PublicLocaleToggle = ({ className }: { className?: string }) => {
   const { language, setLanguage, t } = useLanguage();
 
   return (
     <div
       role="group"
       aria-label={t("languageSwitcherLabel")}
-      className="flex items-center gap-2 text-[13px] font-medium text-[#6B7280]"
+      className={cn("flex items-center gap-2 text-[13px] font-medium text-[#6B7280]", className)}
     >
       {LANGUAGES.map((entry, index) => (
         <Fragment key={entry.code}>

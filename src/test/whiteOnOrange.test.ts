@@ -152,3 +152,42 @@ describe("interactive ui primitives state their text colour on orange", () => {
     expect(uncoloured).toEqual([]);
   });
 });
+
+describe("one brand orange", () => {
+  // The code used to carry two oranges: raw #FF6B00 (and its hover shades
+  // #E86000 / #E86200) next to the --primary token. They are now one token, so
+  // a future change of the brand colour is a single edit in index.css.
+  const RAW_ORANGE = /#(FF6B00|E86000|E86200)\b/i;
+  // These two name the raw values on purpose: the helper still recognises them
+  // as orange so the white-text rule holds if one is ever reintroduced.
+  const ALLOWED = new Set(["src/lib/orangeSurfaces.ts"].map((f) => join(f)));
+
+  it("no source file uses a raw orange hex instead of the primary token", () => {
+    const offenders = sourceFiles("src", [".tsx", ".ts", ".css"])
+      .filter((file) => !ALLOWED.has(join(file)))
+      .filter((file) => RAW_ORANGE.test(readRepoFile(file)));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("the browser theme colour is the primary token's colour", () => {
+    const css = readRepoFile("src/index.css");
+    const primary = css.match(/--primary:\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/);
+    expect(primary).not.toBeNull();
+    const [h, s, l] = primary!.slice(1).map(Number);
+
+    // hsl → hex, the standard conversion.
+    const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+    const channel = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const value = l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(value * 255).toString(16).padStart(2, "0");
+    };
+    const hex = `#${channel(0)}${channel(8)}${channel(4)}`;
+
+    for (const file of ["index.html", "public/offline.html"]) {
+      const meta = readRepoFile(file).match(/name="theme-color"\s+content="(#[0-9a-f]{6})"/i);
+      expect(meta?.[1].toLowerCase(), file).toBe(hex);
+    }
+  });
+});

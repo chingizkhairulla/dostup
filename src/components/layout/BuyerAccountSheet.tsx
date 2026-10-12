@@ -235,7 +235,7 @@ const AccountSheet = ({
                     )}
                   >
                     {active && (
-                      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#FF6B00]" aria-hidden />
+                      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-primary" aria-hidden />
                     )}
                     <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden border border-border/80 bg-muted text-foreground font-semibold text-xs select-none">
                       {profile.avatarUrl && !busy ? (
@@ -251,7 +251,7 @@ const AccountSheet = ({
                       <p className="truncate text-[12px] leading-tight text-[#6B7280]">{role}</p>
                     </div>
                     {active && (
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B00]" aria-hidden />
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
                     )}
                   </button>
                 );

@@ -270,7 +270,7 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
           style={{ transform: "translate3d(0, 0, 10px)" }}
           aria-label="Play video"
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#FF6B00] shadow-xl shadow-black/40 pointer-events-none transform transition-transform duration-200 ease-out group-hover/videoplayer:scale-110">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-black/40 pointer-events-none transform transition-transform duration-200 ease-out group-hover/videoplayer:scale-110">
             <Play className="ml-1 h-7 w-7 fill-white text-white" />
           </div>
         </button>

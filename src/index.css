@@ -171,6 +171,12 @@
     }
   }
 
+  /* "Buy. Learn. Sell." reads cramped in English at the tight letter-spacing
+     the Russian/Kazakh lines were tuned for (customer request). */
+  :lang(en) .hero-headline {
+    word-spacing: 0.2em;
+  }
+
   .public-display {
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -257,7 +263,7 @@
   }
 
   .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] focus-visible:ring-offset-2;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
   }
 
   .gradient-primary {

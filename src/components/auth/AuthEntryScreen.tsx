@@ -55,7 +55,7 @@ const AuthEntryScreen = ({
             type="submit"
             variant="cta"
             size="lg"
-            className="w-full bg-[#FF6B00]"
+            className="w-full bg-primary"
             disabled={busy || !canSubmit}
           >
             {sending ? (

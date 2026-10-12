@@ -26,7 +26,7 @@ import {
 import { useProduct, useProductProgram, type Product, type ProductProgramItem } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
-import { formatPriceTenge, formatCatalogPrice, isBillingPeriod } from "@/lib/catalog";
+import { formatPriceTenge, formatCatalogPrice, isBillingPeriod, pricingOptionLabel, trialDays } from "@/lib/catalog";
 import { touchRecentProduct } from "@/lib/buyerActivity";
 import { sellerInitial } from "@/lib/productCover";
 import { PRODUCT_TITLE_CLASS, productTitleSize } from "@/lib/productTitle";
@@ -80,21 +80,6 @@ function renderSafeFormattedContent(text: string | null | undefined) {
       })}
     </div>
   );
-}
-
-function getOptionDisplay(opt: any) {
-  const priceStr = formatPriceTenge(Number(opt.price));
-  if (opt.payment_type === "one_time") {
-    return `${priceStr} (разово)`;
-  }
-  let periodStr = "в месяц";
-  if (opt.recurring_interval === "7d") periodStr = "каждые 7 дней";
-  else if (opt.recurring_interval === "14d") periodStr = "каждые 14 дней";
-  else if (opt.recurring_interval === "1m") periodStr = "в месяц";
-  else if (opt.recurring_interval === "3m") periodStr = "каждые 3 месяца";
-  else if (opt.recurring_interval === "1y") periodStr = "в год";
-  else if (opt.recurring_interval === "custom") periodStr = `каждые ${opt.access_duration_days || 30} дн.`;
-  return `${priceStr} / ${periodStr}`;
 }
 
 const ProgramTree = ({ items, parentId }: { items: ProductProgramItem[]; parentId: string | null }) => {
@@ -151,7 +136,7 @@ const BuyButton = ({
     <button
       type="button"
       onClick={onClick}
-      className="h-12 w-full rounded-2xl bg-[#FF6B00] px-6 text-base font-semibold text-white focus-ring hover:bg-[#E86000]"
+      className="h-12 w-full rounded-2xl bg-primary px-6 text-base font-semibold text-white focus-ring hover:bg-primary/90"
     >
       {label}
     </button>
@@ -255,14 +240,14 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
   const handleActivateTrial = async () => {
     if (isPreview) return;
     if (!user) {
-      toast.error(t("loginRequiredCheckout") || "Для активации необходимо войти");
+      toast.error(t("loginRequiredCheckout"));
       const next = `/p/${product?.slug || product?.id}`;
       rememberAuthNext(next);
       navigate(loginPath(next), { state: loginState(location) });
       return;
     }
     if (isSellerProfile) {
-      toast.info("Переключитесь на профиль покупателя");
+      toast.info(l({ ru: "Переключитесь на профиль покупателя", kk: "Сатып алушы профиліне ауысыңыз", en: "Switch to your buyer profile" }));
       setSwitchBuyerOpen(true);
       return;
     }
@@ -274,13 +259,15 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
         sessionToken: localStorage.getItem("creator_token") || "",
       });
       if (res.ok) {
-        toast.success(`Пробный период на ${effectiveTrialDays || product?.trial_days} дн. активирован!`);
+        toast.success(t("trialActivated", { days: effectiveTrialDays || product?.trial_days || "" }));
         queryClient.invalidateQueries({ queryKey: ["simple-purchases"] });
         queryClient.invalidateQueries({ queryKey: ["check-trial", product?.id] });
         navigate("/dashboard");
       }
     } catch (err: any) {
-      toast.error(err?.message || "Пробный период уже был использован");
+      // invokeApi surfaces the server's error code; never show the code itself.
+      const code = String(err?.message || "");
+      toast.error(t(code.includes("trial_already_used") ? "trialAlreadyUsed" : "trialActivationFailed"));
     } finally {
       setActivatingTrial(false);
     }
@@ -445,7 +432,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
     : (activeOption?.access_duration_days || product.access_duration_days)
       ? t("accessDays", { days: activeOption?.access_duration_days || product.access_duration_days })
       : t("accessLifetime");
-  const firstChargeDate = new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "ru-RU" }), {
+  const firstChargeDate = new Intl.DateTimeFormat(l({ ru: "ru-RU", kk: "kk-KZ", en: "en-GB" }), {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -484,11 +471,11 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
     <>
       {product.pricing_options && product.pricing_options.length > 1 && (
         <div className="space-y-2 mb-4">
-          <p className="text-xs font-semibold text-muted-foreground">Вариант доступа:</p>
+          <p className="text-xs font-semibold text-muted-foreground">{l({ ru: "Вариант доступа:", kk: "Қол жеткізу нұсқасы:", en: "Access option:" })}</p>
           <div className="space-y-2">
             {product.pricing_options.map((opt: any) => {
               const isSelected = (activeOption?.id === opt.id);
-              const summary = getOptionDisplay(opt);
+              const summary = pricingOptionLabel(opt, language);
               return (
                 <div
                   key={opt.id}
@@ -504,7 +491,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                     <span className="text-sm font-semibold text-foreground truncate">{summary}</span>
                     {opt.has_free_trial && (
                       <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium shrink-0">
-                        {opt.trial_days} дн. триал
+                        {l({ ru: `${opt.trial_days} дн. триал`, kk: `${opt.trial_days} күн сынақ`, en: `${opt.trial_days}-day trial` })}
                       </span>
                     )}
                   </div>
@@ -545,9 +532,13 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
             {activatingTrial ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : trialInfo?.hasUsedTrial ? (
-              "Пробный период уже использован"
+              l({ ru: "Пробный период уже использован", kk: "Сынақ мерзімі пайдаланылған", en: "Free trial already used" })
             ) : (
-              `Попробовать бесплатно (${effectiveTrialDays} ${effectiveTrialDays === 3 ? "дня" : "дней"})`
+              l({
+                ru: `Попробовать бесплатно (${trialDays(effectiveTrialDays, "ru")})`,
+                kk: `Тегін байқап көру (${trialDays(effectiveTrialDays, "kk")})`,
+                en: `Try it free (${trialDays(effectiveTrialDays, "en")})`,
+              })
             )}
           </Button>
         )}
@@ -616,7 +607,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                       type="button"
                       onClick={() => setActiveMediaIdx((prev) => (prev > 0 ? prev - 1 : productMedia.length - 1))}
                       className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all z-10"
-                      title="Предыдущее"
+                      title={l({ ru: "Предыдущее", kk: "Алдыңғы", en: "Previous" })}
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -624,7 +615,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                       type="button"
                       onClick={() => setActiveMediaIdx((prev) => (prev < productMedia.length - 1 ? prev + 1 : 0))}
                       className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all z-10"
-                      title="Следующее"
+                      title={l({ ru: "Следующее", kk: "Келесі", en: "Next" })}
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -646,7 +637,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                           ? "w-4 bg-primary"
                           : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60"
                       )}
-                      title={`Медиа ${i + 1}`}
+                      title={l({ ru: `Медиа ${i + 1}`, kk: `Медиа ${i + 1}`, en: `Media ${i + 1}` })}
                     />
                   ))}
                 </div>
@@ -875,7 +866,11 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                   {activatingTrial ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   ) : (
-                    `Попробовать бесплатно (${product.trial_days} ${product.trial_days === 3 ? "дня" : "дней"})`
+                    l({
+                      ru: `Попробовать бесплатно (${trialDays(product.trial_days, "ru")})`,
+                      kk: `Тегін байқап көру (${trialDays(product.trial_days, "kk")})`,
+                      en: `Try it free (${trialDays(product.trial_days, "en")})`,
+                    })
                   )}
                 </Button>
               )}
@@ -886,7 +881,7 @@ const ProductPage = ({ isPreview = false, previewProduct = null }: ProductPagePr
                 <button
                   type="button"
                   onClick={handleBuy}
-                  className="h-12 min-w-0 flex-1 rounded-2xl bg-[#FF6B00] px-6 text-base font-semibold text-white focus-ring hover:bg-[#E86000]"
+                  className="h-12 min-w-0 flex-1 rounded-2xl bg-primary px-6 text-base font-semibold text-white focus-ring hover:bg-primary/90"
                 >
                   {t("buy")}
                 </button>

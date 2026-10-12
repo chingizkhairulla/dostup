@@ -40,7 +40,7 @@ const CatalogFilterRow = ({
             className={cn(
               "inline-flex h-9 items-center rounded-full border px-4 text-sm font-medium focus-ring",
               !subcategorySlug
-                ? "border-[#FF6B00]/30 bg-[#FF6B00]/10 text-[#1F2328]"
+                ? "border-primary/30 bg-primary/10 text-[#1F2328]"
                 : "border-[#E3E5E8] bg-white text-[#1F2328] hover:border-[#D0D3D8]",
             )}
           >
@@ -57,7 +57,7 @@ const CatalogFilterRow = ({
                 className={cn(
                   "inline-flex h-9 items-center rounded-full border px-4 text-sm font-medium focus-ring",
                   active
-                    ? "border-[#FF6B00]/30 bg-[#FF6B00]/10 text-[#1F2328]"
+                    ? "border-primary/30 bg-primary/10 text-[#1F2328]"
                     : "border-[#E3E5E8] bg-white text-[#1F2328] hover:border-[#D0D3D8]",
                 )}
               >
@@ -92,7 +92,7 @@ const CatalogFilterRow = ({
                 onClick={() => onLessonFormatChange(active ? "" : option.value)}
                 className={cn(
                   "inline-flex h-7 items-center rounded-full px-3 text-sm font-medium focus-ring",
-                  active ? "bg-[#FF6B00]/10 text-[#1F2328]" : "text-[#6B7280] hover:text-[#1F2328]",
+                  active ? "bg-primary/10 text-[#1F2328]" : "text-[#6B7280] hover:text-[#1F2328]",
                 )}
               >
                 {t(option.labelKey)}

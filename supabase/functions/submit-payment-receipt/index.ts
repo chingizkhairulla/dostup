@@ -7,6 +7,7 @@ import {
 } from '../_shared/purchase.ts'
 import { parseReceipt, sha256Hex } from '../_shared/receipt-parse.ts'
 import { buildFingerprint, verifyReceipt } from '../_shared/receipt-verify.ts'
+import { DEFAULT_LANG, receiptErrors, toLang, type Lang, type ReceiptErrorKey } from '../_shared/i18n.ts'
 
 const MAX_BYTES = 4_194_304
 const ALLOWED_MIME = new Set([
@@ -18,7 +19,16 @@ const ALLOWED_MIME = new Set([
   'application/pdf',
 ])
 
-function fail(stage: string, code: string, message: string, status = 400) {
+// `message` is shown to the user as-is (ReceiptUploadCard), so it is written in
+// the language the upload form sent; `code` stays the stable thing to branch on.
+function fail(
+  stage: string,
+  code: string,
+  status: number,
+  lang: Lang,
+  key: ReceiptErrorKey = code as ReceiptErrorKey,
+) {
+  const message = receiptErrors[key][lang]
   console.error('submit-payment-receipt fail', { stage, code, message, status })
   return json({ ok: false, stage, code, message }, status)
 }
@@ -30,16 +40,18 @@ function ok(body: Record<string, unknown>, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return optionsResponse()
 
+  let lang: Lang = DEFAULT_LANG
   try {
     const supabase = serviceClient()
     const parsed = await readRequest(req)
-    if ('error' in parsed) {
-      return fail(parsed.stage, parsed.code, parsed.error, parsed.status)
+    lang = parsed.lang
+    if ('code' in parsed) {
+      return fail(parsed.stage, parsed.code, parsed.status, lang)
     }
 
     const user = await resolveUser(supabase, parsed.sessionToken)
     if (!user) {
-      return fail('authentication', 'UNAUTHORIZED', 'Войдите в аккаунт, чтобы загрузить чек.', 401)
+      return fail('authentication', 'UNAUTHORIZED', 401, lang)
     }
 
     const { data: purchase, error: purchaseError } = await supabase
@@ -49,11 +61,11 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (purchaseError || !purchase) {
-      return fail('purchase_lookup', 'PURCHASE_NOT_FOUND', 'Заказ не найден.', 404)
+      return fail('purchase_lookup', 'PURCHASE_NOT_FOUND', 404, lang)
     }
     const ownerId = purchase.buyer_profile_id || purchase.simple_user_id
     if (ownerId !== user.userId) {
-      return fail('authorization', 'FORBIDDEN', 'Этот заказ принадлежит другому пользователю.', 403)
+      return fail('authorization', 'FORBIDDEN', 403, lang)
     }
 
     if (purchase.status === 'completed') {
@@ -66,18 +78,18 @@ Deno.serve(async (req) => {
       })
     }
     if (purchase.status !== 'pending') {
-      return fail('purchase_status', 'PURCHASE_NOT_PENDING', 'Этот заказ уже нельзя подтвердить чеком.', 409)
+      return fail('purchase_status', 'PURCHASE_NOT_PENDING', 409, lang)
     }
 
     const mime = normalizeMime(parsed.mimeType, parsed.fileName)
     if (!ALLOWED_MIME.has(mime)) {
-      return fail('mime_validation', 'UNSUPPORTED_TYPE', 'Нужен файл JPG, PNG, WEBP или PDF.', 400)
+      return fail('mime_validation', 'UNSUPPORTED_TYPE', 400, lang)
     }
     if (parsed.bytes.byteLength === 0) {
-      return fail('file_validation', 'EMPTY_FILE', 'Файл пустой. Выберите другой чек.', 400)
+      return fail('file_validation', 'EMPTY_FILE', 400, lang)
     }
     if (parsed.bytes.byteLength > MAX_BYTES) {
-      return fail('file_validation', 'FILE_TOO_LARGE', 'Файл слишком большой (макс. 4 МБ).', 413)
+      return fail('file_validation', 'FILE_TOO_LARGE', 413, lang)
     }
 
     const { data: product } = await supabase
@@ -166,12 +178,7 @@ Deno.serve(async (req) => {
     })
     if (upload.error) {
       console.error('receipt upload failed', upload.error)
-      return fail(
-        'storage_upload',
-        'STORAGE_UPLOAD_FAILED',
-        'Не удалось сохранить файл чека. Попробуйте ещё раз.',
-        500,
-      )
+      return fail('storage_upload', 'STORAGE_UPLOAD_FAILED', 500, lang)
     }
 
     const verified = await verifyReceipt({
@@ -235,7 +242,7 @@ Deno.serve(async (req) => {
       const { error } = await supabase.from('payment_submissions').update(row).eq('id', reuseId)
       if (error) {
         console.error('submission update after upload failed', error)
-        return fail('db_update', 'DB_UPDATE_FAILED', dbMessage(error.message), 500)
+        return fail('db_update', 'DB_UPDATE_FAILED', 500, lang, dbMessage(error.message))
       }
     } else {
       const { error } = await supabase.from('payment_submissions').insert(row)
@@ -245,7 +252,7 @@ Deno.serve(async (req) => {
           verified.rejectionReason = 'duplicate_receipt'
         } else {
           console.error('submission insert after upload failed', error)
-          return fail('db_insert', 'DB_INSERT_FAILED', dbMessage(error.message), 500)
+          return fail('db_insert', 'DB_INSERT_FAILED', 500, lang, dbMessage(error.message))
         }
       }
     }
@@ -322,11 +329,12 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.error('submit-payment-receipt error', e)
-    return fail('unhandled', 'INTERNAL_ERROR', 'Не удалось обработать чек. Попробуйте ещё раз.', 500)
+    return fail('unhandled', 'INTERNAL_ERROR', 500, lang)
   }
 })
 
 type ParsedOk = {
+  lang: Lang
   sessionToken: string
   purchaseId: string
   fileName: string
@@ -334,7 +342,9 @@ type ParsedOk = {
   bytes: Uint8Array
 }
 
-type ParsedErr = { error: string; status: number; stage: string; code: string }
+// No language is known until the form has been read, so the two failures
+// before that point answer in the default one.
+type ParsedErr = { lang: Lang; status: number; stage: string; code: ReceiptErrorKey }
 
 async function readRequest(req: Request): Promise<ParsedOk | ParsedErr> {
   const contentType = req.headers.get('content-type') || ''
@@ -343,6 +353,7 @@ async function readRequest(req: Request): Promise<ParsedOk | ParsedErr> {
   let fileName = 'receipt'
   let mimeType = ''
   let bytes: Uint8Array | null = null
+  let lang: Lang = DEFAULT_LANG
 
   if (contentType.includes('multipart/form-data')) {
     let form: FormData
@@ -351,15 +362,16 @@ async function readRequest(req: Request): Promise<ParsedOk | ParsedErr> {
     } catch (err) {
       console.error('formData parse failed', err)
       return {
-        error: 'Не удалось прочитать файл. Попробуйте другой формат.',
+        lang,
         status: 400,
         stage: 'request_parse',
         code: 'MULTIPART_PARSE_FAILED',
       }
     }
+    lang = toLang(form.get('language'))
     const file = form.get('file')
     if (!(file instanceof File)) {
-      return { error: 'Файл не выбран.', status: 400, stage: 'request_parse', code: 'MISSING_FILE' }
+      return { lang, status: 400, stage: 'request_parse', code: 'MISSING_FILE' }
     }
     sessionToken = sessionToken || String(form.get('sessionToken') || '')
     purchaseId = String(form.get('purchaseId') || '')
@@ -368,7 +380,7 @@ async function readRequest(req: Request): Promise<ParsedOk | ParsedErr> {
     bytes = new Uint8Array(await file.arrayBuffer())
   } else {
     return {
-      error: 'Нужно отправить файл как multipart/form-data.',
+      lang,
       status: 415,
       stage: 'request_parse',
       code: 'UNSUPPORTED_CONTENT_TYPE',
@@ -376,16 +388,16 @@ async function readRequest(req: Request): Promise<ParsedOk | ParsedErr> {
   }
 
   if (!sessionToken) {
-    return { error: 'Войдите в аккаунт, чтобы загрузить чек.', status: 401, stage: 'authentication', code: 'MISSING_SESSION' }
+    return { lang, status: 401, stage: 'authentication', code: 'MISSING_SESSION' }
   }
   if (!purchaseId) {
-    return { error: 'Не указан заказ.', status: 400, stage: 'request_parse', code: 'MISSING_PURCHASE' }
+    return { lang, status: 400, stage: 'request_parse', code: 'MISSING_PURCHASE' }
   }
   if (!bytes) {
-    return { error: 'Файл не выбран.', status: 400, stage: 'request_parse', code: 'MISSING_FILE' }
+    return { lang, status: 400, stage: 'request_parse', code: 'MISSING_FILE' }
   }
 
-  return { sessionToken, purchaseId, fileName, mimeType, bytes }
+  return { lang, sessionToken, purchaseId, fileName, mimeType, bytes }
 }
 
 function sessionTokenFromAuth(req: Request): string {
@@ -422,9 +434,9 @@ function redactQr(payload: string): string {
   return `${payload.slice(0, 48)}…`
 }
 
-function dbMessage(raw: string): string {
-  if (/unicode escape/i.test(raw)) return 'Не удалось сохранить данные чека. Попробуйте другое фото.'
-  return 'Не удалось сохранить запись о чеке. Попробуйте ещё раз.'
+function dbMessage(raw: string): ReceiptErrorKey {
+  if (/unicode escape/i.test(raw)) return 'DB_BAD_TEXT'
+  return 'DB_SAVE_FAILED'
 }
 
 function jsonbSafe(value: unknown): unknown {

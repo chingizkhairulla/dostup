@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { localize, push, shortTime, type Localized, type Push } from "../_shared/i18n.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,11 +80,19 @@ serve(async (req) => {
     const requestedBy = record.requested_by || "student";
     const isApproved = record.status === "approved";
 
-    let title: string;
-    let body: string;
+    // Built in every language; each device reads the one it registered with.
+    // The responder's comment is their own words and is passed through as written.
+    let message: Localized<Push>;
     let targetUserId: string | null = null;
     let targetRole: string;
     let targetLink: string;
+    const answer = {
+      approved: isApproved,
+      product: record.product_title,
+      newDate: record.new_date,
+      newTime: shortTime(record.new_time),
+      comment: record.response_comment || undefined,
+    };
 
     if (requestedBy === "student") {
       // Student's request was responded to → notify the student
@@ -91,10 +100,7 @@ serve(async (req) => {
       targetRole = "student";
       targetLink = "/dashboard";
 
-      title = isApproved ? "Перенос подтверждён ✅" : "Перенос отклонён ❌";
-      body = isApproved
-        ? `Урок "${record.product_title}" перенесён на ${record.new_date} ${record.new_time?.slice(0, 5)}`
-        : `Запрос на перенос "${record.product_title}" отклонён`;
+      message = push.rescheduleAnswered(answer);
 
     } else {
       // Creator/Teacher's request was responded to by student → notify creator/teacher
@@ -109,7 +115,7 @@ serve(async (req) => {
       }
 
       // Get student name
-      let studentName = "Ученик";
+      let studentName: string | null = null;
       if (record.simple_user_id) {
         const { data: studentData } = await supabase
           .from("simple_users")
@@ -119,14 +125,7 @@ serve(async (req) => {
         if (studentData) studentName = studentData.name;
       }
 
-      title = isApproved ? "Перенос подтверждён учеником ✅" : "Перенос отклонён учеником ❌";
-      body = isApproved
-        ? `${studentName} подтвердил перенос "${record.product_title}" на ${record.new_date} ${record.new_time?.slice(0, 5)}`
-        : `${studentName} отклонил запрос на перенос "${record.product_title}"`;
-    }
-
-    if (record.response_comment) {
-      body += `. ${record.response_comment}`;
+      message = push.rescheduleAnsweredByStudent({ ...answer, student: studentName });
     }
 
     if (!targetUserId && targetRole !== "creator") {
@@ -134,7 +133,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const query = supabase.from("push_tokens").select("id, fcm_token").eq("user_role", targetRole);
+    const query = supabase.from("push_tokens").select("id, fcm_token, language").eq("user_role", targetRole);
     if (targetUserId) query.eq("user_id", targetUserId);
     const { data: tokens } = await query;
 
@@ -149,6 +148,7 @@ serve(async (req) => {
 
     for (const tokenRecord of tokens) {
       try {
+        const { title, body } = localize(message, tokenRecord.language);
         const response = await fetch(
           `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
           {
