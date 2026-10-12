@@ -1406,35 +1406,47 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          description: string | null
           end_time: string
           id: string
+          image_url: string | null
           is_available: boolean
           lesson_link: string | null
+          location: string | null
           max_participants: number | null
           schedule_id: string
           start_time: string
+          title: string | null
         }
         Insert: {
           created_at?: string
           date: string
+          description?: string | null
           end_time: string
           id?: string
+          image_url?: string | null
           is_available?: boolean
           lesson_link?: string | null
+          location?: string | null
           max_participants?: number | null
           schedule_id: string
           start_time: string
+          title?: string | null
         }
         Update: {
           created_at?: string
           date?: string
+          description?: string | null
           end_time?: string
           id?: string
+          image_url?: string | null
           is_available?: boolean
           lesson_link?: string | null
+          location?: string | null
           max_participants?: number | null
           schedule_id?: string
           start_time?: string
+          title?: string | null
         }
         Relationships: [
           {
