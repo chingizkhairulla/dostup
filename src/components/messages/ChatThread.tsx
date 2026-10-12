@@ -45,6 +45,7 @@ interface Props {
   send: (text: string, attachments: ChatAttachment[]) => Promise<void>;
   /** Replaces the composer (e.g. "access ended" for a chat that is read-only now). */
   composerNotice?: ReactNode;
+  initialText?: string;
 }
 
 const MAX_ATTACHMENTS = 10;
@@ -67,9 +68,22 @@ const ChatThread = ({
   uploadFile,
   send,
   composerNotice,
+  initialText,
 }: Props) => {
   const { t } = useLanguage();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => {
+    if (initialText) return initialText;
+    try {
+      const stored = sessionStorage.getItem("support_prefill");
+      if (stored) {
+        sessionStorage.removeItem("support_prefill");
+        return stored;
+      }
+    } catch {
+      // ignore
+    }
+    return "";
+  });
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<(ChatAttachment & { localId: string })[]>([]);
   const [pending, setPending] = useState<PendingUpload[]>([]);
