@@ -44,20 +44,14 @@ class ErrorBoundary extends Component<Props, State> {
       const translations = {
         ru: {
           title: "Что-то пошло не так",
-          message: "Не беспокойтесь! Это временная техническая проблема.",
-          tryThese: "Попробуйте:",
-          option1: "Перезагрузить страницу",
-          option2: "Подождать пару минут и попробовать снова",
-          reloadButton: "Перезагрузить страницу",
+          message: "Не беспокойтесь, это временная ошибка. Попробуйте еще раз.",
+          reloadButton: "Попробовать снова",
           homeButton: "На главную",
         },
         kk: {
           title: "Бірдеңе дұрыс болмады",
-          message: "Уайымдамаңыз! Бұл уақытша техникалық мәселе.",
-          tryThese: "Мынаны көріңіз:",
-          option1: "Бетті қайта жүктеу",
-          option2: "Бірнеше минут күтіп, қайта көріңіз",
-          reloadButton: "Бетті қайта жүктеу",
+          message: "Уайымдамаңыз, бұл уақытша қате. Қайталап көріңіз.",
+          reloadButton: "Қайталап көру",
           homeButton: "Басты бетке",
         },
       };
@@ -69,33 +63,31 @@ class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-md w-full text-center space-y-6">
             {/* Icon */}
             <div className="flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-warning/10 flex items-center justify-center">
-                <AlertTriangle className="w-10 h-10 text-warning" />
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-primary" />
               </div>
             </div>
 
             {/* Title and message */}
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
-              <p className="text-muted-foreground">{t.message}</p>
-            </div>
-
-            {/* Tips */}
-            <div className="bg-muted/50 rounded-lg p-4 text-left">
-              <p className="font-medium text-foreground mb-2">{t.tryThese}</p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                <li>• {t.option1}</li>
-                <li>• {t.option2}</li>
-              </ul>
+            <div className="space-y-1.5">
+              <h1 className="text-xl font-bold text-foreground">{t.title}</h1>
+              <p className="text-sm text-muted-foreground">{t.message}</p>
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={this.handleReload} className="gap-2">
-                <RefreshCw className="w-4 h-4" />
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
+              <Button
+                onClick={this.handleReload}
+                className="gap-2 bg-primary hover:bg-primary/90 text-white font-medium"
+              >
+                <RefreshCw className="w-4 h-4 text-white" />
                 {t.reloadButton}
               </Button>
-              <Button variant="outline" onClick={this.handleGoHome} className="gap-2">
+              <Button
+                variant="outline"
+                onClick={this.handleGoHome}
+                className="gap-2 border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 font-medium"
+              >
                 <Home className="w-4 h-4" />
                 {t.homeButton}
               </Button>

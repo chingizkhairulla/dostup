@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { authErrorKeyFromUnknown } from "@/lib/authErrors";
 import {
   exchangeCreatorAccessToken,
@@ -11,6 +12,7 @@ import {
   verifyEmailCode,
   type GoogleOAuthResult,
 } from "@/lib/creatorAuth";
+import { getTestAccountEmail, TEST_ACCOUNT_PASSWORD } from "@/lib/testAccounts";
 
 type UseEmailAuthOptions = {
   onAuthRedirect?: (path: string) => void | Promise<void>;
@@ -126,6 +128,33 @@ export function useEmailAuth(options: UseEmailAuthOptions = {}) {
     }
   };
 
+  const handleContinue = async (address: string): Promise<"code" | "authenticated" | "error"> => {
+    const testEmail = getTestAccountEmail(address);
+    if (testEmail) {
+      setSending(true);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: testEmail,
+          password: TEST_ACCOUNT_PASSWORD,
+        });
+        if (error || !data.session?.access_token) {
+          toast.error(t(authErrorKeyFromUnknown(error || { message: "invalid_credentials" })));
+          return "error";
+        }
+        const success = await exchange(data.session.access_token, testEmail);
+        return success ? "authenticated" : "error";
+      } catch {
+        toast.error(t("networkFailure"));
+        return "error";
+      } finally {
+        setSending(false);
+      }
+    }
+
+    const ok = await sendCode(address);
+    return ok ? "code" : "error";
+  };
+
   return {
     email,
     setEmail,
@@ -139,6 +168,7 @@ export function useEmailAuth(options: UseEmailAuthOptions = {}) {
     canRetryExchange: Boolean(pendingExchange.current && exchangeError),
     busy: googleLoading || sending || verifying || retryingExchange,
     sendCode,
+    handleContinue,
     verifyCode,
     retryExchange,
     handleGoogle,

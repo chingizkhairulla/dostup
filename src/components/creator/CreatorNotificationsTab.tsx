@@ -393,8 +393,6 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt, onOpenUsers }: Cre
 
   return (
     <div className="space-y-4">
-      <CreatorPendingPayments creatorName={creatorName} mode="link" onOpenUsers={onOpenUsers} />
-
       {/* Reschedule Requests Section */}
       {rescheduleRequests.length > 0 && (
         <Card className="border-primary/30">

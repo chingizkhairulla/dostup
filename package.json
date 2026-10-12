@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "seed:demo:clean": "tsx scripts/seed-demo.ts --clean"
+    "seed:demo:clean": "tsx scripts/seed-demo.ts --clean",
+    "seed:preview": "tsx scripts/manage-preview-data.ts",
+    "clean:preview": "tsx scripts/manage-preview-data.ts --clean"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
