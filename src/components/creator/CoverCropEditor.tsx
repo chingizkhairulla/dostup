@@ -1,7 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Loader2, ZoomIn, ZoomOut, Move } from "lucide-react";
+import { COVER_FRAME_WIDTH, COVER_FRAME_HEIGHT } from "@/hooks/useCoverCrop";
 
 type CoverCropEditorProps = {
   source: string;
@@ -30,6 +32,31 @@ const CoverCropEditor = ({
   onCancel,
   onSave,
 }: CoverCropEditorProps) => {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [frameWidth, setFrameWidth] = useState(COVER_FRAME_WIDTH);
+
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const update = () => setFrameWidth(el.clientWidth || COVER_FRAME_WIDTH);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => update());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Crop math works in 384x240 frame units; scale the stage to the rendered frame width.
+  const scale = frameWidth / COVER_FRAME_WIDTH;
+
+  const toFrame = (e: ReactPointerEvent<HTMLDivElement>) =>
+    ({
+      currentTarget: e.currentTarget,
+      pointerId: e.pointerId,
+      clientX: e.clientX / scale,
+      clientY: e.clientY / scale,
+    }) as unknown as ReactPointerEvent<HTMLDivElement>;
+
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -40,33 +67,44 @@ const CoverCropEditor = ({
     <div className="space-y-3.5 select-none w-full">
       {/* 16:10 Cover Frame (exact ratio of product cards) */}
       <div
-        className="relative mx-auto w-full max-w-[384px] aspect-[16/10] cursor-grab overflow-hidden rounded-2xl border-2 border-primary/40 bg-black/90 shadow-inner active:cursor-grabbing touch-none select-none ring-4 ring-black/5 flex items-center justify-center"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
+        ref={frameRef}
+        className="relative mx-auto w-full max-w-[384px] aspect-[16/10] cursor-grab overflow-hidden rounded-2xl border-2 border-primary/40 bg-black/90 shadow-inner active:cursor-grabbing touch-none select-none ring-4 ring-black/5"
+        onPointerDown={(e) => onPointerDown(toFrame(e))}
+        onPointerMove={(e) => onPointerMove(toFrame(e))}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onWheel={handleWheel}
       >
-        {mediaType === "video" ? (
-          <video
-            src={source}
-            autoPlay
-            loop
-            muted
-            playsInline
-            draggable={false}
-            className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
-            style={previewStyle}
-          />
-        ) : (
-          <img
-            src={source}
-            alt="cover preview"
-            draggable={false}
-            className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
-            style={previewStyle}
-          />
-        )}
+        <div
+          className="absolute left-0 top-0 pointer-events-none"
+          style={{
+            width: COVER_FRAME_WIDTH,
+            height: COVER_FRAME_HEIGHT,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          {mediaType === "video" ? (
+            <video
+              src={source}
+              autoPlay
+              loop
+              muted
+              playsInline
+              draggable={false}
+              className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+              style={previewStyle}
+            />
+          ) : (
+            <img
+              src={source}
+              alt="cover preview"
+              draggable={false}
+              className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+              style={previewStyle}
+            />
+          )}
+        </div>
       </div>
 
       {/* Controls Row: Zoom on left | Cancel & Save on right */}
