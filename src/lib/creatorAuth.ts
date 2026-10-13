@@ -556,7 +556,7 @@ export async function startGoogleOAuth(profileType?: ProfileType): Promise<Googl
   }
 }
 
-const EMAIL_OTP_TYPES = ["email", "magiclink", "signup"] as const;
+const EMAIL_OTP_TYPES = ["email", "magiclink", "recovery", "signup"] as const;
 
 export async function sendEmailCode(email: string, profileType?: ProfileType) {
   rememberOAuthProfileType(profileType);
