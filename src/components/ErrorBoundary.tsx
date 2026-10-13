@@ -11,6 +11,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo?: ErrorInfo | null;
 }
 
 const PREFILL = 'Здравствуйте! Вышел экран "Что-то пошло не так", после того как ';
@@ -33,6 +34,7 @@ class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    errorInfo: null,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -41,6 +43,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
+    this.setState({ errorInfo });
   }
 
   public componentDidMount() {
