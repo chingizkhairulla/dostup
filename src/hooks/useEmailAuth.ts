@@ -43,7 +43,7 @@ export function useEmailAuth(options: UseEmailAuthOptions = {}) {
       await onAuthRedirect(path);
       return;
     }
-    navigate(path, { replace: true });
+    window.location.href = path;
   };
 
   const exchange = async (accessToken: string, address: string) => {

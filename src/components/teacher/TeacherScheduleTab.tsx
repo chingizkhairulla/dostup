@@ -911,6 +911,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           repeatWeekly?: boolean;
           repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
           repeatUntil?: string | null;
+          lessonLink?: string;
         }[]
       >;
       timeIntervals: { start: string; end: string }[];
@@ -924,6 +925,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
       description?: string;
       imageUrl?: string;
       location?: string;
+      lessonLink?: string;
       deletedSlotIds?: string[];
     }) => {
       // Resolve schedules for products
@@ -1062,6 +1064,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
           const slotDesc = (interval as any).description ?? params.description;
           const slotImg = (interval as any).imageUrl ?? params.imageUrl;
           const slotLoc = (interval as any).location ?? params.location;
+          const slotLink = (interval as any).lessonLink ?? (params as any).lessonLink ?? (interval as any).lesson_link;
 
           const [startH, startM] = interval.start.split(":").map(Number);
           const [endH, endM] = interval.end.split(":").map(Number);
@@ -1118,6 +1121,7 @@ const TeacherScheduleTab = ({ teacherName, productIds }: TeacherScheduleTabProps
                 description: slotDesc || null,
                 image_url: slotImg || null,
                 location: slotLoc || null,
+                lesson_link: slotLink || null,
               });
             }
 
