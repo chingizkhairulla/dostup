@@ -74,12 +74,6 @@ const ShareProductButton = ({ title, id, slug, sellerHandle, className, size = "
             {language === "ru" ? "Скопируйте ссылку или выберите приложение" : "Сілтемені көшіріңіз немесе қолданбаны таңдаңыз"}
           </DialogDescription>
         </DialogHeader>
-        {warning && (
-          <div className="flex gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-base leading-relaxed text-foreground">
-            <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
-            <p>{warning}</p>
-          </div>
-        )}
         <div className="flex min-w-0 items-center gap-2 rounded-full border border-border bg-muted/20 p-1.5 shadow-sm">
           <Input readOnly value={shareUrl} aria-label={language === "ru" ? "Ссылка на продукт" : "Өнімге сілтеме"}
             onFocus={(event) => event.currentTarget.select()} className="min-w-0 rounded-full border-0 bg-transparent shadow-none focus-visible:ring-1" />
@@ -111,6 +105,12 @@ const ShareProductButton = ({ title, id, slug, sellerHandle, className, size = "
             <Instagram aria-hidden="true" /> Instagram
           </Button>
         </div>
+        {warning && (
+          <div className="flex gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-base leading-relaxed text-foreground">
+            <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
+            <p>{warning}</p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

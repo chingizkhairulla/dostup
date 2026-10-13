@@ -12,7 +12,7 @@ const payment: PaymentMethodFormValue = {
 };
 
 test("phone transfers keep the selected bank through saving and checkout", () => {
-  const saved = serializeKaspiFields(payment);
+  const saved = serializeKaspiFields({ ...payment, kaspiLink: "", kaspiCard: "" });
   assert.equal(saved.bank, "halyk");
   assert.equal(saved.kaspi_card, null);
   assert.equal(saved.kaspi_link, null);
@@ -35,8 +35,24 @@ test("existing combined phone, card and link options remain supported", () => {
   assert.equal(resolved.bank, "halyk");
 });
 
-test("turning transfers off clears their stored details and bank", () => {
-  assert.deepEqual(serializeKaspiFields({ ...payment, kaspiMethods: ["link"], bank: "other", bankName: "Мой банк" }), {
-    kaspi_link: payment.kaspiLink, kaspi_phone: null, kaspi_card: null, bank: null, bank_name: null,
-  });
+test("switching to a link keeps previously entered transfer details", () => {
+  const saved = serializeKaspiFields({ ...payment, kaspiMethods: ["link"], paymentMethod: "link", lastPaymentMethod: "phone" });
+  assert.equal(saved.kaspi_link, payment.kaspiLink);
+  assert.equal(saved.kaspi_phone, payment.kaspiPhone);
+  assert.equal(saved.kaspi_card, "1234567890123456");
+  assert.equal(saved.last_payment_method, "phone");
+});
+
+test("empty fields are removed deliberately without clearing other methods", () => {
+  const saved = serializeKaspiFields({ ...payment, kaspiPhone: "", kaspiCard: "", lastPaymentMethod: "phone" });
+  assert.equal(saved.kaspi_link, payment.kaspiLink);
+  assert.equal(saved.kaspi_phone, null);
+  assert.equal(saved.kaspi_card, null);
+  assert.equal(saved.last_payment_method, "link");
+});
+
+test("a bank entered before transfer details survives saving", () => {
+  const saved = serializeKaspiFields({ ...payment, kaspiLink: "", kaspiPhone: "", kaspiCard: "", bank: "other", bankName: "  Мой банк  " });
+  assert.equal(saved.bank, "other");
+  assert.equal(saved.bank_name, "Мой банк");
 });
