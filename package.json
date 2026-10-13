@@ -12,7 +12,9 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "seed:demo:clean": "tsx scripts/seed-demo.ts --clean",
     "test:messages": "node --import tsx --test tests/messages*.test.ts",
-    "support:welcome": "tsx scripts/support-welcome.ts"
+    "support:welcome": "tsx scripts/support-welcome.ts",
+    "seed:preview": "tsx scripts/manage-preview-data.ts",
+    "clean:preview": "tsx scripts/manage-preview-data.ts --clean"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

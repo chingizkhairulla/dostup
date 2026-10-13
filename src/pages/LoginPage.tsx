@@ -40,9 +40,9 @@ const LoginPage = () => {
 
   const applyAuthRedirect = useCallback(
     async (path: string) => {
-      navigate(path, { replace: true });
+      window.location.href = path;
     },
-    [navigate],
+    [],
   );
 
   const auth = useEmailAuth({ onAuthRedirect: applyAuthRedirect });
@@ -84,14 +84,14 @@ const LoginPage = () => {
         isSafeInternalPath(nextPath) && nextPath !== "/"
           ? nextPath
           : profileHomePath(profileType || "buyer", localStorage.getItem("creator_account_type"));
-      navigate(destination, { replace: true });
+      window.location.href = destination;
     }
   }, [navigate, needsOnboarding, nextPath, profileType, screen, sessionToken, signedIn, status]);
 
   const handleContinue = async (e: FormEvent) => {
     e.preventDefault();
-    const ok = await auth.sendCode(auth.email);
-    if (ok) setScreen("code");
+    const result = await auth.handleContinue(auth.email);
+    if (result === "code") setScreen("code");
   };
 
   const handleGoogle = async () => {
