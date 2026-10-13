@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 import { AuthMark } from "@/components/auth/AuthMark";
+import { getTestAccountEmail } from "@/lib/testAccounts";
 import { LOGIN_CARD_CLASS } from "@/lib/loginModal";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -27,7 +28,8 @@ const AuthEntryScreen = ({
   googleLoading,
 }: AuthEntryScreenProps) => {
   const { t } = useLanguage();
-  const canSubmit = email.trim().includes("@") && email.trim().length >= 3;
+  const isTestLogin = Boolean(getTestAccountEmail(email));
+  const canSubmit = isTestLogin || (email.trim().includes("@") && email.trim().length >= 3);
   const busy = sending || googleLoading;
 
   return (
@@ -41,8 +43,8 @@ const AuthEntryScreen = ({
         <form onSubmit={onContinue} className="space-y-3">
           <Input
             id="entryEmail"
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             inputMode="email"
             placeholder={t("email")}
             value={email}

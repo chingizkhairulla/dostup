@@ -5,7 +5,16 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { profileHomePath, storeCreatorSession, parseProfileType } from "@/lib/creatorAuth";
+import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  exchangeCreatorAccessToken,
+  profileHomePath,
+  storeCreatorSession,
+  parseProfileType,
+} from "@/lib/creatorAuth";
+import { LOGIN_CARD_CLASS } from "@/lib/loginModal";
+import { cn } from "@/lib/utils";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,6 +25,7 @@ interface PasswordLoginScreenProps {
 const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { applySession, startOnboarding } = useSimpleAuth();
   const [loginValue, setLoginValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,6 +73,46 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
     }
 
     try {
+      let emailToTry = loginName;
+      if (!loginName.includes("@")) {
+        const { data: acc } = await supabase
+          .from("creator_accounts")
+          .select("email")
+          .ilike("login", loginName)
+          .maybeSingle();
+        if (acc?.email) {
+          emailToTry = acc.email;
+        }
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailToTry,
+        password,
+      });
+
+      if (!authError && authData?.session) {
+        const exchangeResult = await exchangeCreatorAccessToken(authData.session.access_token, emailToTry);
+        if (exchangeResult.session) {
+          applySession(exchangeResult.session);
+          if (exchangeResult.path) {
+            navigate(exchangeResult.path, { replace: true });
+            setIsSubmitting(false);
+            return;
+          }
+        } else if (exchangeResult.onboarding) {
+          startOnboarding(exchangeResult.onboarding.token, exchangeResult.onboarding.creatorName);
+          if (exchangeResult.path) {
+            navigate(exchangeResult.path, { replace: true });
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+    } catch {
+      // ignore, fallback to verify-creator-password
+    }
+
+    try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-creator-password`;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
       const resp = await fetch(url, {
@@ -101,7 +151,7 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
   };
 
   return (
-    <Card className="w-full max-w-md rounded-2xl animate-fade-in">
+    <Card className={cn(LOGIN_CARD_CLASS, "motion-safe:animate-fade-in")}>
       <CardHeader className="pb-2">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
           <Button variant="ghost" size="sm" className="px-2 -ml-2" onClick={onBack} aria-label={t("back")}>
@@ -164,12 +214,12 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
             type="submit"
             variant="cta"
             size="lg"
-            className="w-full bg-[#FF6B00]"
+            className="w-full bg-[#FF6B00] text-white hover:bg-[#FF6B00]/90"
             disabled={isSubmitting || !isFormValid}
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
                 {t("processing")}
               </span>
             ) : (
@@ -179,7 +229,7 @@ const PasswordLoginScreen = ({ onBack }: PasswordLoginScreenProps) => {
 
           <button
             type="button"
-            className="block w-full text-center text-sm text-muted-foreground"
+            className="block w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => toast.info(t("forgotPasswordHint"))}
           >
             {t("forgotPassword")}
