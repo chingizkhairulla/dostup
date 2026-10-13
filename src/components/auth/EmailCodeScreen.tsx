@@ -140,9 +140,9 @@ const EmailCodeScreen = ({
           ))}
         </div>
 
-        <div className="h-8 mt-4 flex items-center justify-center">
+        <div className="h-10 my-4 flex items-center justify-center" aria-live="polite">
           {verifying ? (
-            <div className="flex justify-center text-muted-foreground">
+            <div className="flex justify-center text-primary">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : null}

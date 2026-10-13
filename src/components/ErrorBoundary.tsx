@@ -43,6 +43,20 @@ class ErrorBoundary extends Component<Props, State> {
     console.error("Uncaught error:", error, errorInfo);
   }
 
+  public componentDidMount() {
+    window.addEventListener("storage", this.handleStorage);
+  }
+
+  public componentWillUnmount() {
+    window.removeEventListener("storage", this.handleStorage);
+  }
+
+  private handleStorage = () => {
+    if (this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  };
+
   public componentDidUpdate(prevProps: Props) {
     const { resetKeys, onReset } = this.props;
     if (this.state.hasError && resetKeys && prevProps.resetKeys) {
