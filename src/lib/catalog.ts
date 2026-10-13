@@ -110,9 +110,12 @@ export function productCategoryLabel(
 }
 
 export function subcategoryLabel(
-  subcategory: Pick<CatalogSubcategory, "name_ru" | "name_kk">,
+  subcategory: Pick<CatalogSubcategory, "name_ru" | "name_kk"> & { slug?: string },
   language: "ru" | "kk",
 ) {
+  if (subcategory.slug === "group" || subcategory.name_ru === "Групповые занятия") {
+    return language === "kk" ? "Топта" : "В группе";
+  }
   return language === "kk" ? subcategory.name_kk : subcategory.name_ru;
 }
 

@@ -60,6 +60,8 @@ export interface ProductPricingOption {
   kaspi_phone?: string | null;
   /** Card number, digits grouped in fours. Lives only in pricing_options, no column. */
   kaspi_card?: string | null;
+  bank?: string | null;
+  bank_name?: string | null;
 }
 
 export interface ProductProgramItem {

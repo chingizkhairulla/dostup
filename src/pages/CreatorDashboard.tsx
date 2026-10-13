@@ -290,7 +290,7 @@ const CreatorDashboard = () => {
       >
           {activeTab === "products" && (
             <div className="animate-fade-in">
-              <CreatorProductsTab creatorName={creatorName} />
+              <CreatorProductsTab creatorName={creatorName} onOpenUsers={() => handleTabChange("users")} />
             </div>
           )}
           {isMessages && (
@@ -335,7 +335,14 @@ const CreatorDashboard = () => {
           />
         }
       >
-        <CreatorNotificationsTab creatorName={creatorName} lastViewedAt={lastViewedAt} />
+        <CreatorNotificationsTab
+          creatorName={creatorName}
+          lastViewedAt={lastViewedAt}
+          onOpenUsers={() => {
+            setNotificationsOpen(false);
+            handleTabChange("users");
+          }}
+        />
       </NotificationsDialog>
 
       {/* Bottom Navigation - Mobile Only */}

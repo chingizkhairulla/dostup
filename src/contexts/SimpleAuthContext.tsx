@@ -17,6 +17,7 @@ import {
   type SessionPayload,
   type StoredAppSession,
 } from "@/lib/creatorAuth";
+import { ensureUserTimezoneDetected } from "@/lib/timezones";
 
 export type AuthStatus = "loading" | "authenticated" | "guest";
 
@@ -203,6 +204,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
       expiresAt,
     });
     const nextProfiles = session.profiles ?? [];
+    ensureUserTimezoneDetected();
     setNeedsOnboarding(false);
     setSessionToken(session.token);
     setProfileType(session.profileType);
@@ -371,6 +373,7 @@ export const SimpleAuthProvider = ({ children }: SimpleAuthProviderProps) => {
         handle: data.handle ?? null,
         profiles: data.profiles,
       });
+      ensureUserTimezoneDetected();
       const nextType = parseProfileType(data.profileType) || "buyer";
       setNeedsOnboarding(false);
       setProfileType(nextType);

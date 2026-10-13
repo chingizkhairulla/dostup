@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSimplePurchases, useSimpleSchedules, useSimpleTimeSlots, useSimpleBookings, useCreateSimpleBooking, useCancelSimpleBooking, useAllBookingsForSchedule } from "@/hooks/useSimplePurchases";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTimezone } from "@/contexts/TimezoneContext";
 import { Calendar, Clock, Users, User, Check, Loader2, X, CalendarCheck, GraduationCap, Link as LinkIcon, Copy, Timer, Video } from "lucide-react";
 import { format, addDays, isSameDay, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -30,6 +31,7 @@ const ScheduleTab = () => {
   const { data: schedules, isLoading: schedulesLoading } = useSimpleSchedules();
   const { data: bookings, isLoading: bookingsLoading } = useSimpleBookings();
   const { t, language } = useLanguage();
+  const { timezone, formatSlotTime, convertSlotToUser } = useTimezone();
   const { user } = useSimpleAuth();
   const createBooking = useCreateSimpleBooking();
   const cancelBooking = useCancelSimpleBooking();
@@ -159,7 +161,22 @@ const ScheduleTab = () => {
     },
   });
 
-  const { data: timeSlots, isLoading: timeSlotsLoading } = useSimpleTimeSlots(selectedScheduleId || undefined);
+  const { data: rawTimeSlots, isLoading: timeSlotsLoading } = useSimpleTimeSlots(selectedScheduleId || undefined);
+
+  const timeSlots = useMemo(() => {
+    if (!rawTimeSlots) return [];
+    if (timezone.offset === 5) return rawTimeSlots;
+    return rawTimeSlots.map((slot) => {
+      const startConv = convertSlotToUser(slot.date, slot.start_time);
+      const endConv = convertSlotToUser(slot.date, slot.end_time);
+      return {
+        ...slot,
+        date: startConv.date,
+        start_time: `${startConv.time}:00`,
+        end_time: `${endConv.time}:00`,
+      };
+    });
+  }, [rawTimeSlots, timezone.offset, convertSlotToUser]);
   const { data: allBookingsForSchedule } = useAllBookingsForSchedule(selectedScheduleId || undefined);
   
   // Получить текущий выбранный schedule для проверки event_type
@@ -406,14 +423,25 @@ const ScheduleTab = () => {
                       {booking.product?.title || booking.schedule?.title}
                     </div>
                     <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: ru })}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {booking.time_slot?.start_time?.slice(0, 5)}-{booking.time_slot?.end_time?.slice(0, 5)}
-                      </span>
+                      {(() => {
+                        const formatted = formatSlotTime(
+                          booking.time_slot?.date || "",
+                          booking.time_slot?.start_time || "",
+                          booking.time_slot?.end_time || ""
+                        );
+                        return (
+                          <>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              {formatted.date && format(parseISO(formatted.date), "d MMM", { locale: ru })}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {formatted.timeRange}
+                            </span>
+                          </>
+                        );
+                      })()}
                       <span className="flex items-center gap-1">
                         {booking.schedule?.event_type === "group" ? (
                           <Users className="w-3.5 h-3.5" />
@@ -446,15 +474,22 @@ const ScheduleTab = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setRescheduleBooking({
-                        id: booking.id,
-                        productTitle: booking.product?.title || booking.schedule?.title || "",
-                        productId: booking.product?.id || "",
-                        scheduleId: booking.schedule?.id || "",
-                        date: booking.time_slot?.date || "",
-                        startTime: booking.time_slot?.start_time || "",
-                        endTime: booking.time_slot?.end_time || "",
-                      })}
+                      onClick={() => {
+                        const formatted = formatSlotTime(
+                          booking.time_slot?.date || "",
+                          booking.time_slot?.start_time || "",
+                          booking.time_slot?.end_time || ""
+                        );
+                        setRescheduleBooking({
+                          id: booking.id,
+                          productTitle: booking.product?.title || booking.schedule?.title || "",
+                          productId: booking.product?.id || "",
+                          scheduleId: booking.schedule?.id || "",
+                          date: formatted.date,
+                          startTime: formatted.startTime,
+                          endTime: formatted.endTime,
+                        });
+                      }}
                       className="text-muted-foreground hover:text-primary hover:bg-primary/10"
                     >
                       <Timer className="w-4 h-4" />
@@ -623,7 +658,11 @@ const ScheduleTab = () => {
                         : "border-border hover:border-primary/50"
                     }`}
                   >
-                    <h3 className="font-medium text-foreground text-sm">{schedule.title}</h3>
+                    <h3 className="font-medium text-foreground text-sm">
+                      {schedule.title && schedule.title !== "Расписание" && schedule.title !== "Кесте"
+                        ? schedule.title
+                        : (schedule.product_title || schedule.title)}
+                    </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {schedule.teacher_name || t("author")}
                     </p>
@@ -732,7 +771,7 @@ const ScheduleTab = () => {
                             {isGroupFull && !bookedByMe && <span className="text-xs ml-auto">{t("slotTaken")}</span>}
                             {isGroup && !bookedByMe && !isGroupFull && (
                               <span className="text-xs ml-auto text-muted-foreground">
-                                {bookingsCount}/{maxParticipants}
+                                {bookingsCount}/{maxParticipants >= 9999 ? "∞" : maxParticipants}
                               </span>
                             )}
                           </div>

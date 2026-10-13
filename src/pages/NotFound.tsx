@@ -61,12 +61,19 @@ const NotFound = () => {
 
         {/* Action buttons */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-          <Button variant="outline" onClick={handleGoBack} className="gap-2">
+          <Button
+            variant="outline"
+            onClick={handleGoBack}
+            className="gap-2 border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 font-medium"
+          >
             <ArrowLeft className="w-4 h-4" />
             {t.goBack}
           </Button>
-          <Button onClick={() => navigate("/")} className="gap-2">
-            <Home className="w-4 h-4" />
+          <Button
+            onClick={() => navigate("/")}
+            className="gap-2 bg-primary hover:bg-primary/90 text-white font-medium"
+          >
+            <Home className="w-4 h-4 text-white" />
             {t.goHome}
           </Button>
         </div>

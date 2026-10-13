@@ -6,18 +6,16 @@ type CatalogFilterRowProps = {
   categories: CatalogCategory[];
   categorySlug: string;
   subcategorySlug: string;
-  lessonFormat: LessonFormat | "";
+  lessonFormat?: LessonFormat | "";
   onSubcategoryChange: (slug: string) => void;
-  onLessonFormatChange: (format: LessonFormat | "") => void;
+  onLessonFormatChange?: (format: LessonFormat | "") => void;
 };
 
 const CatalogFilterRow = ({
   categories,
   categorySlug,
   subcategorySlug,
-  lessonFormat,
   onSubcategoryChange,
-  onLessonFormatChange,
 }: CatalogFilterRowProps) => {
   const { t, language } = useLanguage();
 
@@ -25,9 +23,8 @@ const CatalogFilterRow = ({
   if (!category) return null;
 
   const subcategories = category.subcategories;
-  const showLessonFormat = categorySlug === "online-lessons";
 
-  if (subcategories.length === 0 && !showLessonFormat) return null;
+  if (subcategories.length === 0) return null;
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -62,40 +59,6 @@ const CatalogFilterRow = ({
                 )}
               >
                 {subcategoryLabel(subcategory, language)}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {showLessonFormat && (
-        <div
-          className={cn(
-            "flex items-center gap-1 rounded-full border border-[#E3E5E8] bg-white p-1",
-            subcategories.length > 0 && "sm:ml-2",
-          )}
-          role="group"
-          aria-label={t("filterFormat")}
-        >
-          {(
-            [
-              { value: "individual" as const, labelKey: "filterLessonIndividual" as const },
-              { value: "group" as const, labelKey: "filterLessonGroup" as const },
-            ] as const
-          ).map((option) => {
-            const active = lessonFormat === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onLessonFormatChange(active ? "" : option.value)}
-                className={cn(
-                  "inline-flex h-7 items-center rounded-full px-3 text-sm font-medium focus-ring",
-                  active ? "bg-[#FF6B00]/10 text-[#1F2328]" : "text-[#6B7280] hover:text-[#1F2328]",
-                )}
-              >
-                {t(option.labelKey)}
               </button>
             );
           })}

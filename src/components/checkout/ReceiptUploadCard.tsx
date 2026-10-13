@@ -111,7 +111,7 @@ const ReceiptUploadCard = ({ purchaseId, sessionToken, expectedAmount, submissio
       else if (result.verification_status === "unreadable") toast.message(t("receiptUnreadableTitle"));
       else if (result.verification_status === "rejected") {
         toast.error(reasonText(t));
-      } else if (result.verification_status === "manual_review") toast.message(t("receiptManualReviewTitle"));
+      } else if (result.verification_status === "manual_review") toast.success(t("receiptSentToast"));
     } catch (err) {
       const message = err instanceof FunctionInvokeError
         ? err.message
