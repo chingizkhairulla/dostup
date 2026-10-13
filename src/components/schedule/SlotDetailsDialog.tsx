@@ -387,7 +387,13 @@ export const SlotDetailsDialog = ({
           if (!nextOpen && !cropSaving) coverCrop.resetCrop();
         }}
       >
-        <DialogContent hideCloseButton className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4">
+        <DialogContent
+          hideCloseButton
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
+        >
           <div className="pb-1 border-b border-border/50">
             <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
               {t.coverSettings}

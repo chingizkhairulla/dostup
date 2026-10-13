@@ -121,6 +121,16 @@ const getMinutesFromDayStart = (timeStr: string, startHour: number = 9) => {
   return diffHours * 60 + m;
 };
 
+// Center the selected item inside a scrollable picker column
+const centerSelectedIn = (container: HTMLElement | null) => {
+  if (!container) return;
+  const el = container.querySelector<HTMLElement>('[data-selected="true"]');
+  if (!el) return;
+  const cRect = container.getBoundingClientRect();
+  const eRect = el.getBoundingClientRect();
+  container.scrollTop += eRect.top - cRect.top - container.clientHeight / 2 + eRect.height / 2;
+};
+
 // Editable time popover picker: no keyboard input into numbers, only free hours from 09:00 to 01:00, no past time, minTime for end box
 function EditableTime({
   time,
@@ -155,27 +165,19 @@ function EditableTime({
     setMVal(m || "00");
   }, [time, minTime]);
 
-  // Smoothly center selected items inside the container without scrolling parent dialogs
+  // Center selected hour/minute once the popover content is laid out (rAF + after open animation)
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        if (hoursContainerRef.current) {
-          const hourEl = hoursContainerRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-          if (hourEl) {
-            const container = hoursContainerRef.current;
-            container.scrollTop = hourEl.offsetTop - container.clientHeight / 2 + hourEl.clientHeight / 2;
-          }
-        }
-        if (minutesContainerRef.current) {
-          const minEl = minutesContainerRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-          if (minEl) {
-            const container = minutesContainerRef.current;
-            container.scrollTop = minEl.offsetTop - container.clientHeight / 2 + minEl.clientHeight / 2;
-          }
-        }
-      }, 50);
-      return () => clearTimeout(timer);
-    }
+    if (!isOpen) return;
+    const center = () => {
+      centerSelectedIn(hoursContainerRef.current);
+      centerSelectedIn(minutesContainerRef.current);
+    };
+    const raf = requestAnimationFrame(center);
+    const timer = setTimeout(center, 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [isOpen]);
 
   const commit = (newH: string, newM: string): boolean => {
@@ -238,7 +240,10 @@ function EditableTime({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none"
+          className={cn(
+            "inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none",
+            isOpen && "border-primary ring-1 ring-primary/30 bg-background"
+          )}
           title={language === "ru" ? "Нажмите, чтобы выбрать время" : "Уақытты таңдау үшін басыңыз"}
         >
           <span>{hVal}</span>
@@ -375,22 +380,18 @@ function TimeRangePickerContent({
   const curTime = activeField === "start" ? tempWorkingHours.start : tempWorkingHours.end;
   const [curH, curM] = (curTime || "09:00").split(":");
 
+  // Center selected hour/minute on mount and whenever the active field changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (hoursRef.current) {
-        const hourEl = hoursRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-        if (hourEl) {
-          hoursRef.current.scrollTop = hourEl.offsetTop - hoursRef.current.clientHeight / 2 + hourEl.clientHeight / 2;
-        }
-      }
-      if (minutesRef.current) {
-        const minEl = minutesRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-        if (minEl) {
-          minutesRef.current.scrollTop = minEl.offsetTop - minutesRef.current.clientHeight / 2 + minEl.clientHeight / 2;
-        }
-      }
-    }, 50);
-    return () => clearTimeout(timer);
+    const center = () => {
+      centerSelectedIn(hoursRef.current);
+      centerSelectedIn(minutesRef.current);
+    };
+    const raf = requestAnimationFrame(center);
+    const timer = setTimeout(center, 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [activeField]);
 
   return (
@@ -511,7 +512,8 @@ function TimeRangePickerContent({
       <div className="pt-2 border-t border-border/50">
         <Button
           size="sm"
-          className="w-full h-8 text-xs font-semibold cursor-pointer"
+          variant="outline"
+          className="w-full h-8 text-xs font-semibold cursor-pointer bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40"
           onClick={onApply}
         >
           {t.apply}
@@ -568,6 +570,7 @@ export default function SlotCreationWizard({
   const [isRangeOpen, setIsRangeOpen] = useState(false);
   const [isMobileRangeOpen, setIsMobileRangeOpen] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
+  const [isMobileConfirmClearOpen, setIsMobileConfirmClearOpen] = useState(false);
 
   // Cover cropper
   const coverCrop = useCoverCrop();
@@ -581,6 +584,7 @@ export default function SlotCreationWizard({
   const [slotSettingsMap, setSlotSettingsMap] = useState<Record<string, SlotSettings>>({});
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [pressedToolbarBtn, setPressedToolbarBtn] = useState<"selectAll" | "unselectAll" | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Step 2: Global repetition settings (default: off)
@@ -796,6 +800,7 @@ export default function SlotCreationWizard({
       setIsRangeOpen(false);
       setIsMobileRangeOpen(false);
       setIsConfirmClearOpen(false);
+      setIsMobileConfirmClearOpen(false);
       setRepeatWeekly(false);
       setRepeatPeriod("1week");
       setRepeatUntil("");
@@ -1952,9 +1957,7 @@ export default function SlotCreationWizard({
                   "h-6 w-full transition-colors select-none",
                   m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                   isPast
-                    ? isSelected
-                      ? "bg-primary/50 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed border-t border-white/50 opacity-80"
-                      : "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
+                    ? "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
                     : isSelected
                     ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
                     : "hover:bg-primary/15 active:bg-primary/25 cursor-pointer bg-card"
@@ -2012,9 +2015,7 @@ export default function SlotCreationWizard({
                     "h-5 sm:h-6 w-full transition-colors select-none",
                     m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                     isPast
-                      ? isSelected
-                        ? "bg-primary/50 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed border-t border-white/50 opacity-80"
-                        : "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
+                      ? "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
                       : isSelected
                       ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
                       : "hover:bg-primary/20 active:bg-primary/30 cursor-pointer"
@@ -2193,7 +2194,13 @@ export default function SlotCreationWizard({
                   {/* Top spacer matching bottom padding so 09:00 doesn't collide with header */}
                   <div className="grid grid-cols-[64px_1fr] select-none pointer-events-none">
                     <div className="border-r border-border/60 h-3 bg-muted/20" />
-                    <div className="h-3" />
+                    <div
+                      className={cn(
+                        "h-3",
+                        isCellInPast(mobileDayIdx, workingHours.start) &&
+                          "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
+                      )}
+                    />
                   </div>
 
                   {/* Standard working hours */}
@@ -2319,12 +2326,12 @@ export default function SlotCreationWizard({
 
                   {/* Right: Clear all with popover */}
                   {activeDays.length > 0 && (
-                    <Popover open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
+                    <Popover open={isMobileConfirmClearOpen} onOpenChange={setIsMobileConfirmClearOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                          className="h-8 px-2.5text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
                           title={t.clearAll}
                         >
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
@@ -2339,15 +2346,15 @@ export default function SlotCreationWizard({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 px-3 text-xs"
-                            onClick={() => setIsConfirmClearOpen(false)}
+                            className="h-7 px-3 text-xs hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+                            onClick={() => setIsMobileConfirmClearOpen(false)}
                           >
                             {t.no}
                           </Button>
                           <Button
                             size="sm"
-                            variant="destructive"
-                            className="h-7 px-3 text-xs"
+                            variant="ghost"
+                            className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={async () => {
                               const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                               setSelectedCells(new Set());
@@ -2358,7 +2365,7 @@ export default function SlotCreationWizard({
                                 ...prev,
                                 [weekOffset]: new Set(),
                               }));
-                              setIsConfirmClearOpen(false);
+                              setIsMobileConfirmClearOpen(false);
                               if (onDeleteSlots) {
                                 await onDeleteSlots(dates);
                               }
@@ -2462,7 +2469,14 @@ export default function SlotCreationWizard({
                   <div className="grid grid-cols-[100px_repeat(7,1fr)] bg-muted/10">
                     <div className="border-r border-border/60 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
-                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5" />
+                      <div
+                        key={i}
+                        className={cn(
+                          "border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5",
+                          isCellInPast(i, workingHours.start) &&
+                            "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
+                        )}
+                      />
                     ))}
                   </div>
 
@@ -2603,15 +2617,15 @@ export default function SlotCreationWizard({
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-3 min-w-[48px] text-xs"
+                              className="h-7 px-3 min-w-[48px] text-xs hover:bg-primary/10 hover:text-primary hover:border-primary/40"
                               onClick={() => setIsConfirmClearOpen(false)}
                             >
                               {t.no}
                             </Button>
                             <Button
                               size="sm"
-                              variant="destructive"
-                              className="h-7 px-3 min-w-[48px] text-xs"
+                              variant="ghost"
+                              className="h-7 px-3 min-w-[48px] text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2717,9 +2731,9 @@ export default function SlotCreationWizard({
           {step === 2 && (
             <>
               {/* MOBILE STEP 2: Settings with sticky top slot summary */}
-              <div className="block sm:hidden p-3.5 space-y-3.5 pb-28">
-                {/* Summary of Selected Slots - Pinned at top and sticky */}
-                <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-0.5 pb-2 -mx-3.5 px-3.5 border-b border-border/40 shadow-2xs">
+              <div className="flex sm:hidden flex-col h-full p-3.5 gap-3.5" style={{ paddingBottom: 96 }}>
+                {/* Summary of Selected Slots - fixed at top, does not scroll */}
+                <div className="flex-none bg-background/95 backdrop-blur-md pt-0.5 pb-2 -mx-3.5 px-3.5 border-b border-border/40 shadow-2xs">
                   {/* Day Switcher Bar with < and > */}
                   <div
                     className="flex items-center justify-between gap-2 px-2 py-2 mb-2 bg-card border border-border/80 rounded-xl shadow-2xs"
@@ -2806,7 +2820,7 @@ export default function SlotCreationWizard({
                               "text-xs h-7 px-2.5 rounded-lg transition-colors border shadow-2xs font-medium cursor-pointer",
                               isAllSelected
                                 ? "bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-white hover:border-destructive font-semibold"
-                                : "bg-card text-foreground border-border hover:bg-primary hover:text-white hover:border-primary"
+                                : "bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40"
                             )}
                           >
                             {isAllSelected ? t.unselectAll : t.selectAll}
@@ -2859,10 +2873,10 @@ export default function SlotCreationWizard({
                 {/* Settings Card: Product, Duration, Participants, Conference, Details, Repetition */}
                 <div
                   className={cn(
-                    "bg-card border p-4 rounded-2xl shadow-sm space-y-4 transition-all",
+                    "flex-1 min-h-0 overflow-y-auto overscroll-contain bg-card border p-4 pr-2.5 rounded-2xl shadow-sm space-y-4 transition-all [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full",
                     selectedSlotKeys.size > 0
                       ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                      : "border-border/60 opacity-60 pointer-events-none"
+                      : "border-border/60 opacity-60 [&>*]:pointer-events-none"
                   )}
                 >
                   {/* For Product */}
@@ -3387,22 +3401,13 @@ export default function SlotCreationWizard({
                                           key={`lesson-break-${li}`}
                                           className={cn(
                                             "absolute left-0 right-0 pointer-events-none",
-                                            isSelected
-                                              ? "[background-image:repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(255,255,255,0.25)_4px,rgba(255,255,255,0.25)_8px)]"
-                                              : "[background-image:repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.08)_4px,rgba(0,0,0,0.08)_8px)]"
+                                            isSelected ? "bg-white/45" : "bg-muted"
                                           )}
                                           style={{ top: `${breakTop}px`, height: `${breakHeight}px` }}
                                         />
                                       ) : null,
                                     ];
                                   })}
-                                  <span className={cn(
-                                    "relative z-10 font-mono font-bold whitespace-nowrap px-1.5 rounded",
-                                    isSelected ? "bg-primary" : "bg-card/90",
-                                    isShortSlot ? "text-[13px] leading-none" : "text-xs sm:text-sm leading-tight"
-                                  )}>
-                                    {interval.start} – {interval.end}
-                                  </span>
                                 </div>
                               );
                             })}
@@ -3413,66 +3418,88 @@ export default function SlotCreationWizard({
                   </div>
                 </div>
 
-                {/* Single Combined Button under schedule: Select All / Unselect All */}
+                {/* Toolbar under schedule: Select All (left) / late-hours toggle (center) / Unselect All (right) */}
                 <div
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center justify-between gap-2 mt-3 mb-2 px-1"
                 >
-                  {lateHoursArr.length > 0 ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleToggleLateHours}
-                      className="text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/40 gap-1.5 rounded-full px-4 py-1.5 border-dashed transition-all"
-                    >
-                      <ChevronDown
-                        className={cn(
-                          "w-3.5 h-3.5 transition-transform duration-300",
-                          showLateHours && "rotate-180"
-                        )}
-                      />
-                      <span>{showLateHours ? t.hideLateHours : t.showLateHours}</span>
-                    </Button>
-                  ) : (
-                    <div />
-                  )}
                   {(() => {
                     const selectedCount = allSlotKeys.filter((k) => selectedSlotKeys.has(k)).length;
-                    const toolbarButtonClass =
-                      "text-xs sm:text-sm h-8 px-3.5 rounded-lg font-medium bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 disabled:opacity-40 transition-colors";
+                    const selectAllDisabled = allSlotKeys.length === 0 || selectedCount === allSlotKeys.length;
+                    const unselectAllDisabled = selectedCount === 0;
+                    const toolbarBaseClass =
+                      "text-xs sm:text-sm h-8 px-3.5 rounded-lg font-medium disabled:opacity-40 transition-colors";
                     return (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={allSlotKeys.length === 0 || selectedCount === allSlotKeys.length}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectAllSlots();
-                          }}
-                          className={toolbarButtonClass}
-                        >
-                          {t.selectAll}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={selectedCount === 0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSlotKeys((prev) => {
-                              const next = new Set(prev);
-                              allSlotKeys.forEach((k) => next.delete(k));
-                              return next;
-                            });
-                          }}
-                          className={toolbarButtonClass}
-                        >
-                          {t.unselectAll}
-                        </Button>
-                      </div>
+                      <>
+                        <div className="min-w-[150px] flex items-center justify-start">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={selectAllDisabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPressedToolbarBtn("selectAll");
+                              handleSelectAllSlots();
+                            }}
+                            onMouseLeave={() => setPressedToolbarBtn(null)}
+                            className={cn(
+                              toolbarBaseClass,
+                              "bg-card text-foreground border-border",
+                              !selectAllDisabled && pressedToolbarBtn !== "selectAll"
+                                ? "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+                                : "hover:bg-card hover:text-foreground hover:border-border"
+                            )}
+                          >
+                            {t.selectAll}
+                          </Button>
+                        </div>
+
+                        {lateHoursArr.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleToggleLateHours}
+                            className="text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/40 gap-1.5 rounded-full px-4 py-1.5 border-dashed transition-all"
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "w-3.5 h-3.5 transition-transform duration-300",
+                                showLateHours && "rotate-180"
+                              )}
+                            />
+                            <span>{showLateHours ? t.hideLateHours : t.showLateHours}</span>
+                          </Button>
+                        )}
+
+                        <div className="min-w-[150px] flex items-center justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={unselectAllDisabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPressedToolbarBtn("unselectAll");
+                              setSelectedSlotKeys((prev) => {
+                                const next = new Set(prev);
+                                allSlotKeys.forEach((k) => next.delete(k));
+                                return next;
+                              });
+                            }}
+                            onMouseLeave={() => setPressedToolbarBtn(null)}
+                            className={cn(
+                              toolbarBaseClass,
+                              "bg-card text-destructive border-destructive/40",
+                              !unselectAllDisabled && pressedToolbarBtn !== "unselectAll"
+                                ? "hover:bg-destructive hover:text-white hover:border-destructive"
+                                : "hover:bg-card hover:text-destructive hover:border-destructive/40"
+                            )}
+                          >
+                            {t.unselectAll}
+                          </Button>
+                        </div>
+                      </>
                     );
                   })()}
                 </div>
@@ -4135,7 +4162,13 @@ export default function SlotCreationWizard({
             if (!nextOpen && !cropSaving) coverCrop.resetCrop();
           }}
         >
-          <DialogContent hideCloseButton className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4">
+          <DialogContent
+            hideCloseButton
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+            className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
+          >
             <div className="pb-1 border-b border-border/50">
               <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
                 {language === "ru" ? "Настройка обложки" : "Мұқабаны баптау"}
