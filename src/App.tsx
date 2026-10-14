@@ -104,6 +104,25 @@ function AppRoutes() {
 		navigate(ONBOARDING_PATH, { replace: true })
 	}, [location.pathname, location.search, navigate, needsOnboarding, status])
 
+	useEffect(() => {
+		const isPreview =
+			!window.location.hostname.includes('trydostup.online') &&
+			(window.location.hostname.includes('fix-small-fixes') ||
+				window.location.hostname.includes('vercel.app') ||
+				window.location.hostname === 'localhost' ||
+				window.location.hostname === '127.0.0.1' ||
+				location.search.includes('debug'))
+		if (!isPreview) return
+		const params = new URLSearchParams(location.search)
+		if (params.get('debug') === 'error') {
+			const nextParams = new URLSearchParams(location.search)
+			nextParams.delete('debug')
+			const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : ''
+			window.history.replaceState({}, '', `${location.pathname}${nextSearch}`)
+			window.dispatchEvent(new CustomEvent('trigger-debug-error'))
+		}
+	}, [location.pathname, location.search])
+
 	if (status === 'loading' && !isAuthCallback) {
 		return <AuthSplash />
 	}

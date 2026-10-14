@@ -39,6 +39,21 @@ class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  public componentDidMount() {
+    window.addEventListener("trigger-debug-error", this.handleDebugError);
+  }
+
+  public componentWillUnmount() {
+    window.removeEventListener("trigger-debug-error", this.handleDebugError);
+  }
+
+  private handleDebugError = () => {
+    this.setState({
+      hasError: true,
+      error: new Error("[debug] Тестовый экран ошибки"),
+    });
+  };
+
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }

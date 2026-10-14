@@ -21,6 +21,7 @@ import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -3249,31 +3250,29 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Вы уверены, что хотите удалить "{deletingProduct?.title}"? Это действие нельзя отменить.
-              <br /><br />
-              <span className="text-foreground font-medium">Расписание, материалы, объявления и пользователи будут удалены вместе с этим продуктом.</span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction 
+      <Dialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
+        <DialogContent className="max-w-md" hideCloseButton>
+          <DialogHeader>
+            <DialogTitle>Удалить продукт?</DialogTitle>
+            <DialogDescription className="text-base text-foreground font-normal pt-2">
+              Расписание, материалы, объявления и пользователи будут удалены вместе с этим продуктом.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end pt-4">
+            <Button 
+              variant="destructive"
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteProduct.isPending}
             >
               {deleteProduct.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 t("delete")
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Products List */}
       <div className="space-y-3">
@@ -3459,13 +3458,13 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
             {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
+        <div className="space-y-3">
+          <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
             {language === "ru"
               ? "На продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
               : "Өнімге кіруге болады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
           </p>
-          <p>
+          <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
             {language === "ru"
               ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
               : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
