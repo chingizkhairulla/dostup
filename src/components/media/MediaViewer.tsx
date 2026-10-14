@@ -19,6 +19,8 @@ interface Props {
   onIndexChange: (index: number | null) => void;
   /** Buttons placed before "Done" (e.g. a download button for receipts). */
   actions?: ReactNode;
+  /** "left" slides a side panel in from the left instead of covering the whole screen. */
+  align?: "center" | "left";
   /** White window instead of the dark one. */
   light?: boolean;
 }
@@ -31,7 +33,7 @@ const DOT_STEP_PX = 12;
  * the left, a dot per item in the middle (the orange one is on screen) and "Done" on the right.
  * A tap on the empty space around the picture closes it too.
  */
-const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Props) => {
+const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", light = false }: Props) => {
   const { t } = useLanguage();
   const open = index !== null && !!items[index];
   const item = open ? items[index!] : null;
@@ -66,9 +68,13 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed inset-0 z-[60] flex flex-col overflow-hidden outline-none",
+            "fixed z-[60] flex flex-col overflow-hidden outline-none",
             light ? "bg-white" : "bg-neutral-950",
+            align === "left"
+              ? "left-0 top-0 bottom-0 w-[calc(100%-2.5rem)] sm:w-[480px] sm:max-w-[45vw] rounded-r-2xl"
+              : "inset-0",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            align === "left" && "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
           )}
         >
           <DialogPrimitive.Title className="sr-only">{item?.name || t("mediaViewerTitle")}</DialogPrimitive.Title>
@@ -76,13 +82,21 @@ const MediaViewer = ({ items, index, onIndexChange, actions, light = false }: Pr
           {/* A tap on the empty space around the picture closes the viewer. */}
           <div
             className={cn(
-              "relative flex min-h-0 flex-1 items-center justify-center pt-[env(safe-area-inset-top)]",
+              "relative flex min-h-0 flex-1 items-center pt-[env(safe-area-inset-top)]",
+              align === "left" ? "justify-start p-3 sm:p-4" : "justify-center",
               light ? "bg-white" : "bg-neutral-950",
             )}
             onClick={(e) => e.target === e.currentTarget && onIndexChange(null)}
           >
             {item?.kind === "image" && (
-              <img src={item.url} alt={item.name ?? ""} className="max-h-full max-w-full object-contain" />
+              <img
+                src={item.url}
+                alt={item.name ?? ""}
+                className={cn(
+                  "max-h-full max-w-full object-contain",
+                  align === "left" && "object-left",
+                )}
+              />
             )}
             {item?.kind === "video" && <WholeVideo key={item.url} url={item.url} light={light} />}
             {item?.kind === "pdf" && (
