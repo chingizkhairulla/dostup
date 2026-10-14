@@ -8,13 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
+import { isVideoFileName } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { buildAnnouncementHtml, formatFileSize, type AnnouncementAttachment } from "@/lib/announcementHtml";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
 
 const MAX_ATTACHMENTS = 10;
+const MAX_FIELD_HEIGHT = 200;
 
 type LocalAttachment = AnnouncementAttachment & { id: string };
 
@@ -84,11 +87,15 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
     }
   }, [editingId, editingHtml]);
 
+  // Grows with the text. scrollHeight leaves out the border, so without it the field ends up
+  // 2px short and shows a scrollbar on every line; it only scrolls past the height cap.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    const full = el.scrollHeight + el.offsetHeight - el.clientHeight;
+    el.style.height = `${Math.min(full, MAX_FIELD_HEIGHT)}px`;
+    el.style.overflowY = full > MAX_FIELD_HEIGHT ? "auto" : "hidden";
   }, [text]);
 
   const pendingRef = useRef(pending);
@@ -123,7 +130,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
             ? "file"
             : file.type.startsWith("image/")
               ? "image"
-              : file.type.startsWith("video/")
+              : file.type.startsWith("video/") || (!file.type && isVideoFileName(file.name))
                 ? "video"
                 : "file";
         const entry: PendingUpload = {
@@ -144,7 +151,9 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
           // Cancelling is not a failure — the tile simply disappears.
           if (!entry.controller.signal.aborted) {
             console.error(e);
-            toast.error(t("announcementUploadError", { name: file.name }));
+            toast.error(t("announcementUploadError", { name: file.name }), {
+              description: e instanceof Error ? e.message.slice(0, 160) : undefined,
+            });
           }
         } finally {
           dropPending(entry.id);
@@ -248,7 +257,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                   <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                 )}
                 {p.previewUrl && p.kind === "video" && (
-                  <video src={p.previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                  <video src={`${p.previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                 )}
                 {p.kind === "file" && (
                   <span className="flex h-full w-full items-center justify-center">
@@ -261,9 +270,13 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                     p.previewUrl && "bg-black/40",
                   )}
                 >
-                  <Loader2
-                    className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
-                  />
+                  {p.kind === "video" ? (
+                    <UploadingVideoBadge />
+                  ) : (
+                    <Loader2
+                      className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
+                    />
+                  )}
                 </span>
               </div>
               {/* Available while the file uploads, so a big video can be called off. */}

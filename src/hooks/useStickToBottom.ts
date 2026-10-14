@@ -35,7 +35,7 @@ export function useStickToBottom(
 
     // Photos finish loading after the jump and push the newest post down: follow them
     // for a moment, unless the reader starts scrolling on their own.
-    let following = opened;
+    let following = true;
     const stop = () => {
       following = false;
     };

@@ -187,7 +187,9 @@ export async function uploadProductMedia(
       throw new Error("Не удалось получить адрес для загрузки файла");
     } catch (err: any) {
       lastError = err;
-      if (err?.message?.includes("Failed to send a request") && attempt < retries) {
+      // A dropped connection (also mid-way through a video) is worth one more try.
+      const transient = err?.message?.includes("Failed to send a request") || err?.message?.includes("Сетевой сбой");
+      if (transient && attempt < retries && !signal?.aborted) {
         continue;
       }
       if (err?.message?.includes("Failed to send a request")) {

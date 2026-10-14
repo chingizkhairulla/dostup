@@ -7,7 +7,7 @@ import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import AppHeader from "@/components/layout/AppHeader";
 import BuyerAppShell from "@/components/layout/BuyerAppShell";
 import BuyerMobileNav from "@/components/layout/BuyerMobileNav";
-import { HeaderAccountControl, HeaderNotificationsButton } from "@/components/layout/HeaderControls";
+import { HeaderAccountControl, HeaderNotificationsButton, HeaderSupportButton } from "@/components/layout/HeaderControls";
 import NotificationsTab from "@/components/dashboard/NotificationsTab";
 import NotificationsDialog from "@/components/dashboard/NotificationsDialog";
 import HomeTab from "@/components/dashboard/HomeTab";
@@ -231,6 +231,7 @@ const Dashboard = () => {
         )}
       >
         <AppHeader>
+          <HeaderSupportButton mobileNav={(close) => <BuyerMobileNav onNavigate={close} />} />
           <HeaderNotificationsButton
             active={notificationsOpen}
             count={newNotificationsCount}
