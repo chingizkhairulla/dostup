@@ -4,11 +4,12 @@ import { format, parseISO, addHours, isBefore, isAfter } from "date-fns";
 import { ru, kk } from "date-fns/locale";
 import { useSimpleBookings, useSimpleMaterials } from "@/hooks/useSimplePurchases";
 import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
-import { useCatalogPreview, useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
+import { useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
+import PurchaseRating from "@/components/reviews/PurchaseRating";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { readLastOpenedMaterial, readRecentProductIds } from "@/lib/buyerActivity";
@@ -88,7 +89,6 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   const showContinue = Boolean(lastMaterial);
   const showProducts = myProducts.length > 0;
   const allEmpty = !showLesson && !showContinue && !showProducts;
-  const popular = useCatalogPreview(allEmpty && !loading, 4);
 
   if (loading) {
     return (
@@ -99,7 +99,6 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   }
 
   if (allEmpty) {
-    const suggested = popular.data ?? [];
     return (
       <div className="py-4">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -109,22 +108,11 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
               : "Әзірге ештеңе сатып алынбады — каталогтан бастаңыз"}
           </p>
           {onBrowseCourses && (
-            <Button onClick={onBrowseCourses}>{t("browseCourses")}</Button>
+            <Button variant="outline" onClick={onBrowseCourses}>
+              {t("browseCatalog")}
+            </Button>
           )}
         </div>
-
-        {(popular.isLoading || suggested.length > 0) && (
-          <section className="mt-12">
-            <h2 className="mb-6 text-lg font-semibold text-foreground">{t("newProductsHeading")}</h2>
-            {popular.isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <CatalogGrid products={suggested} />
-            )}
-          </section>
-        )}
       </div>
     );
   }
@@ -198,7 +186,12 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
       {showProducts && (
         <section>
           <h2 className="mb-3 text-lg font-semibold text-foreground">{t("myProducts")}</h2>
-          <CatalogGrid products={myProducts} />
+          <CatalogGrid
+            products={myProducts}
+            renderFooter={(product) => (
+              <PurchaseRating productId={product.id} productTitle={product.title} />
+            )}
+          />
         </section>
       )}
     </div>

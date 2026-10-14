@@ -6,9 +6,11 @@ import { catalogColumnCount, type CatalogProduct } from "@/lib/catalog";
 type CatalogGridProps = {
   products: CatalogProduct[];
   empty?: ReactNode;
+  /** Optional content rendered under each card. */
+  renderFooter?: (product: CatalogProduct) => ReactNode;
 };
 
-const CatalogGrid = ({ products, empty }: CatalogGridProps) => {
+const CatalogGrid = ({ products, empty, renderFooter }: CatalogGridProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -40,9 +42,16 @@ const CatalogGrid = ({ products, empty }: CatalogGridProps) => {
             gap: 24,
           }}
         >
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+          {products.map((product) =>
+            renderFooter ? (
+              <div key={product.id} className="min-w-0">
+                <ProductCard product={product} />
+                {renderFooter(product)}
+              </div>
+            ) : (
+              <ProductCard key={product.id} product={product} />
+            ),
+          )}
         </div>
       )}
     </div>
