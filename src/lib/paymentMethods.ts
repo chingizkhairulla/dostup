@@ -35,6 +35,46 @@ export const formatCardNumber = (raw: string | null | undefined): string =>
 export const isValidCardNumber = (raw: string | null | undefined): boolean =>
   cardDigits(raw).length === CARD_DIGITS;
 
+export interface PaymentMethodFormValue {
+  kaspiMethods: KaspiMethod[];
+  kaspiLink: string;
+  kaspiPhone: string;
+  kaspiCard: string;
+  bank: PaymentBank;
+  bankName: string;
+  /** Открытое поле не определяет, какие реквизиты сохраняются. */
+  paymentMethod?: KaspiMethod;
+  lastPaymentMethod?: KaspiMethod;
+  transferMethod?: "phone" | "card";
+}
+
+export const filledPaymentMethods = (opt: PaymentMethodFormValue): KaspiMethod[] =>
+  KASPI_METHOD_ORDER.filter((method) => {
+    if (method === "link") return Boolean(opt.kaspiLink.trim());
+    if (method === "phone") return Boolean(opt.kaspiPhone.trim());
+    return Boolean(cardDigits(opt.kaspiCard));
+  });
+
+export const lastFilledPaymentMethod = (opt: PaymentMethodFormValue): KaspiMethod => {
+  const filled = filledPaymentMethods(opt);
+  if (opt.lastPaymentMethod && (filled.includes(opt.lastPaymentMethod) || filled.length === 0)) {
+    return opt.lastPaymentMethod;
+  }
+  return filled[filled.length - 1] || "phone";
+};
+
+/** Сохраняет все заполненные поля, включая скрытые вкладки. */
+export const serializeKaspiFields = (opt: PaymentMethodFormValue) => {
+  return {
+    kaspi_link: opt.kaspiLink.trim() || null,
+    kaspi_phone: opt.kaspiPhone.trim() || null,
+    kaspi_card: cardDigits(opt.kaspiCard) || null,
+    bank: opt.bank,
+    bank_name: opt.bank === "other" ? opt.bankName.trim() || null : null,
+    last_payment_method: lastFilledPaymentMethod(opt),
+  };
+};
+
 /** Название банка для показа покупателю. */
 export const bankLabel = (bank: unknown, bankName?: string | null): string => {
   if (bank === "other") return (bankName || "").trim() || "банк";
@@ -48,6 +88,7 @@ export interface PaymentOptionLike {
   kaspi_card?: string | null;
   bank?: string | null;
   bank_name?: string | null;
+  last_payment_method?: string | null;
 }
 
 export interface ResolvedPaymentMethods {
