@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
 import { uploadProductMedia } from "@/lib/productMediaUpload";
-import { Plus, Pencil, Trash2, MapPin, Loader2, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin, Loader2, Check, X } from "lucide-react";
 
 export interface SlotDetailsData {
   id: string;
@@ -394,10 +394,23 @@ export const SlotDetailsDialog = ({
           onEscapeKeyDown={(e) => e.preventDefault()}
           className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
         >
-          <div className="pb-1 border-b border-border/50">
+          <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/50">
             <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
               {t.coverSettings}
             </DialogTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 min-h-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={() => {
+                if (!cropSaving) coverCrop.resetCrop();
+              }}
+              title={language === "kk" ? "Өзгерістер сақталмайды" : "Изменения не сохранятся"}
+              aria-label="Закрыть"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
 
           {/* Border around showing settings are inside cover */}
@@ -413,6 +426,7 @@ export const SlotDetailsDialog = ({
                 onPointerMove={coverCrop.onPointerMove}
                 onPointerUp={coverCrop.onPointerUp}
                 saving={cropSaving}
+                hideCancel
                 onCancel={() => {
                   coverCrop.resetCrop();
                 }}

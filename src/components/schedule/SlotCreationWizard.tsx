@@ -241,7 +241,7 @@ function EditableTime({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none",
+            "inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none",
             isOpen && "border-primary ring-1 ring-primary/30 bg-background"
           )}
           title={language === "ru" ? "Нажмите, чтобы выбрать время" : "Уақытты таңдау үшін басыңыз"}
@@ -258,6 +258,7 @@ function EditableTime({
         sideOffset={6}
         className="w-52 p-2.5 bg-card border border-border rounded-xl shadow-xl z-50 select-none"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <div className="grid grid-cols-2 gap-3 pb-1.5 mb-1.5 border-b border-border/50 text-[11px] font-semibold text-muted-foreground px-1">
           <span className="text-left">{language === "ru" ? "Часы" : "Сағат"}</span>
@@ -2252,54 +2253,62 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Mobile Toolbar under grid */}
-                <div className="flex items-center justify-between gap-2 mt-3 mb-2 px-0.5">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-0.5">
                   {/* Left: Time range */}
-                  <Popover
-                    open={isMobileRangeOpen}
-                    onOpenChange={(nextOpen) => {
-                      setIsMobileRangeOpen(nextOpen);
-                      if (nextOpen) {
-                        setTempWorkingHours(workingHours);
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 px-2.5 rounded-lg border-border text-foreground bg-card shadow-2xs cursor-pointer flex items-center gap-1.5 text-xs font-medium transition-colors group",
-                          "hover:bg-primary hover:text-white hover:border-primary active:bg-primary active:text-white",
-                          isMobileRangeOpen && "bg-primary text-white border-primary"
-                        )}
-                        title={t.timeRangeBtn}
-                      >
-                        <Clock className={cn("w-3.5 h-3.5 text-foreground transition-colors group-hover:text-white group-active:text-white", isMobileRangeOpen && "text-white")} />
-                        <span>{language === "ru" ? "Диапазон" : "Ауқым"}</span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      side="top"
-                      align="start"
-                      sideOffset={8}
-                      className="w-64 p-3 bg-card border border-border rounded-xl shadow-2xl z-50 select-none"
-                      onOpenAutoFocus={(e) => e.preventDefault()}
+                  <div className="flex justify-start">
+                    <Popover
+                      open={isMobileRangeOpen}
+                      onOpenChange={(nextOpen) => {
+                        setIsMobileRangeOpen(nextOpen);
+                        if (nextOpen) {
+                          setTempWorkingHours(workingHours);
+                        }
+                      }}
                     >
-                      <TimeRangePickerContent
-                        tempWorkingHours={tempWorkingHours}
-                        setTempWorkingHours={setTempWorkingHours}
-                        onApply={() => {
-                          setWorkingHours(tempWorkingHours);
-                          setIsMobileRangeOpen(false);
-                        }}
-                        t={t}
-                        language={language}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "h-8 px-2.5 rounded-lg border-border text-foreground bg-card shadow-2xs cursor-pointer flex items-center gap-1.5 text-xs font-medium transition-colors group",
+                            isMobileRangeOpen
+                              ? "bg-primary text-white border-primary hover:bg-primary hover:text-white hover:border-primary"
+                              : "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+                          )}
+                          title={t.timeRangeBtn}
+                        >
+                          <Clock
+                            className={cn(
+                              "w-3.5 h-3.5 text-foreground transition-colors group-hover:text-primary",
+                              isMobileRangeOpen && "text-white group-hover:text-white"
+                            )}
+                          />
+                          <span>{language === "ru" ? "Диапазон" : "Ауқым"}</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="top"
+                        align="start"
+                        sideOffset={8}
+                        className="w-64 p-3 bg-card border border-border rounded-xl shadow-2xl z-50 select-none"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
+                        <TimeRangePickerContent
+                          tempWorkingHours={tempWorkingHours}
+                          setTempWorkingHours={setTempWorkingHours}
+                          onApply={() => {
+                            setWorkingHours(tempWorkingHours);
+                            setIsMobileRangeOpen(false);
+                          }}
+                          t={t}
+                          language={language}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
 
                   {/* Center: Late hours toggle */}
-                  {lateHoursArr.length > 0 && (
+                  {lateHoursArr.length > 0 ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2322,61 +2331,57 @@ export default function SlotCreationWizard({
                           : "Көрсету"}
                       </span>
                     </Button>
+                  ) : (
+                    <div />
                   )}
 
                   {/* Right: Clear all with popover */}
-                  {activeDays.length > 0 && (
-                    <Popover open={isMobileConfirmClearOpen} onOpenChange={setIsMobileConfirmClearOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2.5text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
-                          title={t.clearAll}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          <span>{language === "ru" ? "Удалить" : "Жою"}</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                        <p className="text-xs font-medium text-foreground">
-                          {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
-                        </p>
-                        <div className="flex items-center justify-center gap-2">
+                  <div className="flex justify-end">
+                    {activeDays.length > 0 && (
+                      <Popover open={isMobileConfirmClearOpen} onOpenChange={setIsMobileConfirmClearOpen}>
+                        <PopoverTrigger asChild>
                           <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-3 text-xs hover:bg-primary/10 hover:text-primary hover:border-primary/40"
-                            onClick={() => setIsMobileConfirmClearOpen(false)}
-                          >
-                            {t.no}
-                          </Button>
-                          <Button
-                            size="sm"
                             variant="ghost"
-                            className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={async () => {
-                              const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
-                              setSelectedCells(new Set());
-                              setCustomDayIntervals({});
-                              setSlotSettingsMap({});
-                              setSelectedSlotKeys(new Set());
-                              setCellsByWeek((prev) => ({
-                                ...prev,
-                                [weekOffset]: new Set(),
-                              }));
-                              setIsMobileConfirmClearOpen(false);
-                              if (onDeleteSlots) {
-                                await onDeleteSlots(dates);
-                              }
-                            }}
+                            size="sm"
+                            className="h-8 px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                            title={t.clearAll}
                           >
-                            {t.yes}
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            <span>{language === "ru" ? "Удалить" : "Жою"}</span>
                           </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
+                          <p className="text-xs font-medium text-foreground">
+                            {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
+                          </p>
+                          <div className="flex items-center justify-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-9 px-5 text-sm text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={async () => {
+                                const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
+                                setSelectedCells(new Set());
+                                setCustomDayIntervals({});
+                                setSlotSettingsMap({});
+                                setSelectedSlotKeys(new Set());
+                                setCellsByWeek((prev) => ({
+                                  ...prev,
+                                  [weekOffset]: new Set(),
+                                }));
+                                setIsMobileConfirmClearOpen(false);
+                                if (onDeleteSlots) {
+                                  await onDeleteSlots(dates);
+                                }
+                              }}
+                            >
+                              {t.yes}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2532,9 +2537,9 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Bottom toolbar under grid */}
-                <div className="flex items-center justify-between mt-3 mb-2 px-1">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-1">
                   {/* Left: Time range */}
-                  <div className="flex justify-start shrink-0">
+                  <div className="flex justify-start">
                     <Popover
                       open={isRangeOpen}
                       onOpenChange={(nextOpen) => {
@@ -2549,11 +2554,18 @@ export default function SlotCreationWizard({
                           variant="outline"
                           size="sm"
                           className={cn(
-                            "text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border text-foreground bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm transition-colors group cursor-pointer",
-                            isRangeOpen && "bg-primary text-primary-foreground border-primary"
+                            "text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border text-foreground bg-card shadow-sm transition-colors group cursor-pointer",
+                            isRangeOpen
+                              ? "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                              : "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
                           )}
                         >
-                          <Clock className={cn("w-3.5 h-3.5 text-muted-foreground group-hover:text-primary-foreground transition-colors", isRangeOpen && "text-primary-foreground")} />
+                          <Clock
+                            className={cn(
+                              "w-3.5 h-3.5 text-muted-foreground transition-colors group-hover:text-primary",
+                              isRangeOpen && "text-primary-foreground group-hover:text-primary-foreground"
+                            )}
+                          />
                           <span>{t.timeRangeBtn}</span>
                         </Button>
                       </PopoverTrigger>
@@ -2578,7 +2590,7 @@ export default function SlotCreationWizard({
                   </div>
 
                   {/* Center: Toggle late hours */}
-                  {lateHoursArr.length > 0 && (
+                  {lateHoursArr.length > 0 ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2593,10 +2605,12 @@ export default function SlotCreationWizard({
                       />
                       <span>{showLateHours ? t.hideLateHours : t.showLateHours}</span>
                     </Button>
+                  ) : (
+                    <div />
                   )}
 
                   {/* Right: Clear all with popover */}
-                  <div className="min-w-[150px] flex justify-end shrink-0">
+                  <div className="flex justify-end">
                     {activeDays.length > 0 && (
                       <Popover open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
                         <PopoverTrigger asChild>
@@ -2613,19 +2627,11 @@ export default function SlotCreationWizard({
                           <p className="text-xs font-medium text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex items-center justify-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-3 min-w-[48px] text-xs hover:bg-primary/10 hover:text-primary hover:border-primary/40"
-                              onClick={() => setIsConfirmClearOpen(false)}
-                            >
-                              {t.no}
-                            </Button>
+                          <div className="flex items-center justify-center">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-3 min-w-[48px] text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-9 px-5 min-w-[48px] text-sm sm:text-base text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2835,31 +2841,63 @@ export default function SlotCreationWizard({
                         {t.noSlotsForDay}
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2 h-[80px] overflow-y-auto overscroll-contain touch-pan-y pr-2.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/55 [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full">
+                      <div className={cn("flex flex-col gap-2 h-[80px] overscroll-contain touch-pan-y pr-2.5 [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/55 [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full", daySlotKeys.length > 1 ? "overflow-y-scroll" : "overflow-y-hidden")}>
                         {daySlotKeys.map((key) => {
                           const isSelected = selectedSlotKeys.has(key);
-                          const [dStr, start, end] = key.split("_");
-                          const dateObj = parseISO(dStr);
-                          const dayName = isValid(dateObj)
-                            ? format(dateObj, "EEE, d MMM", { locale: language === "ru" ? ru : kk })
-                            : dStr;
+                          const [, start, end] = key.split("_");
+                          const toMinutes = (time: string) => {
+                            const [h, m] = time.split(":").map(Number);
+                            return h * 60 + (m || 0);
+                          };
+                          const startMin = toMinutes(start);
+                          let endMin = toMinutes(end);
+                          if (endMin <= startMin) endMin += 24 * 60;
+                          const blockMinutes = Math.max(1, endMin - startMin);
+                          const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
+                          const lessons = lessonDuration > 0 ? splitIntoLessons(0, blockMinutes, lessonDuration) : [];
+                          const label = `${start}–${end}`;
 
                           return (
                             <button
                               key={key}
                               type="button"
                               onClick={() => toggleSlotSelection(key)}
+                              title={label}
+                              aria-label={label}
                               className={cn(
-                                "w-full h-9 px-3 rounded-xl text-sm font-medium transition-colors border shrink-0 flex items-center justify-center cursor-pointer truncate",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
-                                  : "bg-muted/60 text-muted-foreground border-border hover:border-primary/40"
+                                "w-full h-[80px] rounded-xl border-2 relative overflow-hidden shrink-0 cursor-pointer transition-colors",
+                                isSelected ? "bg-primary border-primary" : "bg-card border-primary/40"
                               )}
-                              title={`${dayName}: ${start}–${end}`}
                             >
-                              <span className="truncate">
-                                {start}–{end}
-                              </span>
+                              {!isSelected && (
+                                <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
+                              )}
+                              {lessons.map((lesson, li) => {
+                                if (lesson.end >= blockMinutes) return null;
+                                const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : blockMinutes;
+                                const leftPct = (lesson.end / blockMinutes) * 100;
+                                const widthPct = ((nextStart - lesson.end) / blockMinutes) * 100;
+                                return [
+                                  <div
+                                    key={`lesson-line-${li}`}
+                                    className={cn(
+                                      "absolute top-0 bottom-0 w-px pointer-events-none",
+                                      isSelected ? "bg-white/70" : "bg-primary/50"
+                                    )}
+                                    style={{ left: `${leftPct}%` }}
+                                  />,
+                                  nextStart > lesson.end ? (
+                                    <div
+                                      key={`lesson-break-${li}`}
+                                      className={cn(
+                                        "absolute top-0 bottom-0 pointer-events-none",
+                                        isSelected ? "bg-white/45" : "bg-muted-foreground/25"
+                                      )}
+                                      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                                    />
+                                  ) : null,
+                                ];
+                              })}
                             </button>
                           );
                         })}
@@ -2927,6 +2965,13 @@ export default function SlotCreationWizard({
                           updateSelectedSlotsField("customDuration", val);
                           if (val && Number(val) > 0) {
                             updateSelectedSlotsField("slotDuration", Number(val));
+                          } else if (!val) {
+                            updateSelectedSlotsField("slotDuration", 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
+                            updateSelectedSlotsField("slotDuration", 60);
                           }
                         }}
                       />
@@ -3083,7 +3128,7 @@ export default function SlotCreationWizard({
                       onClick={() => setIsDetailsDialogOpen(true)}
                       className="w-full justify-between h-11 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer"
                     >
-                      <span className="text-xs font-normal text-muted-foreground">{t.detailsHint}</span>
+                      <span className="text-xs text-foreground">{t.detailsHint}</span>
                       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                     </Button>
                   </div>
@@ -3356,8 +3401,8 @@ export default function SlotCreationWizard({
                               const topPx = startM * pixelsPerMinute;
                               const heightPx = Math.max(24, durationM * pixelsPerMinute);
                               const isShortSlot = heightPx <= 32;
-                              const lessonDuration = slotSettingsMap[key]?.slotDuration || 60;
-                              const lessons = splitIntoLessons(0, durationM, lessonDuration);
+                              const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
+                              const lessons = lessonDuration > 0 ? splitIntoLessons(0, durationM, lessonDuration) : [];
 
                               return (
                                 <div
@@ -3385,7 +3430,8 @@ export default function SlotCreationWizard({
                                   {lessons.map((lesson, li) => {
                                     if (lesson.end >= durationM) return null;
                                     const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
-                                    const breakTop = lesson.end * pixelsPerMinute;
+                                    // -3px: block sits at topPx + 1 and has border-2, so padding-box coords are shifted by 3
+                                    const breakTop = lesson.end * pixelsPerMinute - 3;
                                     const breakHeight = (nextStart - lesson.end) * pixelsPerMinute;
                                     return [
                                       <div
@@ -3401,7 +3447,7 @@ export default function SlotCreationWizard({
                                           key={`lesson-break-${li}`}
                                           className={cn(
                                             "absolute left-0 right-0 pointer-events-none",
-                                            isSelected ? "bg-white/45" : "bg-muted"
+                                            isSelected ? "bg-white/45" : "bg-muted-foreground/25"
                                           )}
                                           style={{ top: `${breakTop}px`, height: `${breakHeight}px` }}
                                         />
@@ -3579,6 +3625,13 @@ export default function SlotCreationWizard({
                             updateSelectedSlotsField("customDuration", val);
                             if (val && Number(val) > 0) {
                               updateSelectedSlotsField("slotDuration", Number(val));
+                            } else if (!val) {
+                              updateSelectedSlotsField("slotDuration", 0);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
+                              updateSelectedSlotsField("slotDuration", 60);
                             }
                           }}
                         />
@@ -3749,7 +3802,12 @@ export default function SlotCreationWizard({
                         onClick={() => setIsDetailsDialogOpen(true)}
                         className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs"
                       >
-                        <span className="text-xs sm:text-sm font-normal text-muted-foreground">
+                        <span
+                          className={cn(
+                            "text-xs sm:text-sm",
+                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                          )}
+                        >
                           {t.detailsHint}
                         </span>
                         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -4169,10 +4227,23 @@ export default function SlotCreationWizard({
             onEscapeKeyDown={(e) => e.preventDefault()}
             className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
           >
-            <div className="pb-1 border-b border-border/50">
+            <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/50">
               <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
                 {language === "ru" ? "Настройка обложки" : "Мұқабаны баптау"}
               </DialogTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 min-h-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => {
+                  if (!cropSaving) coverCrop.resetCrop();
+                }}
+                title={language === "kk" ? "Өзгерістер сақталмайды" : "Изменения не сохранятся"}
+                aria-label="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
 
             {/* Line around showing settings are inside cover */}
@@ -4188,6 +4259,7 @@ export default function SlotCreationWizard({
                   onPointerMove={coverCrop.onPointerMove}
                   onPointerUp={coverCrop.onPointerUp}
                   saving={cropSaving}
+                  hideCancel
                   onCancel={() => {
                     coverCrop.resetCrop();
                   }}

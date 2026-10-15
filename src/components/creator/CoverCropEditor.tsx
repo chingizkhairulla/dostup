@@ -15,6 +15,8 @@ type CoverCropEditorProps = {
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: () => void;
   saving?: boolean;
+  /** Hide the "Отмена" button (e.g. when the host dialog provides its own close control). */
+  hideCancel?: boolean;
   onCancel: () => void;
   onSave: () => void;
 };
@@ -29,6 +31,7 @@ const CoverCropEditor = ({
   onPointerMove,
   onPointerUp,
   saving = false,
+  hideCancel = false,
   onCancel,
   onSave,
 }: CoverCropEditorProps) => {
@@ -149,15 +152,17 @@ const CoverCropEditor = ({
 
         {/* Action Buttons on right */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={saving}
-            className="rounded-xl hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-colors"
-          >
-            Отмена
-          </Button>
+          {!hideCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={saving}
+              className="rounded-xl hover:bg-primary/10 hover:text-primary hover:border-primary/40 transition-colors"
+            >
+              Отмена
+            </Button>
+          )}
           <Button
             type="button"
             onClick={onSave}
