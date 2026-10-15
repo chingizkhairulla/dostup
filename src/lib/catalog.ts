@@ -1,4 +1,4 @@
-import { pluralForm, type Language, type Translated } from "./language";
+import { pickLanguage, pluralForm, type Language, type Translated } from "./language";
 import { CATEGORY_NAMES_EN, SUBCATEGORY_NAMES_EN } from "./taxonomyEn";
 
 export type LessonFormat = "individual" | "group";
@@ -87,15 +87,19 @@ function pluralRu(count: number, one: string, few: string, many: string) {
 // English has only one/other, so it needs its own branch rather than the
 // Russian one/few/many rule.
 export function sellerReviewsLabel(count: number, language: Language) {
-  if (language === "en") return `${count} ${count === 1 ? "review" : "reviews"}`;
-  if (language === "kk") return `${count} пікір`;
-  return `${count} ${pluralRu(count, "отзыв", "отзыва", "отзывов")}`;
+  return pickLanguage(language, {
+    ru: `${count} ${pluralRu(count, "отзыв", "отзыва", "отзывов")}`,
+    kk: `${count} пікір`,
+    en: `${count} ${count === 1 ? "review" : "reviews"}`,
+  });
 }
 
 export function sellerSalesLabel(count: number, language: Language) {
-  if (language === "en") return `${count} ${count === 1 ? "sale" : "sales"}`;
-  if (language === "kk") return `${count} сатылым`;
-  return `${count} ${pluralRu(count, "продажа", "продажи", "продаж")}`;
+  return pickLanguage(language, {
+    ru: `${count} ${pluralRu(count, "продажа", "продажи", "продаж")}`,
+    kk: `${count} сатылым`,
+    en: `${count} ${count === 1 ? "sale" : "sales"}`,
+  });
 }
 
 export function productHref(product: { id: string; slug?: string | null }) {
@@ -192,12 +196,11 @@ export function formatCatalogPrice(
 /** "1 день / 3 дня / 7 дней", "7 күн", "1 day / 7 days". */
 export function trialDays(days: number, language: Language) {
   const form = pluralForm(language, days);
-  if (language === "ru") {
-    const word = form === "one" ? "день" : form === "few" ? "дня" : "дней";
-    return `${days} ${word}`;
-  }
-  if (language === "kk") return `${days} күн`;
-  return `${days} ${form === "one" ? "day" : "days"}`;
+  return pickLanguage(language, {
+    ru: `${days} ${form === "one" ? "день" : form === "few" ? "дня" : "дней"}`,
+    kk: `${days} күн`,
+    en: `${days} ${form === "one" ? "day" : "days"}`,
+  });
 }
 
 type PricingOption = {

@@ -136,7 +136,7 @@ Tests: `_shared/i18n.ts` picks the recipient's language with `ru` fallback; migr
 | Longer English strings breaking fixed-width buttons/labels | medium | Included in the Phase 6 screenshot matrix explicitly |
 
 ### Status
-VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD in progress: Phases 0–5 ✅ (Phase 5 as files — the migration and edge-function deploy are the user's to apply), Phase 6 and the raw-literal sweep (Phase 4b) open.** Current detail is in the Build Log below; this line is the summary.
+VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD complete in code (2026-10-13): Phases 0–6 ✅, including the raw-literal sweep (Phase 4b).** Not deployed: the 14 edge functions and the frontend still have to go out (the migration is already on production). Next: `/reflect`. Current detail is in the Build Log below; this line is the summary.
 
 Two creative decisions changed the plan and must be carried into the build:
 1. The taxonomy migration is **cancelled** (C2) — Phase 5 shrinks to server-side notification language only.
@@ -281,10 +281,52 @@ The user chose to apply what the plan said. All raw `#FF6B00` → the `primary` 
 1. **Signed-out header, `RU / KK / EN` moved left of "Sign in"** with a small gap: `mr-3` on the toggle (the header's own gap is 4px on desktop). Measured from the EN glyphs to the button edge: **8 → 20px** at 1280, **12 → 24px** at 390, all three languages.
 2. **"Buy. Learn. Sell." — more space between words, English only:** `:lang(en) .hero-headline { word-spacing: 0.2em }`, following the existing `:lang(kk) .hero-headline` rule. Measured word gaps: **19 → 35px** at 1280, **9 → 15px** at 390; Russian and Kazakh unchanged (19px / 9px), and a test pins that only the English rule sets `word-spacing`.
 
+## Phase 4b — Russian written outside `l()` ✅ (2026-10-13)
+
+**The measure came first.** `scripts/i18n-raw.mjs` reads the syntax tree (TypeScript's own parser) and reports every Cyrillic string, template or JSX text that is not in the `ru`/`kk` slot of an object that also has `en`. Comments cost nothing, and a string is judged by where it sits. First run: **623 strings in 42 files** (the "~600" estimate held). `src/test/noRawRussian.test.ts` runs the same scan and failed on 484 before any fix; it is now the permanent guard.
+
+What is deliberately not scanned, each with its reason in the script: the dictionaries, the moderator dashboard and `ModeratorSettingsDialog` (staff, Russian by plan), `aiCategory.ts` (keyword matching), `taxonomyData.ts` (preset topics, C2), `keywords` lists (settings search matches whatever the reader types), regular expressions, and three single strings (the two native language names, one fragment that matches a server error). **Five files nothing imports** — `ProductScheduleManager`, `AnnouncementEditor`, `CheckoutPage`, `SetupPasswordPage`, `AuthPage`, 89 strings — were left alone rather than translated as dead code; a test fails the moment one of them is imported again.
+
+**Three screens crashed in English — found here, not looked for.** `NotFound`, `NotificationPreferences` (Settings → Notifications, on the buyer path) and `SlotCreationWizard` kept their texts in a table keyed `{ ru, kk }` and read `table[language]`. In English that is `undefined` and the first `t.title` threw: the page did not show Russian, it did not render. Nothing caught it because the project compiles without `strict`. `src/test/englishScreensRender.test.tsx` reproduced all three (red), then each table got its English block and a `Record<Language, …>` type, so a language without its block no longer compiles.
+
+**Other real defects fixed on the way:**
+- **Upload cancellation was recognised by comparing an error message with the Russian sentence «Загрузка отменена»** (`CreatorProductsTab`, `videoCompressor`). Translating the message would have made every non-Russian cancel look like a failed upload. Now `UploadCancelledError` / `isUploadCancelled` in `src/lib/uploadCancelled.ts`.
+- **Two `en` slots still held Russian** (`useRealtimeBookings`, `useRealtimeTeacherNotifications`): templates containing a nested template, which the regex-based `i18n-todo.mjs` cannot pair. The tree-based scan sees them.
+- **29 dates pinned to Russian** (`format(…, { locale: ru })` in both schedule tabs, the buyer schedule, teacher notifications, settings) printed «5 сент», «понедельник» in every language — invisible to any Cyrillic search, since the Russian only exists at run time. Now `dateLocale(language)` from `src/lib/dateLocale.ts`; `pinnedRussianDates()` in the scanner plus a test forbid the shape outside a `ru` slot.
+- **"1 slots"**: `countEn(count, "slot")` in `language.ts`, applied to the nine English phrases that pair a number with a noun. (Russian «1 слотов» is the pre-existing defect noted in C1 and is still not touched.)
+- 16 unreachable `t("key") || "Русский текст"` fallbacks removed (`t()` never returns empty), after checking each key exists in all three dictionaries.
+- `ReportProductDialog`: the Russian value sent to moderators is now derived from the label's `ru` text instead of being written twice.
+
+**The rewrite.** `scripts/i18n-wrap.mjs` wraps what the scanner finds, given a Russian→English dictionary; it shares the scanner's definition of "raw". It refuses three shapes and lists them for a person: a string used as data (`===`, `case`, `.includes()`), a template containing another Russian string, JSX text with an entity. **289 strings wrapped in 24 files**; about 100 of them took an English (and Kazakh) the repository already had for exactly that Russian text, the rest came from 165 new translations. Sentences that JSX had split around a value («Вы уверены, что хотите удалить "{title}"? …») were rewritten by hand as whole phrases so English word order is its own. Non-React files (`productMediaUpload`, `productPayload`, `useCoverCrop`, `normalizeTopic`, `displayName`, `creatorAuth`) use `inDeviceLanguage`, imported as `l` so the i18n scripts see those phrases too.
+
+**Kazakh: unchanged on purpose.** These strings were Russian-only, so the `kk` slot holds Kazakh only where the repository already had it for that exact Russian text; otherwise it holds the Russian a Kazakh reader was shown before. Writing ~200 unreviewed Kazakh strings into a seller's working screens was not asked for and is worse than the Russian they already read. The gap is now a number: **207 of 1049 phrases show Russian to Kazakh readers** (105 in `CreatorProductsTab`, 33 in `ProductMaterialsManager`). Two things did change for Kazakh readers, following conventions already in the repo: schedule dates use the Kazakh locale, and the month-view weekday headers use the abbreviations the slot wizard already had.
+
+**Not test-first, honestly:** `i18n-wrap.mjs` has no unit tests of its own. Its output is checked by the scanner guard (0 left), the type checker (every `l` in scope), the slot tests and the browser audit below.
+
+| Gate | Result |
+|---|---|
+| `node scripts/i18n-raw.mjs` | **0 raw Cyrillic strings** (was 623) |
+| `npm test` | **522 passed / 39 files** (`[i18n] 942/942`) |
+| `npm run typecheck` | **18** — the same set as the committed baseline (diffed) |
+| `npm run build` | green; `dist` has no harness reference |
+| `eslint` on the new files | 0 errors |
+
+## Phase 6 — Verification in a real browser ✅ (2026-10-13)
+
+**How, without a login.** `scripts/language-harness/` renders the real seller screens through Vite with exactly two modules swapped: the Supabase client (every request in the app goes through it, so nothing can reach production) and the auth context (a signed-in seller). Components, hooks, styles and translations are the real ones. Sample data is Latin on purpose, so Cyrillic found on an English screen is the interface's own. `scripts/audit-languages.mjs` drives Chrome over the DevTools Protocol and reads the rendered page: visible Cyrillic (text and `placeholder`/`title`/`aria-label`/`alt`), controls whose text does not fit, sideways scrolling, crashes, `<html lang>`.
+
+**Result: 84 screens — 14 scenes × {1280, 390} × {ru, kk, en} — 0 Cyrillic on English screens, 0 crashes, 0 sideways scrolling.** Scenes: product editor (opened, every section expanded, Paid → Recurring chosen, plus a second shot scrolled to Payment), materials tab, materials manager (edit and add), announcements, buyers, schedule, slot wizard, cover crop, settings, reminders, account sheet, 404. Screenshots were read, not just counted: the editor's preview frame shows the real product page in English, dates read "12 Oct – 18 Oct 2026" / "13 October, Tuesday" / "Member since January 2026", and nothing English overflows at 390px.
+
+`node scripts/audit-orange.mjs`: **PASS, 0 non-white text on orange.**
+
+**The one thing that does not fit** is the trash counter badge in the materials toolbar at 390px — in all three languages alike, so not caused by this task and left as is.
+
+**What this does not prove:** the harness shows sample data, not production data; text the *server* returns (edge-function error messages not covered in Phase 5) is not on these screens; the teacher dashboard, the buyer dashboard tabs, seller notifications and pending payments are covered by the source scan and the unit tests but have no scene. Seen and left: the day heading carries a `capitalize` class («Bookings For», «Записи На») in every language.
+
 ### What is left
+- **Kazakh gap, as a separate task:** 207 phrases (mostly the product editor and materials manager) still show Russian to Kazakh readers, as they did before. `i18n-wrap.mjs`'s dictionary accepts `kk`, so filling it is a translation job, not an engineering one — ideally with a native reader.
+- **Merge with `main`:** 19 files conflicted before Phase 4b; Phase 4b touched more of the same seller files, and `main` deleted `CreatorAnnouncementsTab.tsx`. After merging, `noRawRussian.test.ts` will list whatever Russian `main` brought in.
 - ✅ **Migration applied to production 2026-10-03** (on the user's instruction, via the Management API `database/query` with the personal access token from `.env` — only this file's SQL, not `db push`). Verified: both columns `text NOT NULL DEFAULT 'ru'`, both CHECK constraints present, all 24 profiles and 4 push tokens read `ru`. Recorded in `supabase_migrations.schema_migrations` as `20261003120000 / recipient_language`.
 - **Still to deploy:** the 14 changed edge functions, then the frontend (the migration they depend on is now in place).
 - ⚠️ **Version collision found while checking history:** production's history already has `20260917120000` named `product_marketplace_visibility`, but this branch's file with that version is `private_products_and_seller_metrics.sql` (memory bank had it as unapplied). `supabase db push` would therefore skip this branch's file as already applied. Needs a look before that migration is relied on — not touched.
-- **Phase 4b** — the ~600 raw Russian lines outside `l()`, mostly seller screens. The buyer path is done; this is the seller side.
-- **Phase 6** — the verification matrix on authenticated seller screens (needs a logged-in session); Phase 4b should land first, since that is where the remaining Russian is.
 - Pre-existing, noticed, not changed (outside this task): booking/payment pushes to creators are sent to **every** creator device (`user_role = 'creator'` with no user filter), and `process-subscriptions` passes a *profile* id as `push_tokens.user_id`, which `manage-push-token` fills with `simple_users` ids — unless those ids coincide, renewal pushes reach no device (not verified against the data).

@@ -9,7 +9,8 @@ import { AutoResizeTextarea } from "@/components/ui/AutoResizeTextarea";
 
 import { useCreatorProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
+import { formatPriceTenge, categoryLabel, subcategoryLabel, trialDays, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
+import { pickLanguage, type Language, type Translated } from "@/lib/language";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus, Minus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, ChevronUp, Globe, DollarSign, Sparkles, Wand2, ArrowRight } from "lucide-react";
@@ -40,6 +41,7 @@ import ProductMaterialsManager from "./ProductMaterialsManager";
 import CreatorPendingPayments from "./CreatorPendingPayments";
 import { uploadProductMedia, getVideoDuration, MAX_VIDEO_DURATION_SECONDS } from "@/lib/productMediaUpload";
 import { compressVideoIfNeeded, COMPRESSION_THRESHOLD } from "@/lib/videoCompressor";
+import { isUploadCancelled } from "@/lib/uploadCancelled";
 import { ImageIcon, Video as VideoIcon, X as XIcon, HelpCircle, Play } from "lucide-react";
 import {
   Select,
@@ -70,20 +72,23 @@ import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 export { createDefaultPricingOption };
 export type { PricingOptionFormItem };
 
-export function getPricingOptionSummary(opt: PricingOptionFormItem) {
+export function getPricingOptionSummary(opt: PricingOptionFormItem, language: Language) {
   const priceNum = Number(opt.price) || 0;
   const priceStr = formatPriceTenge(priceNum);
   if (opt.paymentType === "one_time") {
-    return `${priceStr} разово`;
+    return pickLanguage(language, { ru: `${priceStr} разово`, kk: `${priceStr} бір рет`, en: `${priceStr} one-time` });
   }
-  let periodStr = "в месяц";
-  if (opt.recurringInterval === "7d") periodStr = "каждые 7 дней";
-  else if (opt.recurringInterval === "14d") periodStr = "каждые 14 дней";
-  else if (opt.recurringInterval === "1m") periodStr = "в месяц";
-  else if (opt.recurringInterval === "3m") periodStr = "каждые 3 месяца";
-  else if (opt.recurringInterval === "1y") periodStr = "в год";
-  else if (opt.recurringInterval === "custom") periodStr = `каждые ${opt.recurringCustomDays || 30} дн.`;
-  return `${priceStr} ${periodStr}`;
+  const customDays = opt.recurringCustomDays || 30;
+  const periods: Record<string, Translated> = {
+    "7d": { ru: "каждые 7 дней", kk: "әр 7 күн сайын", en: "every 7 days" },
+    "14d": { ru: "каждые 14 дней", kk: "әр 14 күн сайын", en: "every 14 days" },
+    "1m": { ru: "в месяц", kk: "айына", en: "per month" },
+    "3m": { ru: "каждые 3 месяца", kk: "әр 3 ай сайын", en: "every 3 months" },
+    "1y": { ru: "в год", kk: "жылына", en: "per year" },
+    custom: { ru: `каждые ${customDays} дн.`, kk: `әр ${customDays} күн сайын`, en: `every ${customDays} days` },
+  };
+  const period = periods[opt.recurringInterval ?? ""] ?? periods["1m"];
+  return `${priceStr} ${pickLanguage(language, period)}`;
 }
 
 interface Product {
@@ -353,7 +358,7 @@ const ProductForm = ({
     );
 
     if (!titleTrimmed && !descText && faqList.length === 0) {
-      toast.info("Заполните название или описание продукта для подбора темы");
+      toast.info(l({ ru: "Заполните название или описание продукта для подбора темы", kk: "Заполните название или описание продукта для подбора темы", en: "Fill in the product's title or description so a topic can be suggested" }));
       return;
     }
 
@@ -372,13 +377,13 @@ const ProductForm = ({
 
       if (suggested) {
         setNewTopicName(suggested);
-        toast.success(`Подобрана тема: ${suggested}`);
+        toast.success(l({ ru: `Подобрана тема: ${suggested}`, kk: `Подобрана тема: ${suggested}`, en: `Suggested topic: ${suggested}` }));
       } else {
-        toast.info("Не удалось автоматически определить тему. Введите её вручную.");
+        toast.info(l({ ru: "Не удалось автоматически определить тему. Введите её вручную.", kk: "Не удалось автоматически определить тему. Введите её вручную.", en: "Couldn't work out the topic automatically. Enter it yourself." }));
       }
     } catch (err) {
       console.warn("Failed to auto suggest topic:", err);
-      toast.error("Ошибка при подборе темы");
+      toast.error(l({ ru: "Ошибка при подборе темы", kk: "Ошибка при подборе темы", en: "Couldn't suggest a topic" }));
     } finally {
       setIsAutoGeneratingTopic(false);
     }
@@ -393,7 +398,7 @@ const ProductForm = ({
     );
 
     if (isManual && !titleTrimmed && !descText && !hasFaqContent) {
-      toast.error("Сначала заполните детали (название или описание)");
+      toast.error(l({ ru: "Сначала заполните детали (название или описание)", kk: "Сначала заполните детали (название или описание)", en: "Fill in the details first (title or description)" }));
       return;
     }
 
@@ -425,15 +430,15 @@ const ProductForm = ({
         setCategoryOpen(true);
 
         if (isManual) {
-          toast.success("Категория и тема обновлены через ИИ");
+          toast.success(l({ ru: "Категория и тема обновлены через ИИ", kk: "Категория и тема обновлены через ИИ", en: "Category and topic updated by AI" }));
         }
       } else if (isManual) {
-        toast.info("ИИ не смог определить категорию. Попробуйте дополнить описание");
+        toast.info(l({ ru: "ИИ не смог определить категорию. Попробуйте дополнить описание", kk: "ИИ не смог определить категорию. Попробуйте дополнить описание", en: "The AI couldn't work out the category. Try adding more to the description" }));
       }
     } catch (err) {
       console.error("AI prediction error:", err);
       if (isManual) {
-        toast.error("Не удалось определить категорию");
+        toast.error(l({ ru: "Не удалось определить категорию", kk: "Не удалось определить категорию", en: "Couldn't work out the category" }));
       }
     } finally {
       setAiLoading(false);
@@ -646,14 +651,14 @@ const ProductForm = ({
       const isImg = file.type.startsWith("image/");
       const isVid = file.type.startsWith("video/");
       if (!isImg && !isVid) {
-        toast.error(`Файл "${file.name}" не является фото или видео`);
+        toast.error(l({ ru: `Файл "${file.name}" не является фото или видео`, kk: `Файл "${file.name}" не является фото или видео`, en: `The file "${file.name}" is not a photo or video` }));
         continue;
       }
       if (isVid) {
         try {
           const duration = await getVideoDuration(file);
           if (duration > MAX_VIDEO_DURATION_SECONDS) {
-            toast.error(`Видео "${file.name}" слишком длинное (${Math.round(duration)} сек). Максимум 3 минуты.`);
+            toast.error(l({ ru: `Видео "${file.name}" слишком длинное (${Math.round(duration)} сек). Максимум 3 минуты.`, kk: `Видео "${file.name}" слишком длинное (${Math.round(duration)} сек). Максимум 3 минуты.`, en: `The video "${file.name}" is too long (${Math.round(duration)} sec). The maximum is 3 minutes.` }));
             continue;
           }
         } catch {
@@ -693,7 +698,7 @@ const ProductForm = ({
         coverCrop.loadFile(next);
       }
     } catch (err: any) {
-      toast.error(err?.message || "Ошибка обработки файла");
+      toast.error(err?.message || l({ ru: "Ошибка обработки файла", kk: "Ошибка обработки файла", en: "Couldn't process the file" }));
     } finally {
       setCropSaving(false);
     }
@@ -705,19 +710,19 @@ const ProductForm = ({
       let fileToAttach = result.file;
       let previewUrl = result.previewUrl;
       if (kind === "video" && result.file && result.file.size > COMPRESSION_THRESHOLD) {
-        const toastId = toast.loading("Оптимизация видео...");
+        const toastId = toast.loading(l({ ru: "Оптимизация видео...", kk: "Оптимизация видео...", en: "Optimising video..." }));
         try {
           fileToAttach = await compressVideoIfNeeded(result.file, (pct) => {
-            toast.loading(`Оптимизация видео (${pct}%)...`, { id: toastId });
+            toast.loading(l({ ru: `Оптимизация видео (${pct}%)...`, kk: `Оптимизация видео (${pct}%)...`, en: `Optimising video (${pct}%)...` }), { id: toastId });
           });
           previewUrl = URL.createObjectURL(fileToAttach);
-          toast.success("Видео добавлено", { id: toastId });
+          toast.success(l({ ru: "Видео добавлено", kk: "Видео добавлено", en: "Video added" }), { id: toastId });
         } catch {
           toast.dismiss(toastId);
-          toast.success("Видео добавлено");
+          toast.success(l({ ru: "Видео добавлено", kk: "Видео добавлено", en: "Video added" }));
         }
       } else {
-        toast.success(kind === "video" ? "Видео добавлено" : "Фото добавлено");
+        toast.success(kind === "video" ? l({ ru: "Видео добавлено", kk: "Видео добавлено", en: "Video added" }) : l({ ru: "Фото добавлено", kk: "Фото добавлено", en: "Photo added" }));
       }
 
       const newItem: ProductMediaItem = {
@@ -750,18 +755,18 @@ const ProductForm = ({
       setUploadingMedia(true);
       const controller = new AbortController();
       uploadAbortControllerRef.current = controller;
-      const toastId = toast.loading(kind === "video" ? "Подготовка видео..." : "Загрузка фото...");
+      const toastId = toast.loading(kind === "video" ? l({ ru: "Подготовка видео...", kk: "Подготовка видео...", en: "Preparing video..." }) : l({ ru: "Загрузка фото...", kk: "Загрузка фото...", en: "Uploading photo..." }));
       uploadToastIdRef.current = toastId;
 
       try {
         let fileToUpload = result.file;
         if (kind === "video" && result.file.size > COMPRESSION_THRESHOLD) {
-          toast.loading("Оптимизация видео...", { id: toastId });
+          toast.loading(l({ ru: "Оптимизация видео...", kk: "Оптимизация видео...", en: "Optimising video..." }), { id: toastId });
           fileToUpload = await compressVideoIfNeeded(
             result.file,
             (pct) => {
               if (!controller.signal.aborted) {
-                toast.loading(`Оптимизация видео (${pct}%)...`, { id: toastId });
+                toast.loading(l({ ru: `Оптимизация видео (${pct}%)...`, kk: `Оптимизация видео (${pct}%)...`, en: `Optimising video (${pct}%)...` }), { id: toastId });
               }
             },
             controller.signal
@@ -770,14 +775,14 @@ const ProductForm = ({
 
         if (controller.signal.aborted) return;
 
-        toast.loading(kind === "video" ? "Загрузка видео (0%)..." : "Загрузка фото...", { id: toastId });
+        toast.loading(kind === "video" ? l({ ru: "Загрузка видео (0%)...", kk: "Загрузка видео (0%)...", en: "Uploading video (0%)..." }) : l({ ru: "Загрузка фото...", kk: "Загрузка фото...", en: "Uploading photo..." }), { id: toastId });
         const url = await uploadProductMedia(
           fileToUpload,
           editingProductId,
           kind,
           (pct) => {
             if (kind === "video" && !controller.signal.aborted) {
-              toast.loading(`Загрузка видео (${pct}%)...`, { id: toastId });
+              toast.loading(l({ ru: `Загрузка видео (${pct}%)...`, kk: `Загрузка видео (${pct}%)...`, en: `Uploading video (${pct}%)...` }), { id: toastId });
             }
           },
           1,
@@ -809,7 +814,7 @@ const ProductForm = ({
             videoUrl: firstVid?.url || "",
           };
         });
-        toast.success(kind === "video" ? "Видео добавлено" : "Фото добавлено", { id: toastId });
+        toast.success(kind === "video" ? l({ ru: "Видео добавлено", kk: "Видео добавлено", en: "Video added" }) : l({ ru: "Фото добавлено", kk: "Фото добавлено", en: "Photo added" }), { id: toastId });
         setTimeout(() => {
           const total = (formData.media || []).length + 1;
           activeMediaIndexRef.current = total - 1;
@@ -817,10 +822,10 @@ const ProductForm = ({
           scrollToMediaIndex(total - 1);
         }, 50);
       } catch (err: any) {
-        if (err?.message === "Загрузка отменена" || controller.signal.aborted) {
+        if (isUploadCancelled(err) || controller.signal.aborted) {
           return;
         }
-        toast.error(err?.message || "Ошибка загрузки файла", { id: toastId });
+        toast.error(err?.message || l({ ru: "Ошибка загрузки файла", kk: "Ошибка загрузки файла", en: "Couldn't upload the file" }), { id: toastId });
       } finally {
         uploadAbortControllerRef.current = null;
         uploadToastIdRef.current = null;
@@ -1014,7 +1019,7 @@ const ProductForm = ({
     }
     toast.error(
       <span className="flex items-center gap-1 font-medium">
-        Заполните обязательные поля <ReqStar />
+        {l({ ru: "Заполните обязательные поля", kk: "Заполните обязательные поля", en: "Fill in the required fields" })} <ReqStar />
       </span>
     );
     scrollToField(id);
@@ -1105,9 +1110,9 @@ const ProductForm = ({
   );
 
   const durationPresets = [
-    { label: "7 дней", value: 7 },
-    { label: "2 недели", value: 14 },
-    { label: "1 месяц", value: 30 },
+    { label: l({ ru: "7 дней", kk: "7 күн", en: "7 days" }), value: 7 },
+    { label: l({ ru: "2 недели", kk: "2 апта", en: "2 weeks" }), value: 14 },
+    { label: l({ ru: "1 месяц", kk: "1 ай", en: "1 month" }), value: 30 },
   ];
 
   return (
@@ -1135,12 +1140,12 @@ const ProductForm = ({
         <div className="space-y-4 w-full min-w-0 max-w-full">
           {/* ============ ДЕТАЛИ ============ */}
     <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <SectionHeader label="Детали" open={detailsOpen} />
+      <SectionHeader label={l({ ru: "Детали", kk: "Детали", en: "Details" })} open={detailsOpen} />
       <CollapsibleContent className="space-y-4 pt-4 w-full min-w-0 max-w-full">
         {/* Unified Cover (Image & Video) upload */}
         <div className="space-y-2 w-full min-w-0 max-w-full">
           <div className="flex items-center justify-between">
-            <Label className="text-sm sm:text-base font-semibold text-foreground">Обложка</Label>
+            <Label className="text-sm sm:text-base font-semibold text-foreground">{l({ ru: "Обложка", kk: "Обложка", en: "Cover" })}</Label>
             {formData.media && formData.media.length > 0 && (
               <label className="cursor-pointer inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
                 {uploadingMedia ? (
@@ -1148,7 +1153,7 @@ const ProductForm = ({
                 ) : (
                   <Plus className="w-4 h-4" />
                 )}
-                <span>Добавить</span>
+                <span>{l({ ru: "Добавить", kk: "Қосу", en: "Add" })}</span>
                 <input
                   type="file"
                   accept="image/*,video/*"
@@ -1183,13 +1188,13 @@ const ProductForm = ({
                   (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
                 );
                 if (files.length > 0) void startCoverCropProcess(files);
-                else toast.error("Перетащите фото или видео");
+                else toast.error(l({ ru: "Перетащите фото или видео", kk: "Перетащите фото или видео", en: "Drag a photo or video here" }));
               }}
             >
               {uploadingMedia ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Загрузка...</span>
+                  <span className="text-sm text-muted-foreground">{l({ ru: "Загрузка...", kk: "Жүктелуде...", en: "Loading..." })}</span>
                 </div>
               ) : (
                 <>
@@ -1197,7 +1202,7 @@ const ProductForm = ({
                     <Plus className="w-7 h-7 sm:w-8 sm:h-8" />
                   </div>
                   <span className="text-sm sm:text-base font-medium text-foreground">
-                    Добавьте фото или видео
+                    {l({ ru: "Добавьте фото или видео", kk: "Добавьте фото или видео", en: "Add a photo or video" })}
                   </span>
                 </>
               )}
@@ -1263,7 +1268,7 @@ const ProductForm = ({
                         disabled={activeMediaIndex === 0}
                         className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
                         onClick={() => scrollToMediaIndex(Math.max(0, activeMediaIndex - 1))}
-                        title="Предыдущее"
+                        title={l({ ru: "Предыдущее", kk: "Алдыңғы", en: "Previous" })}
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
@@ -1274,7 +1279,7 @@ const ProductForm = ({
                         disabled={activeMediaIndex === formData.media.length - 1}
                         className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
                         onClick={() => scrollToMediaIndex(Math.min(formData.media.length - 1, activeMediaIndex + 1))}
-                        title="Следующее"
+                        title={l({ ru: "Следующее", kk: "Келесі", en: "Next" })}
                       >
                         <ChevronRight className="w-4 h-4" />
                       </Button>
@@ -1291,7 +1296,7 @@ const ProductForm = ({
                         type="button"
                         onClick={() => scrollToMediaIndex(i)}
                         className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
-                        title={`Медиа ${i + 1}`}
+                        title={l({ ru: `Медиа ${i + 1}`, kk: `Медиа ${i + 1}`, en: `Media ${i + 1}` })}
                       />
                     ))}
                     <div
@@ -1312,7 +1317,7 @@ const ProductForm = ({
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10 ml-auto"
                   onClick={() => handleDeleteMedia(activeMediaIndex)}
-                  title="Удалить"
+                  title={l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -1324,11 +1329,11 @@ const ProductForm = ({
         {/* Title */}
         <div className="space-y-2">
           <Label htmlFor="title" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-            Название <ReqStar />
+            {l({ ru: "Название", kk: "Атауы", en: "Title" })} <ReqStar />
           </Label>
           <AutoResizeTextarea
             id="title"
-            placeholder="Название"
+            placeholder={l({ ru: "Название", kk: "Атауы", en: "Title" })}
             rows={1}
             value={formData.title}
             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
@@ -1339,12 +1344,12 @@ const ProductForm = ({
         {/* Description */}
         <div className="space-y-2">
           <Label htmlFor="description" className="flex items-center text-sm sm:text-base font-semibold text-foreground">
-            Описание
+            {l({ ru: "Описание", kk: "Сипаттамасы", en: "Description" })}
           </Label>
           <RichTextEditor
             value={formData.description}
             onChange={(val) => setFormData(prev => ({ ...prev, description: val }))}
-            placeholder="Описание"
+            placeholder={l({ ru: "Описание", kk: "Сипаттамасы", en: "Description" })}
             minHeight="70px"
             maxHeight="220px"
           />
@@ -1356,10 +1361,10 @@ const ProductForm = ({
             <div className="space-y-0.5">
               <Label className="flex items-center gap-2 text-sm sm:text-base font-semibold text-foreground">
                 <HelpCircle className="w-4 h-4 text-primary" />
-                Часто задаваемые вопросы
+                {l({ ru: "Часто задаваемые вопросы", kk: "Жиі қойылатын сұрақтар", en: "Frequently asked questions" })}
               </Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Добавьте ответы на популярные вопросы ваших покупателей.
+                {l({ ru: "Добавьте ответы на популярные вопросы ваших покупателей.", kk: "Добавьте ответы на популярные вопросы ваших покупателей.", en: "Answer the questions your buyers ask most often." })}
               </p>
             </div>
 
@@ -1370,7 +1375,7 @@ const ProductForm = ({
               size="sm"
               className="h-8 w-8 p-0 rounded-full border border-dashed border-primary/50 bg-primary/5 text-primary hover:bg-primary hover:text-white hover:border-primary transition-all shrink-0 ml-2 shadow-2xs"
               onClick={handleAddFaq}
-              title="Добавить вопрос"
+              title={l({ ru: "Добавить вопрос", kk: "Добавить вопрос", en: "Add a question" })}
             >
               <Plus className="w-4 h-4" />
             </Button>
@@ -1422,7 +1427,7 @@ const ProductForm = ({
                     className="w-full min-w-full shrink-0 snap-center rounded-xl border border-border/80 bg-card p-3 space-y-2 shadow-xs"
                   >
                     <AutoResizeTextarea
-                      placeholder="Вопрос"
+                      placeholder={l({ ru: "Вопрос", kk: "Вопрос", en: "Question" })}
                       rows={1}
                       style={{ minHeight: "42px" }}
                       value={item.question}
@@ -1439,7 +1444,7 @@ const ProductForm = ({
                     />
 
                     <AutoResizeTextarea
-                      placeholder="Ответ на вопрос..."
+                      placeholder={l({ ru: "Ответ на вопрос...", kk: "Ответ на вопрос...", en: "The answer..." })}
                       rows={2}
                       style={{ minHeight: "58px" }}
                       value={item.answer}
@@ -1471,7 +1476,7 @@ const ProductForm = ({
                     disabled={activeFaqIndex === 0}
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
                     onClick={() => scrollToFaqIndex(Math.max(0, activeFaqIndex - 1))}
-                    title="Предыдущий вопрос"
+                    title={l({ ru: "Предыдущий вопрос", kk: "Предыдущий вопрос", en: "Previous question" })}
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -1482,7 +1487,7 @@ const ProductForm = ({
                     disabled={activeFaqIndex === formData.faq.length - 1}
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg shrink-0 disabled:opacity-20 disabled:pointer-events-none transition-all"
                     onClick={() => scrollToFaqIndex(Math.min(formData.faq.length - 1, activeFaqIndex + 1))}
-                    title="Следующий вопрос"
+                    title={l({ ru: "Следующий вопрос", kk: "Следующий вопрос", en: "Next question" })}
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -1496,7 +1501,7 @@ const ProductForm = ({
                       type="button"
                       onClick={() => scrollToFaqIndex(i)}
                       className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/60 transition-colors shrink-0"
-                      title={`Вопрос ${i + 1}`}
+                      title={l({ ru: `Вопрос ${i + 1}`, kk: `Вопрос ${i + 1}`, en: `Question ${i + 1}` })}
                     />
                   ))}
                   {/* Плавно переливающийся оранжевый индикатор */}
@@ -1517,7 +1522,7 @@ const ProductForm = ({
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors shrink-0 z-10"
                   onClick={() => handleDeleteFaq(activeFaqIndex)}
-                  title="Удалить этот вопрос"
+                  title={l({ ru: "Удалить этот вопрос", kk: "Удалить этот вопрос", en: "Delete this question" })}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -1530,13 +1535,13 @@ const ProductForm = ({
 
     {/* ============ КЛАССИФИКАЦИЯ ============ */}
     <Collapsible open={categoryOpen} onOpenChange={handleCategoryOpenChange}>
-      <SectionHeader label="Классификация" open={categoryOpen} />
+      <SectionHeader label={l({ ru: "Классификация", kk: "Классификация", en: "Classification" })} open={categoryOpen} />
       <CollapsibleContent className="space-y-4 pt-4">
         {/* Состояние загрузки AI */}
         {aiLoading && (
           <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 px-3 py-2 rounded-xl border border-primary/20">
             <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
-            <span>Подбираем категорию и тему с помощью AI...</span>
+            <span>{l({ ru: "Подбираем категорию и тему с помощью AI...", kk: "Подбираем категорию и тему с помощью AI...", en: "Picking a category and topic with AI..." })}</span>
           </div>
         )}
 
@@ -1553,14 +1558,14 @@ const ProductForm = ({
                 onClick={() => triggerAiCategory(true)}
                 disabled={aiLoading}
                 className="h-7 px-2.5 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1.5 transition-all"
-                title="Определить категорию, подкатегорию и тему по названию и описанию"
+                title={l({ ru: "Определить категорию, подкатегорию и тему по названию и описанию", kk: "Определить категорию, подкатегорию и тему по названию и описанию", en: "Work out the category, subcategory and topic from the title and description" })}
               >
                 {aiLoading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
                 ) : (
                   <Sparkles className="w-3.5 h-3.5 text-primary" />
                 )}
-                <span>Обновить через ИИ</span>
+                <span>{l({ ru: "Обновить через ИИ", kk: "Обновить через ИИ", en: "Update with AI" })}</span>
               </Button>
             </div>
             <Select
@@ -1663,7 +1668,7 @@ const ProductForm = ({
             return (
               <div className="space-y-3 pt-2 border-t border-border/60">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm sm:text-base font-semibold text-foreground">Тема продукта</Label>
+                  <Label className="text-sm sm:text-base font-semibold text-foreground">{l({ ru: "Тема продукта", kk: "Тема продукта", en: "Product topic" })}</Label>
                 </div>
 
                 {/* Выбранные темы в виде плашек с крестиком (над поиском) */}
@@ -1686,8 +1691,8 @@ const ProductForm = ({
                             }));
                           }}
                           className="w-4 h-4 rounded-full inline-flex items-center justify-center hover:bg-primary/20 text-primary/80 hover:text-primary transition-colors cursor-pointer"
-                          title={`Убрать тему ${topicItem}`}
-                          aria-label={`Убрать тему ${topicItem}`}
+                          title={l({ ru: `Убрать тему ${topicItem}`, kk: `Убрать тему ${topicItem}`, en: `Remove topic ${topicItem}` })}
+                          aria-label={l({ ru: `Убрать тему ${topicItem}`, kk: `Убрать тему ${topicItem}`, en: `Remove topic ${topicItem}` })}
                         >
                           <XIcon className="w-3.5 h-3.5" />
                         </button>
@@ -1698,7 +1703,7 @@ const ProductForm = ({
 
                 {/* Поиск темы */}
                 <Input
-                  placeholder="Например (Английский, ЕНТ, Бизнес)..."
+                  placeholder={l({ ru: "Например (Английский, ЕНТ, Бизнес)...", kk: "Например (Английский, ЕНТ, Бизнес)...", en: "For example (English, UNT, Business)..." })}
                   value={searchTopic}
                   onChange={(e) => setSearchTopic(e.target.value)}
                   className="h-11 bg-background text-base rounded-xl"
@@ -1727,10 +1732,10 @@ const ProductForm = ({
                       return (
                         <p className="text-xs sm:text-sm text-muted-foreground p-2">
                           {searchTopic.trim()
-                            ? "Подходящая тема не найдена. Вы можете добавить её ниже."
+                            ? l({ ru: "Подходящая тема не найдена. Вы можете добавить её ниже.", kk: "Подходящая тема не найдена. Вы можете добавить её ниже.", en: "No matching topic found. You can add it below." })
                             : unselectedTopics.length === 0 && allTopics.length > 0
-                            ? "Все темы из списка уже выбраны."
-                            : "Темы не найдены. Вы можете добавить свою тему ниже."}
+                            ? l({ ru: "Все темы из списка уже выбраны.", kk: "Все темы из списка уже выбраны.", en: "Every topic in the list is already selected." })
+                            : l({ ru: "Темы не найдены. Вы можете добавить свою тему ниже.", kk: "Темы не найдены. Вы можете добавить свою тему ниже.", en: "No topics found. You can add your own below." })}
                         </p>
                       );
                     }
@@ -1764,22 +1769,22 @@ const ProductForm = ({
                     onClick={() => setIsAddingTopic(true)}
                   >
                     <Plus className="w-4 h-4" />
-                    Предложить новую
+                    {l({ ru: "Предложить новую", kk: "Предложить новую", en: "Suggest a new one" })}
                   </Button>
                 ) : (
                   <div className="relative p-3.5 border border-dashed border-primary/40 rounded-2xl bg-card space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <Label className="text-sm sm:text-base font-semibold text-foreground">
-                          Предложить новую тему
+                          {l({ ru: "Предложить новую тему", kk: "Предложить новую тему", en: "Suggest a new topic" })}
                         </Label>
                         <button
                           type="button"
                           disabled={isAutoGeneratingTopic}
                           onClick={handleAutoSuggestTopic}
                           className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors flex items-center justify-center disabled:opacity-50"
-                          title="Подобрать тему автоматически"
-                          aria-label="Подобрать тему автоматически"
+                          title={l({ ru: "Подобрать тему автоматически", kk: "Подобрать тему автоматически", en: "Suggest a topic automatically" })}
+                          aria-label={l({ ru: "Подобрать тему автоматически", kk: "Подобрать тему автоматически", en: "Suggest a topic automatically" })}
                         >
                           {isAutoGeneratingTopic ? (
                             <Loader2 className="w-4 h-4 animate-spin text-primary" />
@@ -1795,8 +1800,8 @@ const ProductForm = ({
                           setNewTopicName("");
                         }}
                         className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title="Закрыть"
-                        aria-label="Закрыть"
+                        title={l({ ru: "Закрыть", kk: "Жабу", en: "Close" })}
+                        aria-label={l({ ru: "Закрыть", kk: "Жабу", en: "Close" })}
                       >
                         <XIcon className="w-4 h-4" />
                       </button>
@@ -1805,7 +1810,7 @@ const ProductForm = ({
                     {(() => {
                       const handleTopicSubmit = async () => {
                         if (!formData.categoryId) {
-                          toast.error("Сначала выберите категорию");
+                          toast.error(l({ ru: "Сначала выберите категорию", kk: "Сначала выберите категорию", en: "Choose a category first" }));
                           return;
                         }
                         const currentCat = taxonomyCategories.find((c) => c.id === formData.categoryId);
@@ -1814,7 +1819,7 @@ const ProductForm = ({
                         const allTopics = Array.from(new Set([...presetList, ...customTopics]));
                         const check = validateNewTopic(newTopicName, allTopics);
                         if (!check.isValid) {
-                          toast.error(check.error || "Недопустимое название");
+                          toast.error(check.error || l({ ru: "Недопустимое название", kk: "Недопустимое название", en: "This name is not allowed" }));
                           return;
                         }
                         try {
@@ -1836,16 +1841,16 @@ const ProductForm = ({
                             );
                           if (error) {
                             if (error.message?.includes("duplicate") || error.code === "23505") {
-                              toast.info("Эта тема уже была предложена и находится на проверке");
+                              toast.info(l({ ru: "Эта тема уже была предложена и находится на проверке", kk: "Эта тема уже была предложена и находится на проверке", en: "This topic has already been suggested and is under review" }));
                             } else {
                               console.warn("Failed to suggest topic:", error);
-                              toast.error("Не удалось отправить тему");
+                              toast.error(l({ ru: "Не удалось отправить тему", kk: "Не удалось отправить тему", en: "Couldn't send the topic" }));
                             }
                             return;
                           }
                           setNewTopicName("");
                           setIsAddingTopic(false);
-                          toast.success("Тема отправлена на модерацию");
+                          toast.success(l({ ru: "Тема отправлена на модерацию", kk: "Тема отправлена на модерацию", en: "The topic has been sent for review" }));
 
                           // Отправка push-уведомления модераторам
                           fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-api`, {
@@ -1866,14 +1871,14 @@ const ProductForm = ({
                           }).catch((e) => console.warn("Failed to notify moderator:", e));
                         } catch (err) {
                           console.warn("Failed to suggest topic:", err);
-                          toast.error("Ошибка при отправке темы");
+                          toast.error(l({ ru: "Ошибка при отправке темы", kk: "Ошибка при отправке темы", en: "Couldn't send the topic" }));
                         }
                       };
 
                       return (
                         <div className="flex gap-2 items-center">
                           <Input
-                            placeholder="Например (🇩🇪 Немецкий язык, 🍳 Кулинария)..."
+                            placeholder={l({ ru: "Например (🇩🇪 Немецкий язык, 🍳 Кулинария)...", kk: "Например (🇩🇪 Немецкий язык, 🍳 Кулинария)...", en: "For example (🇩🇪 German, 🍳 Cooking)..." })}
                             value={newTopicName}
                             onChange={(e) => setNewTopicName(e.target.value)}
                             className="h-11 text-base bg-background flex-1 rounded-xl"
@@ -1890,8 +1895,8 @@ const ProductForm = ({
                             size="icon"
                             className="h-11 w-11 shrink-0 rounded-xl bg-background hover:bg-muted text-foreground border-border hover:text-foreground flex items-center justify-center transition-all cursor-pointer"
                             onClick={handleTopicSubmit}
-                            title="Отправить тему"
-                            aria-label="Отправить тему"
+                            title={l({ ru: "Отправить тему", kk: "Отправить тему", en: "Send topic" })}
+                            aria-label={l({ ru: "Отправить тему", kk: "Отправить тему", en: "Send topic" })}
                           >
                             <ArrowRight className="w-5 h-5" />
                           </Button>
@@ -1916,7 +1921,7 @@ const ProductForm = ({
                 setCategoryOpen(false);
               }}
             >
-              <span>Свернуть</span>
+              <span>{l({ ru: "Свернуть", kk: "Свернуть", en: "Collapse" })}</span>
               <ChevronUp className="w-3.5 h-3.5" />
             </Button>
           </div>
@@ -1926,11 +1931,11 @@ const ProductForm = ({
 
     {/* ============ ОПЛАТА ============ */}
     <Collapsible open={paymentOpen} onOpenChange={setPaymentOpen}>
-      <SectionHeader label="Оплата" open={paymentOpen} />
+      <SectionHeader label={l({ ru: "Оплата", kk: "Оплата", en: "Payment" })} open={paymentOpen} />
       <CollapsibleContent className="space-y-4 pt-4">
         {/* Choice between Free access and Paid access (Whop style) */}
         <div className="space-y-2">
-          <Label className="text-sm sm:text-base font-semibold text-foreground">Как люди получат доступ?</Label>
+          <Label className="text-sm sm:text-base font-semibold text-foreground">{l({ ru: "Как люди получат доступ?", kk: "Как люди получат доступ?", en: "How will people get access?" })}</Label>
           <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
             {/* Карточка 1: Бесплатно */}
             <div
@@ -1949,7 +1954,7 @@ const ProductForm = ({
                 )}>
                   <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <p className="font-semibold text-sm sm:text-base text-foreground truncate">Бесплатно</p>
+                <p className="font-semibold text-sm sm:text-base text-foreground truncate">{l({ ru: "Бесплатно", kk: "Бесплатно", en: "Free" })}</p>
               </div>
               <div className={cn(
                 "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
@@ -1991,7 +1996,7 @@ const ProductForm = ({
                 )}>
                   <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <p className="font-semibold text-sm sm:text-base text-foreground truncate">Платно</p>
+                <p className="font-semibold text-sm sm:text-base text-foreground truncate">{l({ ru: "Платно", kk: "Платно", en: "Paid" })}</p>
               </div>
               <div className={cn(
                 "w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ml-1.5 sm:ml-2 transition-colors",
@@ -2007,7 +2012,7 @@ const ProductForm = ({
         {!formData.isPaid && (
           <div className="rounded-2xl border border-border/80 bg-muted/30 p-4">
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Покупатели получат моментальный доступ к продукту сразу, без необходимости оплачивать или вводить платёжные данные.
+              {l({ ru: "Покупатели получат моментальный доступ к продукту сразу, без необходимости оплачивать или вводить платёжные данные.", kk: "Покупатели получат моментальный доступ к продукту сразу, без необходимости оплачивать или вводить платёжные данные.", en: "Buyers get access to the product straight away, without paying or entering payment details." })}
             </p>
           </div>
         )}
@@ -2019,7 +2024,7 @@ const ProductForm = ({
               <div className="space-y-2.5">
                 {(formData.pricingOptions || []).map((opt) => {
                   const isExpanded = expandedOptionId === opt.id;
-                  const summaryText = getPricingOptionSummary(opt);
+                  const summaryText = getPricingOptionSummary(opt, language);
 
                   return (
                     <div
@@ -2043,7 +2048,7 @@ const ProductForm = ({
                             </span>
                             {opt.hasFreeTrial && (
                               <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                                Пробный {opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.
+                                {l({ ru: `Пробный ${opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.`, kk: `Пробный ${opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.`, en: `${opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset}-day trial` })}
                               </span>
                             )}
                           </div>
@@ -2072,7 +2077,7 @@ const ProductForm = ({
                                 className="text-sm sm:text-base h-11"
                                 onClick={() => updateOption(opt.id, { paymentType: "one_time" })}
                               >
-                                Разово
+                                {l({ ru: "Разово", kk: "Разово", en: "One-time" })}
                               </Button>
                               <Button
                                 type="button"
@@ -2080,20 +2085,20 @@ const ProductForm = ({
                                 className="text-sm sm:text-base h-11"
                                 onClick={() => updateOption(opt.id, { paymentType: "recurring" })}
                               >
-                                Регулярно
+                                {l({ ru: "Регулярно", kk: "Регулярно", en: "Recurring" })}
                               </Button>
                             </div>
                             <p className="text-xs sm:text-sm text-muted-foreground">
                               {opt.paymentType === "one_time"
-                                ? "Доступ выдается без ограничения по времени, но вы всегда можете закрыть его вручную."
-                                : "Доступ действует до окончания оплаченного периода. Если оплата не продлилась, доступ автоматически закрывается."}
+                                ? l({ ru: "Доступ выдается без ограничения по времени, но вы всегда можете закрыть его вручную.", kk: "Доступ выдается без ограничения по времени, но вы всегда можете закрыть его вручную.", en: "Access has no time limit, but you can always close it manually." })
+                                : l({ ru: "Доступ действует до окончания оплаченного периода. Если оплата не продлилась, доступ автоматически закрывается.", kk: "Доступ действует до окончания оплаченного периода. Если оплата не продлилась, доступ автоматически закрывается.", en: "Access lasts until the end of the paid period. If the payment is not renewed, access closes automatically." })}
                             </p>
                           </div>
 
                           {opt.paymentType === "one_time" ? (
                             <div className="space-y-2">
                               <Label className="flex items-center text-sm sm:text-base font-medium">
-                                Цена (тенге) <ReqStar />
+                                {l({ ru: "Цена (тенге)", kk: "Цена (тенге)", en: "Price (tenge)" })} <ReqStar />
                               </Label>
                               <Input
                                 id={`price-${opt.id}`}
@@ -2113,7 +2118,7 @@ const ProductForm = ({
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-2">
                                   <Label className="flex items-center text-sm sm:text-base font-medium">
-                                    Цена (тенге) <ReqStar />
+                                    {l({ ru: "Цена (тенге)", kk: "Цена (тенге)", en: "Price (tenge)" })} <ReqStar />
                                   </Label>
                                   <Input
                                     id={`price-${opt.id}`}
@@ -2130,22 +2135,22 @@ const ProductForm = ({
                                 </div>
                                 <div className="space-y-2">
                                   <Label className="flex items-center text-sm sm:text-base font-medium">
-                                    Период оплаты <ReqStar />
+                                    {l({ ru: "Период оплаты", kk: "Төлем кезеңі", en: "Billing period" })} <ReqStar />
                                   </Label>
                                   <Select
                                     value={opt.recurringInterval}
                                     onValueChange={(val) => updateOption(opt.id, { recurringInterval: val })}
                                   >
                                     <SelectTrigger id={`recurring-interval-${opt.id}`} className="h-12 text-base">
-                                      <SelectValue placeholder="Выберите период" />
+                                      <SelectValue placeholder={l({ ru: "Выберите период", kk: "Выберите период", en: "Choose a period" })} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="7d" className="text-base py-2">7 дней</SelectItem>
-                                      <SelectItem value="14d" className="text-base py-2">14 дней</SelectItem>
-                                      <SelectItem value="1m" className="text-base py-2">1 месяц</SelectItem>
-                                      <SelectItem value="3m" className="text-base py-2">3 месяца</SelectItem>
-                                      <SelectItem value="1y" className="text-base py-2">1 год</SelectItem>
-                                      <SelectItem value="custom" className="text-base py-2">Выбрать</SelectItem>
+                                      <SelectItem value="7d" className="text-base py-2">{l({ ru: "7 дней", kk: "7 күн", en: "7 days" })}</SelectItem>
+                                      <SelectItem value="14d" className="text-base py-2">{l({ ru: "14 дней", kk: "14 күн", en: "14 days" })}</SelectItem>
+                                      <SelectItem value="1m" className="text-base py-2">{l({ ru: "1 месяц", kk: "1 ай", en: "1 month" })}</SelectItem>
+                                      <SelectItem value="3m" className="text-base py-2">{l({ ru: "3 месяца", kk: "3 ай", en: "3 months" })}</SelectItem>
+                                      <SelectItem value="1y" className="text-base py-2">{l({ ru: "1 год", kk: "1 жыл", en: "1 year" })}</SelectItem>
+                                      <SelectItem value="custom" className="text-base py-2">{l({ ru: "Выбрать", kk: "Выбрать", en: "Choose" })}</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -2154,7 +2159,7 @@ const ProductForm = ({
                               {opt.recurringInterval === "custom" && (
                                 <div className="flex items-center gap-2 pt-1">
                                   <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                    Число дней:
+                                    {l({ ru: "Число дней:", kk: "Число дней:", en: "Number of days:" })}
                                   </Label>
                                   <Input
                                     type="number"
@@ -2168,7 +2173,7 @@ const ProductForm = ({
                                       })
                                     }
                                   />
-                                  <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
+                                  <span className="text-xs sm:text-sm text-muted-foreground">{l({ ru: "дн.", kk: "күн", en: "days" })}</span>
                                 </div>
                               )}
                             </div>
@@ -2179,10 +2184,10 @@ const ProductForm = ({
                             <div className="flex items-center justify-between">
                               <div>
                                 <Label className="text-sm sm:text-base font-medium cursor-pointer">
-                                  Бесплатный пробный период
+                                  {l({ ru: "Бесплатный пробный период", kk: "Бесплатный пробный период", en: "Free trial" })}
                                 </Label>
                                 <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                                  Дать покупателям доступ на несколько дней перед оплатой
+                                  {l({ ru: "Дать покупателям доступ на несколько дней перед оплатой", kk: "Дать покупателям доступ на несколько дней перед оплатой", en: "Give buyers a few days of access before they pay" })}
                                 </p>
                               </div>
                               <Switch
@@ -2195,7 +2200,7 @@ const ProductForm = ({
 
                             {opt.hasFreeTrial && (
                               <div className="space-y-2 pt-2 border-t border-border/60">
-                                <Label className="text-xs sm:text-sm text-muted-foreground">Длительность пробного периода</Label>
+                                <Label className="text-xs sm:text-sm text-muted-foreground">{l({ ru: "Длительность пробного периода", kk: "Длительность пробного периода", en: "Trial length" })}</Label>
                                 <div className="grid grid-cols-4 gap-2">
                                   {(["3", "7", "30", "custom"] as const).map((preset) => (
                                     <Button
@@ -2206,7 +2211,7 @@ const ProductForm = ({
                                       onClick={() => updateOption(opt.id, { trialPreset: preset })}
                                       className="text-xs sm:text-sm h-9"
                                     >
-                                      {preset === "custom" ? "Выбрать" : `${preset} ${preset === "3" ? "дня" : "дней"}`}
+                                      {preset === "custom" ? l({ ru: "Выбрать", kk: "Выбрать", en: "Choose" }) : trialDays(Number(preset), language)}
                                     </Button>
                                   ))}
                                 </div>
@@ -2214,7 +2219,7 @@ const ProductForm = ({
                                 {opt.trialPreset === "custom" && (
                                   <div className="flex items-center gap-2 pt-1">
                                     <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                      Число дней:
+                                      {l({ ru: "Число дней:", kk: "Число дней:", en: "Number of days:" })}
                                     </Label>
                                     <Input
                                       type="number"
@@ -2228,7 +2233,7 @@ const ProductForm = ({
                                         })
                                       }
                                     />
-                                    <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
+                                    <span className="text-xs sm:text-sm text-muted-foreground">{l({ ru: "дн.", kk: "күн", en: "days" })}</span>
                                   </div>
                                 )}
                               </div>
@@ -2238,7 +2243,7 @@ const ProductForm = ({
                           {/* Способ оплаты через Kaspi для этого варианта */}
                           <div className="space-y-2 pt-2 border-t border-border/60">
                             <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
-                              Способ оплаты Kaspi <ReqStar />
+                              {l({ ru: "Способ оплаты Kaspi", kk: "Способ оплаты Kaspi", en: "Kaspi payment method" })} <ReqStar />
                             </Label>
                             <div className="grid grid-cols-2 gap-2">
                               <Button
@@ -2248,7 +2253,7 @@ const ProductForm = ({
                                 onClick={() => updateOption(opt.id, { kaspiMethod: "link" })}
                                 className="text-xs sm:text-sm h-9"
                               >
-                                Ссылка
+                                {l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })}
                               </Button>
                               <Button
                                 type="button"
@@ -2257,7 +2262,7 @@ const ProductForm = ({
                                 onClick={() => updateOption(opt.id, { kaspiMethod: "phone" })}
                                 className="text-xs sm:text-sm h-9"
                               >
-                                Номер телефона
+                                {l({ ru: "Номер телефона", kk: "Номер телефона", en: "Phone number" })}
                               </Button>
                             </div>
                             {opt.kaspiMethod === "link" ? (
@@ -2295,7 +2300,7 @@ const ProductForm = ({
                                 onClick={() => removeOption(opt.id)}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                Удалить этот вариант
+                                {l({ ru: "Удалить этот вариант", kk: "Удалить этот вариант", en: "Delete this option" })}
                               </Button>
                             ) : <div />}
                             <Button
@@ -2305,7 +2310,7 @@ const ProductForm = ({
                               className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5"
                               onClick={() => setExpandedOptionId(null)}
                             >
-                              <span>Свернуть</span>
+                              <span>{l({ ru: "Свернуть", kk: "Свернуть", en: "Collapse" })}</span>
                               <ChevronUp className="w-3.5 h-3.5" />
                             </Button>
                           </div>
@@ -2324,7 +2329,7 @@ const ProductForm = ({
                 onClick={addOption}
               >
                 <Plus className="w-4 h-4" />
-                Добавить вариант оплаты
+                {l({ ru: "Добавить вариант оплаты", kk: "Добавить вариант оплаты", en: "Add a payment option" })}
               </Button>
             </div>
           </div>
@@ -2514,25 +2519,25 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
     updateProduct: (payload) =>
       updateProduct.mutateAsync(payload as Parameters<typeof updateProduct.mutateAsync>[0]),
     uploadMedia: async (item, productId) => {
-      const toastId = toast.loading(`Загрузка ${item.type === "video" ? "видео (0%)..." : "фото..."}`);
+      const toastId = toast.loading(item.type === "video" ? l({ ru: "Загрузка видео (0%)...", kk: "Загрузка видео (0%)...", en: "Uploading video (0%)..." }) : l({ ru: "Загрузка фото...", kk: "Загрузка фото...", en: "Uploading photo..." }));
       try {
         let fileToUpload = item.file as File;
         if (item.type === "video" && fileToUpload.size > COMPRESSION_THRESHOLD) {
-          toast.loading("Оптимизация видео...", { id: toastId });
+          toast.loading(l({ ru: "Оптимизация видео...", kk: "Оптимизация видео...", en: "Optimising video..." }), { id: toastId });
           fileToUpload = await compressVideoIfNeeded(fileToUpload, (pct) => {
-            toast.loading(`Оптимизация видео (${pct}%)...`, { id: toastId });
+            toast.loading(l({ ru: `Оптимизация видео (${pct}%)...`, kk: `Оптимизация видео (${pct}%)...`, en: `Optimising video (${pct}%)...` }), { id: toastId });
           });
         }
         const url = await uploadProductMedia(fileToUpload, productId, item.type, (pct) => {
           if (item.type === "video") {
-            toast.loading(`Загрузка видео (${pct}%)...`, { id: toastId });
+            toast.loading(l({ ru: `Загрузка видео (${pct}%)...`, kk: `Загрузка видео (${pct}%)...`, en: `Uploading video (${pct}%)...` }), { id: toastId });
           }
         });
         toast.dismiss(toastId);
         return url;
       } catch (err: any) {
         toast.dismiss(toastId);
-        toast.error(err?.message || `Ошибка загрузки ${item.type === "video" ? "видео" : "фото"}`);
+        toast.error(err?.message || (item.type === "video" ? l({ ru: "Ошибка загрузки видео", kk: "Ошибка загрузки видео", en: "Couldn't upload the video" }) : l({ ru: "Ошибка загрузки фото", kk: "Ошибка загрузки фото", en: "Couldn't upload the photo" })));
         throw err;
       }
     },
@@ -2749,11 +2754,11 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
 
     try {
       await deleteProduct.mutateAsync(deletingProduct.id);
-      toast.success("Продукт удалён!");
+      toast.success(l({ ru: "Продукт удалён!", kk: "Продукт удалён!", en: "Product deleted!" }));
       setDeletingProduct(null);
     } catch (error: any) {
       console.error("Delete product error:", error);
-      toast.error(error?.message || "Ошибка при удалении продукта");
+      toast.error(error?.message || l({ ru: "Ошибка при удалении продукта", kk: "Ошибка при удалении продукта", en: "Couldn't delete the product" }));
     }
   };
 
@@ -2817,7 +2822,7 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
         <DialogContent className="flex w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden overflow-x-hidden min-w-0 h-[85vh] sm:w-full lg:h-[92vh] lg:w-[96vw] lg:max-w-[1600px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {isCroppingMedia ? "Настройка обложки" : isCreating ? "Создать продукт" : `${t("edit")} продукт`}
+              {isCroppingMedia ? l({ ru: "Настройка обложки", kk: "Настройка обложки", en: "Adjust the cover" }) : isCreating ? l({ ru: "Создать продукт", kk: "Создать продукт", en: "Create product" }) : l({ ru: "Редактировать продукт", kk: "Редактировать продукт", en: "Edit product" })}
               <AutoSaveIndicator status={autoSave.status} />
             </DialogTitle>
           </DialogHeader>
@@ -2844,9 +2849,9 @@ const CreatorProductsTab = ({ creatorName }: CreatorProductsTabProps) => {
       <AlertDialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
+            <AlertDialogTitle>{l({ ru: "Удалить продукт?", kk: "Удалить продукт?", en: "Delete this product?" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы уверены, что хотите удалить "{deletingProduct?.title}"? Это действие нельзя отменить.
+              {l({ ru: `Вы уверены, что хотите удалить "${deletingProduct?.title ?? ""}"? Это действие нельзя отменить.`, kk: `Вы уверены, что хотите удалить "${deletingProduct?.title ?? ""}"? Это действие нельзя отменить.`, en: `Are you sure you want to delete "${deletingProduct?.title ?? ""}"? This cannot be undone.` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

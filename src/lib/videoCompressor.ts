@@ -1,3 +1,4 @@
+import { UploadCancelledError, isUploadCancelled } from "@/lib/uploadCancelled";
 import {
   Input,
   Output,
@@ -39,7 +40,7 @@ export async function compressVideoIfNeeded(
   }
 
   if (signal?.aborted) {
-    throw new Error("Загрузка отменена");
+    throw new UploadCancelledError();
   }
 
   try {
@@ -123,13 +124,13 @@ export async function compressVideoIfNeeded(
 
     // Проверяем сигнал отмены перед запуском
     if (signal?.aborted) {
-      throw new Error("Загрузка отменена");
+      throw new UploadCancelledError();
     }
 
     await conversion.execute();
 
     if (signal?.aborted) {
-      throw new Error("Загрузка отменена");
+      throw new UploadCancelledError();
     }
 
     const buffer = output.target.buffer;
@@ -152,10 +153,10 @@ export async function compressVideoIfNeeded(
     onProgress?.(100);
     return compressedFile;
   } catch (err: any) {
-    if (signal?.aborted || err?.message === "Загрузка отменена") {
+    if (signal?.aborted || isUploadCancelled(err)) {
       throw err;
     }
-    console.warn("Сжатие видео не удалось, отправляем оригинал:", err);
+    console.warn("Video compression failed, sending the original:", err);
     return file;
   }
 }

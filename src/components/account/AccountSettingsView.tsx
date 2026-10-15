@@ -31,7 +31,7 @@ import BioSettingsCard from "@/components/account/BioSettingsCard";
 import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
 import { format, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
+import { dateLocale } from "@/lib/dateLocale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -230,11 +230,11 @@ export const AccountSettingsView = ({
     if (!createdAt) return null;
     try {
       const date = typeof createdAt === "string" ? parseISO(createdAt) : createdAt;
-      return format(date, "LLLL yyyy", { locale: ru });
+      return format(date, "LLLL yyyy", { locale: dateLocale(language) });
     } catch {
       return null;
     }
-  }, [createdAt]);
+  }, [createdAt, language]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -328,11 +328,11 @@ export const AccountSettingsView = ({
                             <div className="flex items-start justify-between">
                               <div>
                                 <h3 className="font-medium text-foreground">
-                                  {purchase.product?.title || "Продукт"}
+                                  {purchase.product?.title || l({ ru: "Продукт", kk: "Өнім", en: "Product" })}
                                 </h3>
                                 <p className="text-sm text-muted-foreground mt-1">
                                   {t("purchased")}{" "}
-                                  {format(parseISO(purchase.created_at), "d MMMM yyyy", { locale: ru })}
+                                  {format(parseISO(purchase.created_at), "d MMMM yyyy", { locale: dateLocale(language) })}
                                 </p>
                               </div>
                               <span className="text-sm font-medium text-foreground">

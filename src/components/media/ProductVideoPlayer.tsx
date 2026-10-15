@@ -86,6 +86,7 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
   onPause,
   onEnded,
 }) => {
+  const { l } = useLanguage();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Фактический источник для воспроизведения: если скачали в Blob, используем его
@@ -146,12 +147,12 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
     try {
       await videoEl.play();
     } catch (err) {
-      console.warn("Воспроизведение со звуком заблокировано браузером, пробуем без звука:", err);
+      console.warn("Playback with sound was blocked by the browser, retrying muted:", err);
       try {
         videoEl.muted = true;
         await videoEl.play();
       } catch (e2) {
-        console.error("Ошибка запуска видео:", e2);
+        console.error("Video failed to start:", e2);
         setIsLoading(false);
         setIsPlaying(false);
       }
@@ -198,7 +199,7 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
         }
       });
     } catch (err) {
-      console.error("Ошибка подготовки видео:", err);
+      console.error("Video failed to prepare:", err);
       if (videoRef.current) {
         startVideoPlayback(videoRef.current);
       }
@@ -288,9 +289,9 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
           <p className="text-xs font-medium text-white/90">
             {isLoading
               ? (downloadProgress > 0 && downloadProgress < 100
-                  ? `Загрузка видео (${downloadProgress}%)...`
-                  : "Загрузка видео...")
-              : "Буферизация..."}
+                  ? l({ ru: `Загрузка видео (${downloadProgress}%)...`, kk: `Загрузка видео (${downloadProgress}%)...`, en: `Loading video (${downloadProgress}%)...` })
+                  : l({ ru: "Загрузка видео...", kk: "Загрузка видео...", en: "Loading video..." }))
+              : l({ ru: "Буферизация...", kk: "Буферизация...", en: "Buffering..." })}
           </p>
         </div>
       )}

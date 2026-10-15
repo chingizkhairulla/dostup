@@ -107,12 +107,13 @@ function accountHrefForProfileType(profileType: string | null | undefined) {
 }
 
 export function ActiveProfileAvatar({ className }: { className?: string }) {
+  const { l } = useLanguage();
   const { profiles, user } = useSimpleAuth();
   const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") || "" : "";
   const storedName = typeof window !== "undefined" ? localStorage.getItem("profile_display_name") || localStorage.getItem("creator_name") || "" : "";
   const activeProfile =
     profiles.find((profile) => profile.id === activeProfileId) ?? profilesInSidebarOrder(profiles)[0];
-  const displayName = (activeProfile ? profileDisplayLabel(activeProfile) : "") || user?.name || storedName || "П";
+  const displayName = (activeProfile ? profileDisplayLabel(activeProfile) : "") || user?.name || storedName || l({ ru: "П", kk: "П", en: "U" });
   const avatarUrl = activeProfile?.avatarUrl || null;
 
   return (

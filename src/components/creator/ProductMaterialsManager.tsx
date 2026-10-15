@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useProductMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial, uploadMaterialFile } from "@/hooks/useMaterials";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { countEn, localeTag } from "@/lib/language";
 import { Plus, FileText, Folder, Trash2, Edit, Loader2, Upload, GripVertical, ChevronLeft, FolderOpen, Download, X, Clock, Link as LinkIcon, Type, Clipboard } from "lucide-react";
 import { ExternalLink, ChevronRight, ChevronDown, Home } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,7 +142,7 @@ interface FormData {
       ...prev,
       fileEntries: [...prev.fileEntries, ...newEntries]
     }));
-    toast.success(arr.length > 1 ? `Добавлено файлов: ${arr.length}` : "Файл добавлен");
+    toast.success(arr.length > 1 ? l({ ru: `Добавлено файлов: ${arr.length}`, kk: `Добавлено файлов: ${arr.length}`, en: `Files added: ${arr.length}` }) : l({ ru: "Файл добавлен", kk: "Файл добавлен", en: "File added" }));
   }, []);
 
   const getFilesFromClipboard = useCallback((clipboardData: DataTransfer | null): File[] => {
@@ -243,22 +244,22 @@ interface FormData {
       e.preventDefault();
       
       if (formData.itemType === "folder" && !formData.title) {
-        toast.error("Введите название папки");
+        toast.error(l({ ru: "Введите название папки", kk: "Қалта атын енгізіңіз", en: "Enter the folder name" }));
         return;
       }
       
       if (formData.itemType === "file" && formData.fileEntries.length === 0) {
-        toast.error("Выберите файл(ы)");
+        toast.error(l({ ru: "Выберите файл(ы)", kk: "Файл(дар)ды таңдаңыз", en: "Choose the file or files" }));
         return;
       }
 
       if (formData.itemType === "link" && !formData.linkUrl.trim()) {
-        toast.error("Введите ссылку или текст");
+        toast.error(l({ ru: "Введите ссылку или текст", kk: "Введите ссылку или текст", en: "Enter a link or text" }));
         return;
       }
 
       if (formData.itemType === "text" && !formData.content) {
-        toast.error("Введите текст");
+        toast.error(l({ ru: "Введите текст", kk: "Введите текст", en: "Enter text" }));
         return;
       }
 
@@ -293,7 +294,7 @@ interface FormData {
                 ? new Date(formData.availableAt).toISOString()
                 : null,
             });
-            toast.success("Ссылка добавлена!");
+            toast.success(l({ ru: "Ссылка добавлена!", kk: "Сілтеме қосылды!", en: "Link added!" }));
           } else {
             await createMaterial.mutateAsync({
               product_id: productId,
@@ -307,7 +308,7 @@ interface FormData {
                 ? new Date(formData.availableAt).toISOString()
                 : null,
             });
-            toast.success("Текст добавлен!");
+            toast.success(l({ ru: "Текст добавлен!", kk: "Мәтін қосылды!", en: "Text added!" }));
           }
         } else if (formData.itemType === "text") {
           await createMaterial.mutateAsync({
@@ -322,7 +323,7 @@ interface FormData {
               ? new Date(formData.availableAt).toISOString() 
               : null,
           });
-          toast.success("Текст добавлен!");
+          toast.success(l({ ru: "Текст добавлен!", kk: "Мәтін қосылды!", en: "Text added!" }));
         } else if (formData.itemType === "folder") {
           // Create folder
           const folder = await createMaterial.mutateAsync({
@@ -356,7 +357,7 @@ interface FormData {
             }
           }
 
-          toast.success(`Папка "${formData.title}" создана!`);
+          toast.success(l({ ru: `Папка "${formData.title}" создана!`, kk: `Папка "${formData.title}" создана!`, en: `Folder "${formData.title}" created!` }));
         } else {
           // Upload files
            for (let i = 0; i < formData.fileEntries.length; i++) {
@@ -381,7 +382,7 @@ interface FormData {
                 file_size: entry.file.size,
               });
            }
-          toast.success(formData.fileEntries.length > 1 ? "Файлы добавлены!" : "Файл добавлен!");
+          toast.success(formData.fileEntries.length > 1 ? l({ ru: "Файлы добавлены!", kk: "Файлы добавлены!", en: "Files added!" }) : l({ ru: "Файл добавлен!", kk: "Файл добавлен!", en: "File added!" }));
         }
 
         setIsAdding(false);
@@ -391,7 +392,7 @@ interface FormData {
         }
       } catch (err) {
         console.error(err);
-        toast.error("Ошибка при добавлении");
+        toast.error(l({ ru: "Ошибка при добавлении", kk: "Қосу кезінде қате", en: "Could not add" }));
       } finally {
         setIsUploading(false);
       }
@@ -440,12 +441,12 @@ interface FormData {
 
           await updateMaterial.mutateAsync(updateData);
   
-       toast.success("Изменения сохранены!");
+       toast.success(l({ ru: "Изменения сохранены!", kk: "Өзгерістер сақталды!", en: "Changes saved!" }));
         setEditingId(null);
         resetForm();
       } catch (err) {
         console.error(err);
-        toast.error("Ошибка при обновлении");
+        toast.error(l({ ru: "Ошибка при обновлении", kk: "Жаңарту кезінде қате", en: "Could not update" }));
       }
     };
  
@@ -458,11 +459,11 @@ interface FormData {
          productId: productId,
          file_url: deletingMaterial.file_url,
        });
-       toast.success("Удалено!");
+       toast.success(l({ ru: "Удалено!", kk: "Жойылды!", en: "Deleted!" }));
        setDeletingMaterial(null);
      } catch (err) {
        console.error(err);
-       toast.error("Ошибка при удалении");
+       toast.error(l({ ru: "Ошибка при удалении", kk: "Жою кезінде қате", en: "Could not delete" }));
      }
    };
  
@@ -493,7 +494,7 @@ interface FormData {
 
   const handleOfficeView = useCallback(async (material: Material) => {
     if (!material.file_url) return;
-    const loadingToast = toast.loading("Подготовка файла...");
+    const loadingToast = toast.loading(l({ ru: "Подготовка файла...", kk: "Файл дайындалуда...", en: "Preparing the file..." }));
     try {
       const token = await requestMaterialToken(material.file_url, 'creator');
       const proxyUrl = buildProxyUrl(token);
@@ -502,7 +503,7 @@ interface FormData {
     } catch (err) {
       console.error('Error opening office doc:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(`Ошибка: ${errMsg}`);
+      toast.error(l({ ru: `Ошибка: ${errMsg}`, kk: `Ошибка: ${errMsg}`, en: `Error: ${errMsg}` }));
     } finally {
       toast.dismiss(loadingToast);
     }
@@ -547,7 +548,7 @@ interface FormData {
                       type="button"
                       onClick={(e) => { e.stopPropagation(); togglePickerFolder(f.id); }}
                       className="p-1 flex-shrink-0 hover:opacity-80"
-                      aria-label={expanded ? "Свернуть" : "Развернуть"}
+                      aria-label={expanded ? l({ ru: "Свернуть", kk: "Свернуть", en: "Collapse" }) : l({ ru: "Развернуть", kk: "Жаю", en: "Expand" })}
                     >
                       {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </button>
@@ -628,7 +629,7 @@ interface FormData {
       })()}
 
        <div className="space-y-3">
-         <Label>Что добавить?</Label>
+         <Label>{l({ ru: "Что добавить?", kk: "Нені қосу керек?", en: "What would you like to add?" })}</Label>
           <RadioGroup
             value={formData.itemType}
             onValueChange={(value: ItemType) => setFormData(prev => ({ ...prev, itemType: value, files: [], fileEntries: [] }))}
@@ -638,14 +639,14 @@ interface FormData {
               <RadioGroupItem value="file" id="type-file" />
               <Label htmlFor="type-file" className="cursor-pointer flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Файл
+                {l({ ru: "Файл", kk: "Файл", en: "File" })}
               </Label>
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="folder" id="type-folder" />
               <Label htmlFor="type-folder" className="cursor-pointer flex items-center gap-2">
                 <Folder className="w-4 h-4" />
-                Папка
+                {l({ ru: "Папка", kk: "Қалта", en: "Folder" })}
               </Label>
             </div>
             <div className="flex items-center space-x-2">
@@ -660,9 +661,9 @@ interface FormData {
   
         {formData.itemType === "folder" && (
           <div className="space-y-2">
-            <Label>Название папки *</Label>
+            <Label>{l({ ru: "Название папки *", kk: "Қалта атауы *", en: "Folder name *" })}</Label>
             <Input
-              placeholder="Введите название папки"
+              placeholder={l({ ru: "Введите название папки", kk: "Қалта атын енгізіңіз", en: "Enter the folder name" })}
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               required
@@ -673,7 +674,7 @@ interface FormData {
         {formData.itemType === "link" && (
           <>
           <div className="space-y-2">
-              <Label>Название (необязательно)</Label>
+              <Label>{l({ ru: "Название (необязательно)", kk: "Название (необязательно)", en: "Title (optional)" })}</Label>
               <Input
                 placeholder={l({ ru: "Если пусто — показывается сама ссылка", kk: "Бос болса — сілтеменің өзі көрсетіледі", en: "Leave it empty and the link itself is shown" })}
                 value={formData.title}
@@ -696,8 +697,8 @@ interface FormData {
         {(formData.itemType === "file" || formData.itemType === "folder") && <div className="space-y-2">
           <Label>
             {formData.itemType === "folder" 
-              ? "Файлы в папку (опционально)" 
-              : "Выберите файл(ы) *"}
+              ? l({ ru: "Файлы в папку (опционально)", kk: "Қалтаға файлдар (міндетті емес)", en: "Files for the folder (optional)" }) 
+              : l({ ru: "Выберите файл(ы) *", kk: "Файл(дар)ды таңдаңыз *", en: "Choose the file or files *" })}
           </Label>
          {/* Selected files list */}
          {formData.fileEntries.length > 0 && (
@@ -734,7 +735,7 @@ interface FormData {
                     </Button>
                    </div>
                    <div className="pl-6 space-y-2">
-                     <p className="text-xs font-medium text-muted-foreground">Для ученика:</p>
+                     <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Для ученика:", en: "For the student:" })}</p>
                      <label className="flex items-center gap-2 text-xs cursor-pointer">
                       <Checkbox
                         checked={entry.permissions.allow_download}
@@ -750,7 +751,7 @@ interface FormData {
                         }}
                       />
                       <Download className="w-3 h-3" />
-                      Скачивание
+                      {l({ ru: "Скачивание", kk: "Жүктеу", en: "Downloading" })}
                     </label>
                   </div>
                  </div>
@@ -791,21 +792,21 @@ interface FormData {
                  />
                  <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                  <p className="text-sm text-muted-foreground">
-                   {formData.fileEntries.length > 0 ? "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)" : "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)"}
+                   {formData.fileEntries.length > 0 ? l({ ru: "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)", kk: "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)", en: "Add more file(s) — click, drag and drop, or paste (Ctrl+V)" }) : l({ ru: "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)", kk: "Файлды басып таңдаңыз, сүйреңіз немесе қойыңыз (Ctrl+V)", en: "Click, drag or paste (Ctrl+V) your files" })}
                  </p>
                </div>
              </ContextMenuTrigger>
              <ContextMenuContent>
                <ContextMenuItem onSelect={() => fileInputRef.current?.click()}>
                  <FolderOpen className="w-4 h-4 mr-2" />
-                 Выбрать (из компьютера)
+                 {l({ ru: "Выбрать (из компьютера)", kk: "Выбрать (из компьютера)", en: "Choose (from computer)" })}
                </ContextMenuItem>
                <ContextMenuItem
                  onSelect={async () => {
                    try {
                      const anyNav = navigator as unknown as { clipboard?: { read?: () => Promise<Array<{ types: string[]; getType: (t: string) => Promise<Blob> }>> } };
                      const items = await anyNav.clipboard?.read?.();
-                     if (!items) { toast.error("Буфер обмена недоступен"); return; }
+                     if (!items) { toast.error(l({ ru: "Буфер обмена недоступен", kk: "Буфер обмена недоступен", en: "The clipboard is unavailable" })); return; }
                      const files: File[] = [];
                      for (const item of items) {
                        const type = item.types.find((t) => t !== "text/plain" && t !== "text/html") || item.types[0];
@@ -815,14 +816,14 @@ interface FormData {
                        files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
                      }
                      if (files.length > 0) addFilesToForm(files);
-                     else toast.error("В буфере обмена нет файлов");
+                     else toast.error(l({ ru: "В буфере обмена нет файлов", kk: "В буфере обмена нет файлов", en: "There are no files in the clipboard" }));
                    } catch {
-                     toast.error("Не удалось прочитать буфер. Используйте Cmd+V");
+                     toast.error(l({ ru: "Не удалось прочитать буфер. Используйте Cmd+V", kk: "Не удалось прочитать буфер. Используйте Cmd+V", en: "Couldn't read the clipboard. Use Cmd+V" }));
                    }
                  }}
                >
                  <Clipboard className="w-4 h-4 mr-2" />
-                 Вставить
+                 {l({ ru: "Вставить", kk: "Вставить", en: "Paste" })}
                </ContextMenuItem>
              </ContextMenuContent>
            </ContextMenu>
@@ -841,7 +842,7 @@ interface FormData {
               }}
             />
             <Clock className="w-4 h-4" />
-            Запланировать открытие доступа
+            {l({ ru: "Запланировать открытие доступа", kk: "Запланировать открытие доступа", en: "Schedule when access opens" })}
           </label>
           {formData.scheduleAccess && (
             <Input
@@ -876,7 +877,7 @@ interface FormData {
             {(isUploading || createMaterial.isPending) ? (
               <span className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {isUploading && uploadProgress > 0 ? `${uploadProgress}%` : 'Загрузка...'}
+                {isUploading && uploadProgress > 0 ? `${uploadProgress}%` : l({ ru: "Загрузка...", kk: "Жүктелуде...", en: "Loading..." })}
               </span>
             ) : (
              t("add")
@@ -892,9 +893,9 @@ interface FormData {
    const renderEditForm = () => (
      <form onSubmit={handleUpdate} className="space-y-4">
        <div className="space-y-2">
-         <Label>Название *</Label>
+         <Label>{l({ ru: "Название *", kk: "Атауы *", en: "Title *" })}</Label>
          <Input
-           placeholder="Введите название"
+           placeholder={l({ ru: "Введите название", kk: "Атауын енгізіңіз", en: "Enter a title" })}
            value={formData.title}
            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
            required
@@ -903,16 +904,16 @@ interface FormData {
  
       {formData.itemType === "file" && (
         <div className="space-y-3">
-          <Label>Доступ</Label>
+          <Label>{l({ ru: "Доступ", kk: "Доступ", en: "Access" })}</Label>
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-muted-foreground">Для ученика:</p>
+            <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Для ученика:", en: "For the student:" })}</p>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox
                 checked={formData.allow_download}
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allow_download: !!checked }))}
               />
               <Download className="w-4 h-4" />
-              Скачивание файла
+              {l({ ru: "Скачивание файла", kk: "Скачивание файла", en: "File download" })}
             </label>
            </div>
          </div>
@@ -920,7 +921,7 @@ interface FormData {
 
       {formData.itemType === "link" && editingId && (
         <div className="space-y-2">
-          <Label>URL ссылки *</Label>
+          <Label>{l({ ru: "URL ссылки *", kk: "URL сілтемесі *", en: "Link URL *" })}</Label>
           <Input
             placeholder="https://..."
             value={formData.linkUrl}
@@ -932,9 +933,9 @@ interface FormData {
 
       {formData.itemType === "text" && editingId && (
         <div className="space-y-2">
-          <Label>Текст *</Label>
+          <Label>{l({ ru: "Текст *", kk: "Мәтін *", en: "Text *" })}</Label>
           <Textarea
-            placeholder="Введите текст..."
+            placeholder={l({ ru: "Введите текст...", kk: "Мәтін енгізіңіз...", en: "Enter the text..." })}
             value={formData.content}
             onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
             rows={4}
@@ -957,7 +958,7 @@ interface FormData {
                 }}
              />
              <Clock className="w-4 h-4" />
-             Запланировать открытие доступа
+             {l({ ru: "Запланировать открытие доступа", kk: "Запланировать открытие доступа", en: "Schedule when access opens" })}
            </label>
            {formData.scheduleAccess && (
              <Input
@@ -989,7 +990,7 @@ interface FormData {
            {updateMaterial.isPending ? (
              <span className="flex items-center gap-2">
                <Loader2 className="w-4 h-4 animate-spin" />
-               Сохранение...
+               {l({ ru: "Сохранение...", kk: "Сохранение...", en: "Saving..." })}
              </span>
            ) : (
              t("save")
@@ -1026,7 +1027,7 @@ interface FormData {
                             className="h-auto p-1"
                           >
                             <ChevronLeft className="w-4 h-4 mr-1" />
-                            Назад
+                            {l({ ru: "Назад", kk: "Артқа", en: "Back" })}
                           </Button>
                           <span className="text-muted-foreground">/</span>
                         </>
@@ -1046,7 +1047,7 @@ interface FormData {
                                     toast.success(l({ ru: "Сохранено", kk: "Сақталды", en: "Saved" }));
                                     setRenamingFolder(false);
                                   } catch {
-                                    toast.error("Ошибка");
+                                    toast.error(l({ ru: "Ошибка", kk: "Қате", en: "Error" }));
                                   }
                                 }}
                                 className="flex items-center gap-1"
@@ -1138,12 +1139,12 @@ interface FormData {
                   ) : currentFolderId ? (
                    <>
                      <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                     <p>Папка пуста</p>
+                     <p>{l({ ru: "Папка пуста", kk: "Папка пуста", en: "The folder is empty" })}</p>
                    </>
                  ) : (
                    <>
                      <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                     <p>Материалов пока нет</p>
+                     <p>{l({ ru: "Материалов пока нет", kk: "Материалов пока нет", en: "No materials yet" })}</p>
                    </>
                  )}
                </div>
@@ -1173,12 +1174,12 @@ interface FormData {
                                     <p className="font-medium text-sm truncate" title={material.title}>{material.title}</p>
                                     <p className="text-xs text-muted-foreground truncate">
                                       {material.type === "folder" 
-                                        ? `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`
+                                        ? l({ ru: `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`, kk: `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`, en: `Folder • ${countEn((allMaterials as Material[]).filter(m => m.parent_id === material.id).length, "item")}` })
                                         : material.type === "link"
-                                        ? "Ссылка"
+                                        ? l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })
                                         : material.type === "text"
-                                        ? "Текст"
-                                        : `Файл • уч: ${material.allow_download !== false ? 'скач.' : '—'} • учит: ${material.teacher_allow_download !== false ? 'скач.' : '—'}${material.available_at ? ` • 🕐 ${new Date(material.available_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} ${new Date(material.available_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                                        ? l({ ru: "Текст", kk: "Мәтін", en: "Text" })
+                                        : `${l({ ru: "Файл • уч:", kk: "Файл • уч:", en: "File • student:" })} ${material.allow_download !== false ? l({ ru: "скач.", kk: "скач.", en: "download" }) : '—'} • ${l({ ru: "учит:", kk: "учит:", en: "teacher:" })} ${material.teacher_allow_download !== false ? l({ ru: "скач.", kk: "скач.", en: "download" }) : '—'}${material.available_at ? ` • 🕐 ${new Date(material.available_at).toLocaleDateString(localeTag(language), { day: '2-digit', month: '2-digit' })} ${new Date(material.available_at).toLocaleTimeString(localeTag(language), { hour: '2-digit', minute: '2-digit' })}` : ''}`
                                       }
                                    </p>
                                  </div>
@@ -1190,7 +1191,7 @@ interface FormData {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-7 w-7 sm:h-8 sm:w-8"
-                                    title="Открыть ссылку"
+                                    title={l({ ru: "Открыть ссылку", kk: "Сілтемені ашу", en: "Open the link" })}
                                   >
                                     <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                   </a>
@@ -1205,7 +1206,7 @@ interface FormData {
                                         <a
                                           href={dlUrl}
                                           className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-7 w-7 sm:h-8 sm:w-8"
-                                          title="Скачать"
+                                          title={l({ ru: "Скачать", kk: "Жүктеу", en: "Download" })}
                                         >
                                           <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </a>
@@ -1216,7 +1217,7 @@ interface FormData {
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-7 w-7 sm:h-8 sm:w-8"
-                                          title="Открыть в браузере"
+                                          title={l({ ru: "Открыть в браузере", kk: "Браузерде ашу", en: "Open in the browser" })}
                                         >
                                           <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </a>
@@ -1226,7 +1227,7 @@ interface FormData {
                                           size="icon" 
                                           className="h-7 w-7 sm:h-8 sm:w-8"
                                           onClick={() => handleOfficeView(material)}
-                                          title="Открыть в браузере"
+                                          title={l({ ru: "Открыть в браузере", kk: "Браузерде ашу", en: "Open in the browser" })}
                                         >
                                           <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         </Button>
@@ -1266,11 +1267,11 @@ interface FormData {
        <AlertDialog open={!!deletingMaterial} onOpenChange={(open) => { if (!open) setDeletingMaterial(null); }}>
          <AlertDialogContent>
            <AlertDialogHeader>
-             <AlertDialogTitle>Удалить?</AlertDialogTitle>
+             <AlertDialogTitle>{l({ ru: "Удалить?", kk: "Жою керек пе?", en: "Delete?" })}</AlertDialogTitle>
              <AlertDialogDescription>
-               Вы уверены, что хотите удалить "{deletingMaterial?.title}"? 
+               {l({ ru: `Вы уверены, что хотите удалить "${deletingMaterial?.title ?? ""}"?`, kk: `Вы уверены, что хотите удалить "${deletingMaterial?.title ?? ""}"?`, en: `Are you sure you want to delete "${deletingMaterial?.title ?? ""}"?` })}
                {(allMaterials as Material[]).find(m => m.id === deletingMaterial?.id)?.type === "folder" && 
-                 " Все файлы внутри папки также будут удалены."
+                 l({ ru: " Все файлы внутри папки также будут удалены.", kk: " Все файлы внутри папки также будут удалены.", en: " All files inside the folder will be deleted too." })
                }
              </AlertDialogDescription>
            </AlertDialogHeader>

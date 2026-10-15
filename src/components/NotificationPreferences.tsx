@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Bell, BellOff, Loader2 } from "lucide-react";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/language";
 import { toast } from "sonner";
 
 interface NotificationPreferencesProps {
@@ -37,7 +38,19 @@ const NotificationPreferences = ({ userId }: NotificationPreferencesProps) => {
   const [localPrefs, setLocalPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [noReminders, setNoReminders] = useState(false);
 
-  const translations = {
+  // Typed by Language so a language without its block cannot compile.
+  const translations: Record<Language, Record<string, string>> = {
+    en: {
+      title: "Lesson reminder settings",
+      reminder24h: "24 hours before the lesson",
+      reminderMorning: "In the morning on the day of the lesson",
+      reminder2h: "2 hours before the lesson",
+      noReminders: "No reminders",
+      morningTimeLabel: "Morning reminder time",
+      saved: "Settings saved",
+      saveFailed: "Couldn't save",
+      morningNote: "One notification for all of the day's lessons",
+    },
     ru: {
       title: "Настройки напоминаний об уроке",
       reminder24h: "За 24 часа до урока",

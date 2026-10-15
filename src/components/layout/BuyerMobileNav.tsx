@@ -54,7 +54,7 @@ const BuyerMobileNav = ({ activeTab, onTabChange }: BuyerMobileNavProps) => {
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            aria-label={t("navProfiles") || "Профиль"}
+            aria-label={t("navProfiles")}
             className="flex items-center justify-center h-full"
           >
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors text-muted-foreground hover:bg-accent/50">

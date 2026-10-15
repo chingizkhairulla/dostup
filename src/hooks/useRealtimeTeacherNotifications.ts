@@ -339,7 +339,7 @@ export const useRealtimeTeacherNotifications = (
           const title = isApproved
             ? (l({ ru: "Ученик подтвердил перенос ✅", kk: "Оқушы ауыстыруды растады ✅", en: "The student confirmed the reschedule ✅" }))
             : (l({ ru: "Ученик отклонил перенос ❌", kk: "Оқушы ауыстыруды қабылдамады ❌", en: "The student rejected the reschedule ❌" }));
-          const description = l({ ru: `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}`, kk: `"${request.product_title}" ${isApproved ? `${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды` : "ауыстыру қабылданбады"}`, en: `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}` });
+          const description = l({ ru: `"${request.product_title}" ${isApproved ? `перенесён на ${request.new_date} ${request.new_time?.slice(0, 5)}` : "перенос отклонён"}`, kk: `"${request.product_title}" ${isApproved ? `${request.new_date} ${request.new_time?.slice(0, 5)} күніне ауыстырылды` : "ауыстыру қабылданбады"}`, en: `"${request.product_title}" ${isApproved ? `moved to ${request.new_date} ${request.new_time?.slice(0, 5)}` : "reschedule rejected"}` });
 
           toast[isApproved ? "success" : "warning"](title, { description, duration: 10000 });
 

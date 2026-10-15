@@ -374,7 +374,7 @@ export const useRealtimeBookingNotifications = (
           } else if (updated.status === "rejected") {
             const title = l({ ru: "Перенос отклонён", kk: "Ауыстыру қабылданбады", en: "Reschedule rejected" });
             const responseComment = updated.response_comment || "";
-            const description = l({ ru: `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}`, kk: `${studentName} "${updated.product_title}" ауыстыруды қабылдамады${responseComment ? `: "${responseComment}"` : ""}`, en: `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}` });
+            const description = l({ ru: `${studentName} отклонил перенос "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}`, kk: `${studentName} "${updated.product_title}" ауыстыруды қабылдамады${responseComment ? `: "${responseComment}"` : ""}`, en: `${studentName} rejected moving "${updated.product_title}"${responseComment ? `: "${responseComment}"` : ""}` });
             toast.warning(title, { description, duration: 10000 });
           }
 

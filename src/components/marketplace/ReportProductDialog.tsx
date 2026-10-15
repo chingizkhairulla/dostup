@@ -18,25 +18,22 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { Translated } from "@/lib/language";
 
 // The reason is sent in Russian whatever the reader's language: it is read by
-// moderators, whose dashboard is Russian-only. Only the label is translated.
-const REPORT_REASONS: { value: string; label: Translated }[] = [
-  { value: "Мошенничество или обман", label: { ru: "Мошенничество или обман", kk: "Алаяқтық немесе алдау", en: "Fraud or deception" } },
-  { value: "Нарушение авторских прав", label: { ru: "Нарушение авторских прав", kk: "Авторлық құқықты бұзу", en: "Copyright infringement" } },
+// moderators, whose dashboard is Russian-only. Only the label is translated,
+// and the value sent is that label's Russian text, so the two cannot drift.
+const REASON_LABELS: Translated[] = [
+  { ru: "Мошенничество или обман", kk: "Алаяқтық немесе алдау", en: "Fraud or deception" },
+  { ru: "Нарушение авторских прав", kk: "Авторлық құқықты бұзу", en: "Copyright infringement" },
   {
-    value: "Несоответствие описанию / некачественный контент",
-    label: {
-      ru: "Несоответствие описанию / некачественный контент",
-      kk: "Сипаттамаға сәйкес келмейді / сапасыз контент",
-      en: "Not as described / poor-quality content",
-    },
+    ru: "Несоответствие описанию / некачественный контент",
+    kk: "Сипаттамаға сәйкес келмейді / сапасыз контент",
+    en: "Not as described / poor-quality content",
   },
-  {
-    value: "Запрещенный или оскорбительный материал",
-    label: { ru: "Запрещенный или оскорбительный материал", kk: "Тыйым салынған немесе қорлайтын материал", en: "Prohibited or offensive material" },
-  },
-  { value: "Спам или ввод в заблуждение", label: { ru: "Спам или ввод в заблуждение", kk: "Спам немесе жаңылыстыру", en: "Spam or misleading" } },
-  { value: "Другая причина", label: { ru: "Другая причина", kk: "Басқа себеп", en: "Other reason" } },
+  { ru: "Запрещенный или оскорбительный материал", kk: "Тыйым салынған немесе қорлайтын материал", en: "Prohibited or offensive material" },
+  { ru: "Спам или ввод в заблуждение", kk: "Спам немесе жаңылыстыру", en: "Spam or misleading" },
+  { ru: "Другая причина", kk: "Басқа себеп", en: "Other reason" },
 ];
+
+const REPORT_REASONS = REASON_LABELS.map((label) => ({ value: label.ru, label }));
 
 interface ReportProductDialogProps {
   productId: string;

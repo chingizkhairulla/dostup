@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
+import { dateLocale } from "@/lib/dateLocale";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import RejectRescheduleDialog from "@/components/RejectRescheduleDialog";
@@ -341,7 +341,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         {l({ ru: "записался на", kk: "жазылды", en: "booked" })} {booking.schedule?.product?.title || booking.schedule?.title}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: ru })}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: dateLocale(language) })}</span>
                         <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{booking.time_slot?.start_time?.slice(0, 5)}</span>
                       </div>
                     </div>
@@ -379,7 +379,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         </div>
                       )}
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{cancellation.slot_date && format(parseISO(cancellation.slot_date), "d MMM", { locale: ru })}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{cancellation.slot_date && format(parseISO(cancellation.slot_date), "d MMM", { locale: dateLocale(language) })}</span>
                         <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{cancellation.slot_time?.slice(0, 5)}</span>
                       </div>
                     </div>

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Paperclip, Send, Loader2, X, FileText, Play } from "lucide-react";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
 import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props {
   productId: string;
@@ -76,7 +77,9 @@ const buildHtml = (text: string, attachments: Attachment[]) => {
   return parts.join("");
 };
 
-const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, saving, submitLabel = "Опубликовать" }: Props) => {
+const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, saving, submitLabel: submitLabelProp }: Props) => {
+  const { l } = useLanguage();
+  const submitLabel = submitLabelProp ?? l({ ru: "Опубликовать", kk: "Опубликовать", en: "Publish" });
   const initial = parseInitial(initialHtml);
   const [text, setText] = useState(initial.text);
   const [attachments, setAttachments] = useState<Attachment[]>(initial.attachments);
@@ -115,7 +118,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
         ]);
       } catch (e) {
         console.error(e);
-        toast.error(`Не удалось загрузить ${file.name}`);
+        toast.error(l({ ru: `Не удалось загрузить ${file.name}`, kk: `Не удалось загрузить ${file.name}`, en: `Couldn't upload ${file.name}` }));
       } finally {
         setUploading((n) => n - 1);
       }
@@ -162,7 +165,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
                 type="button"
                 onClick={() => removeAttachment(a.id)}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center shadow"
-                aria-label="Удалить"
+                aria-label={l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -183,7 +186,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
           className="shrink-0 h-9 w-9"
           onClick={handlePickFiles}
           disabled={saving}
-          title="Прикрепить файл"
+          title={l({ ru: "Прикрепить файл", kk: "Прикрепить файл", en: "Attach a file" })}
         >
           <Paperclip className="w-5 h-5" />
         </Button>
@@ -198,7 +201,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
             }
           }}
           rows={1}
-          placeholder="Напишите сообщение..."
+          placeholder={l({ ru: "Напишите сообщение...", kk: "Напишите сообщение...", en: "Write a message..." })}
           className="flex-1 resize-none bg-transparent outline-none px-2 py-2 text-sm leading-5 max-h-60"
         />
         <Button
@@ -225,7 +228,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
       {onCancel && (
         <div className="flex justify-end border-t px-2 py-1.5">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
-            Отмена
+            {l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}
           </Button>
         </div>
       )}

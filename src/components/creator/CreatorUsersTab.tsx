@@ -166,11 +166,11 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
-      toast.success(t("accessRevoked") || "Доступ закрыт");
+      toast.success(t("accessRevoked"));
       setRevokeDialog(null);
     },
     onError: () => {
-      toast.error("Ошибка при закрытии доступа");
+      toast.error(l({ ru: "Ошибка при закрытии доступа", kk: "Ошибка при закрытии доступа", en: "Couldn't close access" }));
     },
   });
 
@@ -240,7 +240,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
-          placeholder={t("searchUsers") || "Поиск пользователей..."}
+          placeholder={t("searchUsers")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10 h-12"
@@ -251,7 +251,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">{t("paidUsers")}</h2>
-          <span className="text-sm text-muted-foreground">{filteredCompleted.length} {t("total") || "всего"}</span>
+          <span className="text-sm text-muted-foreground">{filteredCompleted.length} {t("total")}</span>
         </div>
 
         {filteredCompleted.length === 0 && (
@@ -321,7 +321,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                     size="icon"
                     className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
                     onClick={() => setRevokeDialog({ id: purchase.id, name: purchase.simple_user.name })}
-                    title={t("revokeAccess") || "Закрыть доступ"}
+                    title={t("revokeAccess")}
                   >
                     <UserX className="w-3.5 h-3.5" />
                   </Button>
@@ -336,9 +336,9 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       <AlertDialog open={!!revokeDialog} onOpenChange={() => setRevokeDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("revokeAccessTitle") || "Закрыть доступ?"}</AlertDialogTitle>
+            <AlertDialogTitle>{t("revokeAccessTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("revokeAccessDescription") || "Вы уверены, что хотите закрыть доступ пользователю"} <strong>{revokeDialog?.name}</strong>?
+              {t("revokeAccessDescription")} <strong>{revokeDialog?.name}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -350,7 +350,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
               {revokeAccess.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
-              {t("revokeAccess") || "Закрыть доступ"}
+              {t("revokeAccess")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

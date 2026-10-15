@@ -33,6 +33,8 @@ import {
   parseISO 
 } from "date-fns";
 import { ru, enGB } from "date-fns/locale";
+import { dateLocale } from "@/lib/dateLocale";
+import { countEn } from "@/lib/language";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -430,7 +432,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${count} slots created!` }));
+      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
       setIsAddingSlots(false);
       setSelectedScheduleForSlots(null);
     },
@@ -738,7 +740,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
-      toast.success(l({ ru: `Перенесено ${count} слотов на ${manageRescheduleToDate}`, kk: `${count} слот ауыстырылды`, en: `${count} slots moved to ${manageRescheduleToDate}` }));
+      toast.success(l({ ru: `Перенесено ${count} слотов на ${manageRescheduleToDate}`, kk: `${count} слот ауыстырылды`, en: `${countEn(count, "slot")} moved to ${manageRescheduleToDate}` }));
       setIsManagingSlots(false);
       setManageRescheduleFromDate("");
       setManageRescheduleToDate("");
@@ -886,7 +888,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${count} slots created!` }));
+      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
       setIsWizardOpen(false);
     },
     onError: (error: any) => {
@@ -1531,7 +1533,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-xs sm:text-sm font-medium min-w-[140px] text-center">
-                  {format(currentWeekStart, "d MMM", { locale: ru })} – {format(weekEnd, "d MMM yyyy", { locale: ru })}
+                  {format(currentWeekStart, "d MMM", { locale: dateLocale(language) })} – {format(weekEnd, "d MMM yyyy", { locale: dateLocale(language) })}
                 </span>
                 <Button
                   variant="ghost"
@@ -1575,7 +1577,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     }`}
                   >
                     <div className={`text-xs font-semibold ${isSelected ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
-                      {format(day, "EEE", { locale: ru })}
+                      {format(day, "EEE", { locale: dateLocale(language) })}
                     </div>
                     <div className={`text-sm sm:text-base font-bold my-0.5 ${isSelected ? "text-primary-foreground" : "text-foreground"}`}>
                       {format(day, "d")}
@@ -1615,12 +1617,12 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 <Users className="w-4 h-4 text-primary" />
                 {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
                 {(() => {
-                  const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: ru });
+                  const dayTitle = format(selectedDate, "d MMMM, EEEE", { locale: dateLocale(language) });
                   return dayTitle.charAt(0).toUpperCase() + dayTitle.slice(1);
                 })()}
               </CardTitle>
               <Badge variant="secondary">
-                {allSlotsForDay.length} {l({ ru: "слотов", kk: "слот", en: "slots" })}
+                {allSlotsForDay.length} {l({ ru: "слотов", kk: "слот", en: allSlotsForDay.length === 1 ? "slot" : "slots" })}
               </Badge>
             </div>
           </CardHeader>
@@ -1672,7 +1674,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-xs sm:text-sm font-medium min-w-[130px] text-center capitalize">
-                  {format(currentMonth, "LLLL yyyy", { locale: ru })}
+                  {format(currentMonth, "LLLL yyyy", { locale: dateLocale(language) })}
                 </span>
                 <Button
                   variant="ghost"
@@ -1688,7 +1690,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           <CardContent className="pt-0">
             {/* Weekday headers */}
             <div className="grid grid-cols-7 gap-1 mb-2 text-center">
-              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((wd, i) => (
+              {[l({ ru: "Пн", kk: "Дс", en: "Mon" }), l({ ru: "Вт", kk: "Сс", en: "Tue" }), l({ ru: "Ср", kk: "Ср", en: "Wed" }), l({ ru: "Чт", kk: "Бс", en: "Thu" }), l({ ru: "Пт", kk: "Жм", en: "Fri" }), l({ ru: "Сб", kk: "Сн", en: "Sat" }), l({ ru: "Вс", kk: "Жс", en: "Sun" })].map((wd, i) => (
                 <div key={wd} className={`text-xs font-semibold py-1 ${i >= 5 ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
                   {wd}
                 </div>
@@ -1768,7 +1770,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <DialogTitle className="text-base flex items-center gap-2 capitalize">
               <Users className="w-4 h-4 text-primary" />
               {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
-              {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: ru })}
+              {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: dateLocale(language) })}
             </DialogTitle>
           </DialogHeader>
           <div className="pt-2">
@@ -1979,7 +1981,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
             <div className="space-y-4 pt-2">
               <div className="p-3 bg-muted rounded-lg flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">
-                  {format(selectedDate, "d MMMM yyyy", { locale: ru })}
+                  {format(selectedDate, "d MMMM yyyy", { locale: dateLocale(language) })}
                 </span>
                 <Badge variant="default" className="text-xs">
                   {quickAddSlotHour}:00 – {quickAddSlotHour + 1 === 24 ? "00:00" : `${quickAddSlotHour + 1}:00`} ({quickAddSlotHour}–{quickAddSlotHour + 1 === 24 ? "0" : quickAddSlotHour + 1})
@@ -2169,7 +2171,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                             }
                           }}
                         >
-                          {format(new Date(date), "d MMM", { locale: ru })}
+                          {format(new Date(date), "d MMM", { locale: dateLocale(language) })}
                         </Button>
                       );
                     })}
@@ -2215,7 +2217,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                     <SelectContent>
                       {availableDatesForDelete.map((d) => (
                         <SelectItem key={d} value={d}>
-                          {format(new Date(d), "d MMMM yyyy, EEEE", { locale: ru })}
+                          {format(new Date(d), "d MMMM yyyy, EEEE", { locale: dateLocale(language) })}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -2295,7 +2297,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                             }
                           }}
                         >
-                          {format(new Date(date), "d MMM", { locale: ru })}
+                          {format(new Date(date), "d MMM", { locale: dateLocale(language) })}
                         </Button>
                       );
                     })}
@@ -2600,7 +2602,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
           <div className="space-y-4 mt-4">
             <div className="p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground mb-1">
-                {viewingLinkSlot?.date && format(new Date(viewingLinkSlot.date), "d MMMM", { locale: ru })}, {viewingLinkSlot?.start_time.slice(0, 5)} - {viewingLinkSlot?.end_time.slice(0, 5)}
+                {viewingLinkSlot?.date && format(new Date(viewingLinkSlot.date), "d MMMM", { locale: dateLocale(language) })}, {viewingLinkSlot?.start_time.slice(0, 5)} - {viewingLinkSlot?.end_time.slice(0, 5)}
               </p>
               <a 
                 href={viewingLinkSlot?.lesson_link || "#"} 

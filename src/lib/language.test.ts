@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countEn,
   DEFAULT_LANGUAGE,
   LANGUAGES,
   isLanguage,
@@ -60,6 +61,14 @@ describe("locale-aware formatting", () => {
     expect(localeTag("ru")).toBe("ru-RU");
     expect(localeTag("kk")).toBe("kk-KZ");
     expect(localeTag("en")).toBe("en-GB");
+  });
+
+  it("counts in English without writing \"1 slots\"", () => {
+    expect(countEn(1, "slot")).toBe("1 slot");
+    expect(countEn(0, "slot")).toBe("0 slots");
+    expect(countEn(5, "slot")).toBe("5 slots");
+    expect(countEn(1, "person", "people")).toBe("1 person");
+    expect(countEn(3, "person", "people")).toBe("3 people");
   });
 
   it("gives English the one/other split and Russian its own", () => {

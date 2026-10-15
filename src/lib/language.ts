@@ -53,6 +53,16 @@ export function pickLanguage(language: Language, phrase: Translated): string {
   return phrase[language];
 }
 
+/**
+ * One phrase in the language this device chose — for code outside React that
+ * has no `useLanguage()` to call (upload helpers, validators, error messages).
+ * Such files import it as `l`, so a phrase reads the same everywhere and the
+ * i18n scripts, which look for `l({ … })`, see these too.
+ */
+export function inDeviceLanguage(phrase: Translated): string {
+  return pickLanguage(storedLanguage(), phrase);
+}
+
 /** BCP 47 tag for Intl / toLocaleDateString. */
 export function localeTag(language: Language): string {
   return LANGUAGES.find((entry) => entry.code === language)?.locale ?? "ru-RU";
@@ -65,4 +75,12 @@ export function localeTag(language: Language): string {
  */
 export function pluralForm(language: Language, count: number): Intl.LDMLPluralRule {
   return new Intl.PluralRules(localeTag(language)).select(count);
+}
+
+/**
+ * "1 slot", "5 slots" — for the English slot of a counted phrase, which
+ * otherwise reads "1 slots". The plural defaults to the singular plus "s".
+ */
+export function countEn(count: number, one: string, other: string = `${one}s`): string {
+  return `${count} ${count === 1 ? one : other}`;
 }

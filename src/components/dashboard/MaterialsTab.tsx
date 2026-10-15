@@ -73,6 +73,7 @@ interface VideoPlayerProps {
 }
 
 const VideoPlayer = ({ url, onClose }: VideoPlayerProps) => {
+  const { l } = useLanguage();
   const youtubeId = getYouTubeVideoId(url);
   const vimeoId = getVimeoVideoId(url);
   const isDirectVideo = isDirectVideoUrl(url);
@@ -115,7 +116,7 @@ const VideoPlayer = ({ url, onClose }: VideoPlayerProps) => {
         )}
         {!youtubeId && !vimeoId && !isDirectVideo && (
           <div className="w-full h-full flex items-center justify-center text-white">
-            <p>Видео недоступно для встроенного просмотра</p>
+            <p>{l({ ru: "Видео недоступно для встроенного просмотра", kk: "Видео недоступно для встроенного просмотра", en: "This video can't be played here" })}</p>
           </div>
         )}
       </div>
@@ -316,7 +317,7 @@ const MaterialsTab = () => {
   const teacherMaterials = materials?.filter(m => m.is_teacher_material && !m.parent_id) || [];
 
   const groupCreatorMaterials = creatorMaterials.reduce((acc, material) => {
-    const productTitle = material.product?.title || "Продукт";
+    const productTitle = material.product?.title || l({ ru: "Продукт", kk: "Өнім", en: "Product" });
     if (!acc[productTitle]) {
       acc[productTitle] = [];
     }
@@ -325,7 +326,7 @@ const MaterialsTab = () => {
   }, {} as Record<string, typeof creatorMaterials>);
 
   const groupTeacherMaterials = teacherMaterials.reduce((acc, material) => {
-    const key = `${material.product?.title || "Продукт"} - ${material.teacher_name || (l({ ru: "Учитель", kk: "Мұғалім", en: "Teacher" }))}`;
+    const key = `${material.product?.title || l({ ru: "Продукт", kk: "Өнім", en: "Product" })} - ${material.teacher_name || (l({ ru: "Учитель", kk: "Мұғалім", en: "Teacher" }))}`;
     if (!acc[key]) {
       acc[key] = [];
     }
@@ -354,7 +355,7 @@ const MaterialsTab = () => {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${day}.${month} в ${hours}:${minutes}`;
+      return l({ ru: `${day}.${month} в ${hours}:${minutes}`, kk: `${day}.${month} в ${hours}:${minutes}`, en: `${day}.${month} at ${hours}:${minutes}` });
     };
 
     const downloadUrl = material.type === "file" && material.file_url && !isLocked
@@ -422,7 +423,7 @@ const MaterialsTab = () => {
             <div className="flex-1 min-w-0 overflow-hidden">
               <h3 className="font-medium text-foreground truncate" title={material.title}>{material.title}</h3>
               <p className="text-sm text-muted-foreground capitalize mt-0.5">
-                {material.type === "video" ? "Видео" : material.type}
+                {material.type === "video" ? l({ ru: "Видео", kk: "Видео", en: "Video" }) : material.type}
               </p>
 
               {isVideo && isExpanded && canPlay && (

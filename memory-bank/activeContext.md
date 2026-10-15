@@ -12,7 +12,16 @@ Audit: white-on-orange is mostly already correct — 3 real defects found (`drop
 ## Where the build stands (2026-10-03)
 Phases 0–5 built and green (508 tests / 37 files, 18 baseline type errors, build green). Phase 5: migration `20261003120000_recipient_language.sql` **applied to production 2026-10-03** and verified; the 14 changed edge functions and the frontend are not deployed yet. Also found: production history has `20260917120000` under a different name than this branch's file — `db push` would skip ours (see tasks.md). Language for push lives on `push_tokens` (per device — pushes are addressed to tokens, not profiles), for email on `profiles` (per person, via `manage-profile set_language`). The raw `#FF6B00` orange is now the `primary` token (user's call). Customer fixes done and measured in Chrome: toggle gap before "Sign in" 8→20px, English headline word gaps 19→35px (RU/KK untouched).
 
-Open: **Phase 4b** — Phase 4's "0 left in Russian" only counted `l()` phrases; ~600 raw Russian lines remain outside `l()`, mostly seller screens. The buyer path (product, checkout, report dialog) is clean. Then **Phase 6** (authenticated seller screens).
+## Build complete in code (2026-10-13)
+Phase 4b and Phase 6 are done; `/reflect` is next. Phase 4b: 623 Russian strings written outside `l()` → 0, measured on the syntax tree by `scripts/i18n-raw.mjs` and held there by `src/test/noRawRussian.test.ts`. Phase 6: `scripts/audit-languages.mjs` over `scripts/language-harness/` — 84 screens in real Chrome, 0 Cyrillic on English screens, 0 crashes, 0 sideways scrolling. 522 tests / 39 files, 18 baseline type errors, build green.
+
+Found on the way, all fixed with a test first: three screens **crashed** in English (404, reminder settings, slot wizard — tables keyed `{ ru, kk }` read with `table[language]`); 29 dates pinned to the Russian locale; upload cancellation recognised by comparing an error message with a Russian sentence.
+
+Decisions taken as defaults — tell the user, change if they disagree:
+- **Kazakh was left as it was** where no Kazakh existed: 207 of 1049 phrases still show Russian to Kazakh readers (mostly the product editor). Filling that is a translation task, best with a native reader.
+- **Five unused files were not translated** (`ProductScheduleManager`, `AnnouncementEditor`, `CheckoutPage`, `SetupPasswordPage`, `AuthPage`); a test fails if one is imported again.
+
+State of the branch: commit `7b238f7` (Phases 0-5) is pushed to `origin/английский-язык`; Phase 4b/6 are uncommitted in the working tree. Nothing is deployed beyond the migration. Still ahead before a PR: merge `origin/main` (19+ conflicting files, `CreatorAnnouncementsTab.tsx` deleted there), and `предпросмотер` should be merged first since this branch grows from it.
 
 ## Archived: Product Preview / Editor / Storefront (2026-09-22)
 Previously tracked here across many build/fix rounds; now closed out as development-complete but not yet deployed or reviewed by the customer. Full history, every lesson learned, and the outstanding items (customer review of the round-2 editor window; the migration and edge-function redeploy still pending) live in `memory-bank/archive/archive-preview-editor-storefront.md`. If the customer's review or the deploy surfaces something to fix, treat it as a fresh task via `/van` rather than reopening this one.

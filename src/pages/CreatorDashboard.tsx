@@ -354,7 +354,7 @@ const CreatorDashboard = () => {
               <button
                 type="button"
                 onClick={() => setAccountSheetOpen(true)}
-                aria-label={t("navProfiles") || "Профиль"}
+                aria-label={t("navProfiles")}
                 className="flex items-center justify-center h-full"
               >
                 <span

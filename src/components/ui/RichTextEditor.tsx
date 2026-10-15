@@ -4,6 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function parseMarkdownToHtml(md: string): string {
   if (!md) return "<p></p>";
@@ -97,11 +98,13 @@ interface RichTextEditorProps {
 export function RichTextEditor({
   value,
   onChange,
-  placeholder = "Введите текст описания...",
+  placeholder: placeholderProp,
   minHeight = "70px",
   maxHeight = "200px",
   className,
 }: RichTextEditorProps) {
+  const { l } = useLanguage();
+  const placeholder = placeholderProp ?? l({ ru: "Введите текст описания...", kk: "Введите текст описания...", en: "Enter the description..." });
   const formatInitial = (val: string) => {
     if (!val) return "<p></p>";
     if (/<[a-z][\s\S]*>/i.test(val)) return val;

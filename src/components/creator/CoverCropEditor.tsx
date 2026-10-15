@@ -2,6 +2,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Loader2, ZoomIn, ZoomOut, Move } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type CoverCropEditorProps = {
   source: string;
@@ -30,6 +31,7 @@ const CoverCropEditor = ({
   onCancel,
   onSave,
 }: CoverCropEditorProps) => {
+  const { l } = useLanguage();
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -41,7 +43,9 @@ const CoverCropEditor = ({
       <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Move className="w-3.5 h-3.5" />
         <span>
-          Перетащите {mediaType === "video" ? "видео" : "фото"} мышкой или пальцем для выравнивания
+          {mediaType === "video"
+            ? l({ ru: "Перетащите видео мышкой или пальцем для выравнивания", kk: "Перетащите видео мышкой или пальцем для выравнивания", en: "Drag the video with your mouse or finger to position it" })
+            : l({ ru: "Перетащите фото мышкой или пальцем для выравнивания", kk: "Перетащите фото мышкой или пальцем для выравнивания", en: "Drag the photo with your mouse or finger to position it" })}
         </span>
       </div>
 
@@ -79,7 +83,7 @@ const CoverCropEditor = ({
       {/* Zoom Controls */}
       <div className="space-y-2 pt-1">
         <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-          <span>Масштаб</span>
+          <span>{l({ ru: "Масштаб", kk: "Масштаб", en: "Zoom" })}</span>
           <span>{Math.round(zoom * 100)}%</span>
         </div>
         <div className="flex items-center gap-2.5">
@@ -126,7 +130,7 @@ const CoverCropEditor = ({
           disabled={saving}
           className="rounded-xl"
         >
-          Отмена
+          {l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}
         </Button>
         <Button
           type="button"
@@ -135,7 +139,7 @@ const CoverCropEditor = ({
           className="rounded-xl"
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Сохранить
+          {l({ ru: "Сохранить", kk: "Сақтау", en: "Save" })}
         </Button>
       </div>
     </div>

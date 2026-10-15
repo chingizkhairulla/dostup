@@ -1,5 +1,7 @@
 // Нормализация и проверка тем продуктов
 
+import { inDeviceLanguage as l } from "@/lib/language";
+
 // Список запрещённых корней и слов (с поддержкой кириллицы и латиницы)
 const BANNED_PATTERNS = [
   /(секс|sex|порно|porno|нарк|drug|интим|intim|бля|хуй|пизд|ебат|ебан|сука)/i,
@@ -56,7 +58,7 @@ export function validateNewTopic(
   if (trimmed.length < 2) {
     return {
       isValid: false,
-      error: "Название темы слишком короткое (минимум 2 символа)",
+      error: l({ ru: "Название темы слишком короткое (минимум 2 символа)", kk: "Название темы слишком короткое (минимум 2 символа)", en: "The topic name is too short (at least 2 characters)" }),
       normalized: "",
       formatted: "",
     };
@@ -65,7 +67,7 @@ export function validateNewTopic(
   if (trimmed.length > 50) {
     return {
       isValid: false,
-      error: "Название темы слишком длинное (максимум 50 символов)",
+      error: l({ ru: "Название темы слишком длинное (максимум 50 символов)", kk: "Название темы слишком длинное (максимум 50 символов)", en: "The topic name is too long (50 characters at most)" }),
       normalized: "",
       formatted: "",
     };
@@ -76,7 +78,7 @@ export function validateNewTopic(
     if (pattern.test(trimmed)) {
       return {
         isValid: false,
-        error: "Название темы содержит недопустимые слова",
+        error: l({ ru: "Название темы содержит недопустимые слова", kk: "Название темы содержит недопустимые слова", en: "The topic name contains words that are not allowed" }),
         normalized: normalizeTopic(trimmed),
         formatted: formatTopicName(trimmed),
       };
@@ -93,7 +95,7 @@ export function validateNewTopic(
   if (duplicate) {
     return {
       isValid: false,
-      error: `Такая тема уже существует: «${duplicate}»`,
+      error: l({ ru: `Такая тема уже существует: «${duplicate}»`, kk: `Такая тема уже существует: «${duplicate}»`, en: `This topic already exists: “${duplicate}”` }),
       normalized,
       formatted: duplicate,
     };

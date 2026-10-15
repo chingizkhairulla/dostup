@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ProductCard = ({ product }: { product: CatalogProduct }) => {
-  const { t, language } = useLanguage();
+  const { t, language, l } = useLanguage();
   const sellerName = product.seller_display_name || t("author");
   const initial = sellerInitial(sellerName);
   const isNew = isNewProduct(product.created_at);
@@ -114,7 +114,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
                   setActiveIdx((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
                 }}
                 className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 sm:opacity-0 max-sm:opacity-80 z-10"
-                title="Предыдущее"
+                title={l({ ru: "Предыдущее", kk: "Алдыңғы", en: "Previous" })}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -126,7 +126,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
                   setActiveIdx((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
                 }}
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 sm:opacity-0 max-sm:opacity-80 z-10"
-                title="Следующее"
+                title={l({ ru: "Следующее", kk: "Келесі", en: "Next" })}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -152,7 +152,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
                       "h-1.5 rounded-full transition-all",
                       i === activeIdx ? "w-3 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"
                     )}
-                    title={`Медиа ${i + 1}`}
+                    title={l({ ru: `Медиа ${i + 1}`, kk: `Медиа ${i + 1}`, en: `Media ${i + 1}` })}
                   />
                 ))}
               </div>
@@ -195,7 +195,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
           </p>
           {product.has_free_trial && (
             <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-              Пробный период
+              {l({ ru: "Пробный период", kk: "Пробный период", en: "Free trial" })}
             </span>
           )}
         </div>

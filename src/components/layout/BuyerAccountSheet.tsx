@@ -62,7 +62,7 @@ const AccountSheet = ({
   onSelectSection,
   extraSections,
 }: AccountSheetProps) => {
-  const { t } = useLanguage();
+  const { t, l } = useLanguage();
   const navigate = useNavigate();
   const { profileType } = useSimpleAuth();
   const { profiles, runSwitch, createSeller } = useProfileAccountActions();
@@ -177,13 +177,13 @@ const AccountSheet = ({
           {/* Header: Title on left, Close button (X) in top-right corner */}
           <div className="flex items-center justify-between pb-1 px-1">
             <SheetTitle className="text-base font-semibold text-foreground">
-              {t("navProfiles") || "Профили"}
+              {t("navProfiles")}
             </SheetTitle>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="Закрыть"
+              aria-label={l({ ru: "Закрыть", kk: "Жабу", en: "Close" })}
             >
               <X className="h-4 w-4" />
             </button>
@@ -271,7 +271,7 @@ const AccountSheet = ({
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/40">
                 <MoreHorizontal className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
               </span>
-              <span className="truncate text-[15px]">{t("allSections") || "Все разделы"}</span>
+              <span className="truncate text-[15px]">{t("allSections")}</span>
             </button>
           </div>
         </SheetContent>
@@ -299,7 +299,7 @@ const AccountSheet = ({
         >
           <DialogHeader className="text-left sm:text-left pb-1">
             <DialogTitle className="text-lg font-semibold text-left">
-              {t("allSections") || "Все разделы"}
+              {t("allSections")}
             </DialogTitle>
           </DialogHeader>
 
@@ -307,11 +307,11 @@ const AccountSheet = ({
           <div className="flex flex-col gap-1.5 pt-1">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t("onBottomNav") || "На нижней панели"}
+                {t("onBottomNav")}
               </span>
               {missingCount > 0 ? (
                 <span className="text-[12px] font-semibold text-destructive animate-pulse">
-                  Добавьте ещё {missingCount}
+                  {l({ ru: `Добавьте ещё ${missingCount}`, kk: `Добавьте ещё ${missingCount}`, en: `Add ${missingCount} more` })}
                 </span>
               ) : (
                 <span className="text-[11px] font-medium text-muted-foreground">
@@ -333,7 +333,7 @@ const AccountSheet = ({
                           <Plus className="h-4 w-4" />
                         </span>
                         <span className="text-[14px] font-medium text-muted-foreground">
-                          Пустое место
+                          {l({ ru: "Пустое место", kk: "Пустое место", en: "Empty slot" })}
                         </span>
                       </div>
                     </div>
@@ -368,8 +368,8 @@ const AccountSheet = ({
                         handleRemoveSlot(index);
                       }}
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-destructive/15 hover:text-destructive active:scale-95 transition-all shrink-0 cursor-pointer"
-                      aria-label="Убрать"
-                      title="Убрать"
+                      aria-label={l({ ru: "Убрать", kk: "Убрать", en: "Remove" })}
+                      title={l({ ru: "Убрать", kk: "Убрать", en: "Remove" })}
                     >
                       <Minus className="h-4 w-4" strokeWidth={2.5} />
                     </button>
@@ -383,13 +383,13 @@ const AccountSheet = ({
           <div className="flex flex-col gap-1.5 pt-3 mt-1 border-t border-border/70">
             <div className="px-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t("hiddenSections") || "Скрытые разделы"}
+                {t("hiddenSections")}
               </span>
             </div>
 
             {hiddenList.length === 0 ? (
               <div className="px-1 py-1.5 text-xs text-muted-foreground italic">
-                {t("noHiddenSections") || "Все разделы уже на панели"}
+                {t("noHiddenSections")}
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
@@ -422,8 +422,8 @@ const AccountSheet = ({
                             handleAddFromHidden(item.key);
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 transition-transform active:scale-95 shrink-0 cursor-pointer"
-                          aria-label="Добавить"
-                          title="Добавить"
+                          aria-label={l({ ru: "Добавить", kk: "Қосу", en: "Add" })}
+                          title={l({ ru: "Добавить", kk: "Қосу", en: "Add" })}
                         >
                           <Plus className="h-4 w-4" strokeWidth={2.5} />
                         </button>

@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { inDeviceLanguage as l } from "@/lib/language";
+import { UploadCancelledError } from "@/lib/uploadCancelled";
 
 export type ProductMediaKind = "image" | "video";
 
@@ -40,13 +42,13 @@ export async function uploadProductMedia(
   let lastError: any = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (signal?.aborted) {
-      throw new Error("Загрузка отменена");
+      throw new UploadCancelledError();
     }
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, 1000));
     }
     if (signal?.aborted) {
-      throw new Error("Загрузка отменена");
+      throw new UploadCancelledError();
     }
     try {
       // Step 1: Request signed upload URL from upload-product-media edge function
@@ -77,7 +79,7 @@ export async function uploadProductMedia(
           continue;
         }
         if (msg.includes("Failed to send a request")) {
-          throw new Error("Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.");
+          throw new Error(l({ ru: "Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.", kk: "Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.", en: "Couldn't upload the media file because the connection failed. Please try again." }));
         }
         throw new Error(msg);
       }
@@ -102,30 +104,30 @@ export async function uploadProductMedia(
                 resolve((data?.publicUrl || data?.url) as string);
               }
             } else {
-              let errorDetail = `код ${xhr.status}`;
+              let errorDetail = l({ ru: `код ${xhr.status}`, kk: `код ${xhr.status}`, en: `code ${xhr.status}` });
               try {
                 const res = JSON.parse(xhr.responseText);
                 if (res?.error) errorDetail = res.error;
               } catch {
                 // ignore
               }
-              reject(new Error(`Ошибка сохранения видео (${errorDetail})`));
+              reject(new Error(l({ ru: `Ошибка сохранения видео (${errorDetail})`, kk: `Ошибка сохранения видео (${errorDetail})`, en: `Couldn't save the video (${errorDetail})` })));
             }
           });
           xhr.addEventListener("error", () =>
-            reject(new Error("Сетевой сбой при сохранении видео в хранилище"))
+            reject(new Error(l({ ru: "Сетевой сбой при сохранении видео в хранилище", kk: "Сетевой сбой при сохранении видео в хранилище", en: "The network failed while saving the video to storage" })))
           );
-          xhr.addEventListener("abort", () => reject(new Error("Загрузка видео была прервана")));
+          xhr.addEventListener("abort", () => reject(new Error(l({ ru: "Загрузка видео была прервана", kk: "Загрузка видео была прервана", en: "The video upload was interrupted" }))));
 
           if (signal) {
             if (signal.aborted) {
               xhr.abort();
-              reject(new Error("Загрузка отменена"));
+              reject(new UploadCancelledError());
               return;
             }
             signal.addEventListener("abort", () => {
               xhr.abort();
-              reject(new Error("Загрузка отменена"));
+              reject(new UploadCancelledError());
             }, { once: true });
           }
 
@@ -151,9 +153,9 @@ export async function uploadProductMedia(
         if (uploadError) {
           const errMsg = uploadError.message || "";
           if (errMsg.includes("exceeded the maximum allowed size") || (uploadError as any)?.statusCode === "413") {
-            throw new Error("Файл превышает лимит хранилища (максимум 50 МБ).");
+            throw new Error(l({ ru: "Файл превышает лимит хранилища (максимум 50 МБ).", kk: "Файл превышает лимит хранилища (максимум 50 МБ).", en: "The file is over the storage limit (50 MB at most)." }));
           }
-          throw new Error(errMsg || "Ошибка загрузки файла в хранилище");
+          throw new Error(errMsg || l({ ru: "Ошибка загрузки файла в хранилище", kk: "Ошибка загрузки файла в хранилище", en: "Couldn't upload the file to storage" }));
         }
 
         onProgress?.(100);
@@ -172,8 +174,8 @@ export async function uploadProductMedia(
         });
 
         if (!putRes.ok) {
-          const statusText = putRes.statusText || `Код ${putRes.status}`;
-          throw new Error(`Ошибка сохранения файла в хранилище (${statusText})`);
+          const statusText = putRes.statusText || l({ ru: `Код ${putRes.status}`, kk: `Код ${putRes.status}`, en: `Code ${putRes.status}` });
+          throw new Error(l({ ru: `Ошибка сохранения файла в хранилище (${statusText})`, kk: `Ошибка сохранения файла в хранилище (${statusText})`, en: `Couldn't save the file to storage (${statusText})` }));
         }
 
         return (data.publicUrl || data.url) as string;
@@ -184,18 +186,18 @@ export async function uploadProductMedia(
         return (data.url || data.publicUrl) as string;
       }
 
-      throw new Error("Не удалось получить адрес для загрузки файла");
+      throw new Error(l({ ru: "Не удалось получить адрес для загрузки файла", kk: "Не удалось получить адрес для загрузки файла", en: "Couldn't get an address to upload the file to" }));
     } catch (err: any) {
       lastError = err;
       if (err?.message?.includes("Failed to send a request") && attempt < retries) {
         continue;
       }
       if (err?.message?.includes("Failed to send a request")) {
-        throw new Error("Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.");
+        throw new Error(l({ ru: "Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.", kk: "Не удалось загрузить медиафайл из-за сбоя соединения. Попробуйте ещё раз.", en: "Couldn't upload the media file because the connection failed. Please try again." }));
       }
       throw err;
     }
   }
 
-  throw lastError || new Error("Не удалось загрузить файл");
+  throw lastError || new Error(l({ ru: "Не удалось загрузить файл", kk: "Не удалось загрузить файл", en: "Couldn't upload the file" }));
 }

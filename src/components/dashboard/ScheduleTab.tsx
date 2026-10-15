@@ -4,6 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Calendar, Clock, Users, User, Check, Loader2, X, CalendarCheck, GraduationCap, Link as LinkIcon, Copy, Timer, Video } from "lucide-react";
 import { format, addDays, isSameDay, parseISO } from "date-fns";
 import { ru, enGB } from "date-fns/locale";
+import { dateLocale } from "@/lib/dateLocale";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
@@ -408,7 +409,7 @@ const ScheduleTab = () => {
                     <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5" />
-                        {booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: ru })}
+                        {booking.time_slot?.date && format(parseISO(booking.time_slot.date), "d MMM", { locale: dateLocale(language) })}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
@@ -663,10 +664,10 @@ const ScheduleTab = () => {
                           <span className={`absolute top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full ${getDotColor()}`} />
                         )}
                         <div className="text-xs opacity-80 mt-2">
-                          {format(day, "EEE", { locale: ru })}
+                          {format(day, "EEE", { locale: dateLocale(language) })}
                         </div>
                         <div className="text-lg font-bold">{format(day, "d")}</div>
-                        <div className="text-xs opacity-80">{format(day, "MMM", { locale: ru })}</div>
+                        <div className="text-xs opacity-80">{format(day, "MMM", { locale: dateLocale(language) })}</div>
                       </button>
                     );
                   })}

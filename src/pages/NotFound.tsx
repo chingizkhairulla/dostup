@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Search, ArrowLeft, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/language";
 
 const NotFound = () => {
   const location = useLocation();
@@ -13,7 +14,15 @@ const NotFound = () => {
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
   }, [location.pathname]);
 
-  const translations = {
+  // Typed by Language so a language without its block cannot compile —
+  // untyped, English read `undefined` here and the page threw instead of rendering.
+  const translations: Record<Language, { title: string; message: string; goBack: string; goHome: string }> = {
+    en: {
+      title: "Page not found",
+      message: "Oops! This page doesn't exist or has been moved.",
+      goBack: "Go back",
+      goHome: "Home",
+    },
     ru: {
       title: "Страница не найдена",
       message: "Упс! Похоже, эта страница не существует или была перемещена.",

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { creatorCreds, sessionCreds, invokeApi } from "@/lib/sessionApi";
+import { inDeviceLanguage as l } from "@/lib/language";
 
 interface ProductTeacher {
   id: string;
@@ -62,7 +63,7 @@ export const useAddProductTeacher = () => {
         return data.teacher;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
-        if (msg.includes("уже добавлен")) throw new Error("Этот учитель уже добавлен к продукту");
+        if (msg.includes("уже добавлен")) throw new Error(l({ ru: "Этот учитель уже добавлен к продукту", kk: "Этот учитель уже добавлен к продукту", en: "This teacher has already been added to the product" }));
         throw e;
       }
     },

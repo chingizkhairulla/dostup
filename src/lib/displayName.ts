@@ -1,3 +1,5 @@
+import { inDeviceLanguage as l } from "@/lib/language";
+
 /** Matches DB `display_name_usable_for_handle` email-local heuristic. */
 export function looksLikeEmailLocal(displayName: string): boolean {
   const name = displayName.trim();
@@ -24,6 +26,6 @@ export function isDisplayNameValid(value: string): boolean {
 export function initialsFrom(name: string) {
   const clean = (name || "").replace(/^buyer:/, "").trim();
   const parts = clean.split(/\s+/).filter(Boolean);
-  if (!parts.length) return "П";
+  if (!parts.length) return l({ ru: "П", kk: "П", en: "U" });
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
 }

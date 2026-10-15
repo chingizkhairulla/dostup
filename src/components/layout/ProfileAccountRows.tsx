@@ -210,7 +210,7 @@ export function ProfileAccountRows({
       />
       {expanded && (
         <div className="px-2.5 pb-1.5 pt-1 text-sm font-semibold text-foreground">
-          {t("navProfiles") || "Профили"}
+          {t("navProfiles")}
         </div>
       )}
       {newProfileControl}

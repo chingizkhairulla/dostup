@@ -3,6 +3,7 @@ import type {
   ProductMediaItem,
 } from "@/components/creator/CreatorProductsTab";
 import type { CatalogCategory } from "@/lib/catalog";
+import { inDeviceLanguage as l } from "@/lib/language";
 import {
   accessDaysFor,
   billingPeriodFor,
@@ -22,7 +23,7 @@ function optionsOf(form: ProductDraftFormData): PricingOptionFormItem[] {
 
 export function validateTaxonomyFields(form: ProductDraftFormData): string | null {
   if (!form.categoryId || !form.subcategoryId) {
-    return "Выберите категорию и подкатегорию";
+    return l({ ru: "Выберите категорию и подкатегорию", kk: "Выберите категорию и подкатегорию", en: "Choose a category and subcategory" });
   }
   return null;
 }
@@ -58,15 +59,15 @@ function paymentDetailsMissing(opt: PricingOptionFormItem): boolean {
 export function validateProductForm(form: ProductDraftFormData): string | null {
   const taxonomyError = validateTaxonomyFields(form);
   if (!form.title?.trim() || taxonomyError) {
-    return taxonomyError || "Заполните обязательные поля";
+    return taxonomyError || l({ ru: "Заполните обязательные поля", kk: "Заполните обязательные поля", en: "Fill in the required fields" });
   }
   if (form.isPaid) {
     const options = form.pricingOptions ?? [];
-    if (options.length === 0) return "Заполните обязательные поля";
+    if (options.length === 0) return l({ ru: "Заполните обязательные поля", kk: "Заполните обязательные поля", en: "Fill in the required fields" });
     if (options.some((o) => !o.price || Number(o.price) <= 0)) {
-      return "Укажите цену для всех вариантов оплаты";
+      return l({ ru: "Укажите цену для всех вариантов оплаты", kk: "Укажите цену для всех вариантов оплаты", en: "Set a price for every payment option" });
     }
-    if (options.some(paymentDetailsMissing)) return "Заполните обязательные поля";
+    if (options.some(paymentDetailsMissing)) return l({ ru: "Заполните обязательные поля", kk: "Заполните обязательные поля", en: "Fill in the required fields" });
   }
   return null;
 }

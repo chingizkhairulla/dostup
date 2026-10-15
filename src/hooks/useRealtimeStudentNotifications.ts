@@ -80,13 +80,13 @@ export const useRealtimeStudentNotifications = (
         
         // If already available (delay <= 0), show toast immediately for recently unlocked
         if (delay <= 0) {
-          const productTitle = (material as any).product?.title || "курс";
+          const productTitle = (material as any).product?.title || l({ ru: "курс", kk: "курс", en: "course" });
           showUnlockToast(material.id, material.title, productTitle);
           continue;
         }
 
         const timer = setTimeout(() => {
-          const productTitle = (material as any).product?.title || "курс";
+          const productTitle = (material as any).product?.title || l({ ru: "курс", kk: "курс", en: "course" });
           showUnlockToast(material.id, material.title, productTitle);
           activeTimersRef.current.delete(material.id);
         }, delay);

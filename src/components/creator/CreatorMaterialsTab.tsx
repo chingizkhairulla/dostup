@@ -29,6 +29,7 @@ import ProductMaterialsManager from "./ProductMaterialsManager";
 import ProductSwitcher from "./ProductSwitcher";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { countEn } from "@/lib/language";
 import {
   useProductMaterials,
   useUpdateMaterial,
@@ -827,7 +828,7 @@ const CreatorMaterialsReadOnlyList = ({
       return;
     }
     toast.success(
-      l({ ru: `Скачивание ${files.length} файлов...`, kk: `${files.length} файл жүктелуде...`, en: `Downloading ${files.length} files...` })
+      l({ ru: `Скачивание ${files.length} файлов...`, kk: `${files.length} файл жүктелуде...`, en: `Downloading ${countEn(files.length, "file")}...` })
     );
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
@@ -1912,7 +1913,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
           {missingCount > 0 && (
             <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground">
               <span>
-                {l({ ru: `У ${missingCount} файлов размер не определён`, kk: `${missingCount} файлдың өлшемі белгісіз`, en: `${missingCount} files have no known size` })}
+                {l({ ru: `У ${missingCount} файлов размер не определён`, kk: `${missingCount} файлдың өлшемі белгісіз`, en: `${countEn(missingCount, "file has", "files have")} no known size` })}
               </span>
               <Button
                 size="sm"

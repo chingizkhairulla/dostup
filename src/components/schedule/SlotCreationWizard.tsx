@@ -88,6 +88,40 @@ export default function SlotCreationWizard({
   }, [open]);
 
   const dict = {
+    en: {
+      step1: "Choose time",
+      step2: "Repeat",
+      step3: "Settings",
+      showLateHours: "Show late hours",
+      hideLateHours: "Hide late hours",
+      timeRange: "Hours range",
+      timezone: "Time zone",
+      start: "From",
+      end: "To",
+      weekDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      weekDaysFull: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+      everyWeek: "Repeat every week",
+      twoWeeks: "2 weeks",
+      oneMonth: "1 month",
+      twoMonths: "2 months",
+      custom: "Custom period",
+      lessonDuration: "Length of one lesson",
+      min: "min",
+      participants: "Participants per slot",
+      individual: "One-to-one",
+      group: "Group",
+      details: "Lesson details (optional)",
+      title: "Title",
+      description: "Description",
+      imageUrl: "Cover image link",
+      ready: "Done",
+      time: "Time",
+      repeat: "Repeat",
+      settings: "Settings",
+      clearAll: "Clear all",
+      noSlotsWarning: "Select at least one cell on the time grid",
+      repeatSummary: "Slots will be created on these days:",
+    },
     ru: {
       step1: "Выбор времени",
       step2: "Повторение",
@@ -158,7 +192,10 @@ export default function SlotCreationWizard({
     }
   };
 
-  const t = dict[language];
+  // Annotated, so a language missing from `dict` is a compile error rather
+  // than an `undefined` that throws on the first `t.step1`.
+  const texts: Record<Language, (typeof dict)["ru"]> = dict;
+  const t = texts[language];
 
   // Dates for current week (Mon -> Sun)
   const weekDates = useMemo(() => {
@@ -387,7 +424,7 @@ export default function SlotCreationWizard({
               size="icon"
               onClick={() => onOpenChange(false)}
               className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="Закрыть"
+              aria-label={l({ ru: "Закрыть", kk: "Жабу", en: "Close" })}
             >
               <X className="h-4 w-4" />
             </Button>

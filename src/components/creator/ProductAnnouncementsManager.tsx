@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ interface Props {
 }
 
 const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLinkUrl, initialGroupLinkLabel, onBack, hideBackButton }: Props) => {
+  const { l } = useLanguage();
   const { data: announcements = [], isLoading } = useAnnouncements(productId);
   const createMut = useCreateAnnouncement();
   const updateMut = useUpdateAnnouncement();
@@ -56,27 +58,27 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
         groupLinkUrl: groupUrl.trim() || null,
         groupLinkLabel: groupLabel.trim() || null,
       });
-      toast.success("Ссылка сохранена");
+      toast.success(l({ ru: "Ссылка сохранена", kk: "Ссылка сохранена", en: "Link saved" }));
     } catch (e: any) {
-      toast.error(e?.message || "Не удалось сохранить");
+      toast.error(e?.message || l({ ru: "Не удалось сохранить", kk: "Сақтау мүмкін болмады", en: "Could not save" }));
     }
   };
 
   const handleCreate = async (html: string) => {
-    if (!html || html === "<p></p>") { toast.error("Пост пустой"); return; }
+    if (!html || html === "<p></p>") { toast.error(l({ ru: "Пост пустой", kk: "Пост пустой", en: "The post is empty" })); return; }
     try {
       await createMut.mutateAsync({ productId, contentHtml: html });
       setIsAdding(false);
-      toast.success("Опубликовано");
-    } catch (e: any) { toast.error(e?.message || "Ошибка"); }
+      toast.success(l({ ru: "Опубликовано", kk: "Опубликовано", en: "Published" }));
+    } catch (e: any) { toast.error(e?.message || l({ ru: "Ошибка", kk: "Қате", en: "Error" })); }
   };
 
   const handleUpdate = async (id: string, html: string) => {
     try {
       await updateMut.mutateAsync({ id, productId, contentHtml: html });
       setEditingId(null);
-      toast.success("Сохранено");
-    } catch (e: any) { toast.error(e?.message || "Ошибка"); }
+      toast.success(l({ ru: "Сохранено", kk: "Сақталды", en: "Saved" }));
+    } catch (e: any) { toast.error(e?.message || l({ ru: "Ошибка", kk: "Қате", en: "Error" })); }
   };
 
   const handleDelete = async () => {
@@ -84,15 +86,15 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
     try {
       await deleteMut.mutateAsync({ id: deletingId, productId });
       setDeletingId(null);
-      toast.success("Удалено");
-    } catch (e: any) { toast.error(e?.message || "Ошибка"); }
+      toast.success(l({ ru: "Удалено", kk: "Жойылды", en: "Deleted" }));
+    } catch (e: any) { toast.error(e?.message || l({ ru: "Ошибка", kk: "Қате", en: "Error" })); }
   };
 
   return (
     <div className="space-y-4">
       {!hideBackButton && onBack && (
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />К продуктам</Button>
+          <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />{l({ ru: "К продуктам", kk: "К продуктам", en: "Back to products" })}</Button>
           <h2 className="text-lg font-semibold truncate">{productTitle}</h2>
         </div>
       )}
@@ -100,25 +102,25 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="space-y-1">
-            <Label>Ссылка на чат/группу (URL)</Label>
+            <Label>{l({ ru: "Ссылка на чат/группу (URL)", kk: "Ссылка на чат/группу (URL)", en: "Link to the chat or group (URL)" })}</Label>
             <Input value={groupUrl} onChange={(e) => setGroupUrl(e.target.value)} placeholder="https://t.me/..." />
           </div>
           <div className="space-y-1">
-            <Label>Текст кнопки</Label>
-            <Input value={groupLabel} onChange={(e) => setGroupLabel(e.target.value)} placeholder="Ссылка на группу/чат" />
+            <Label>{l({ ru: "Текст кнопки", kk: "Текст кнопки", en: "Button text" })}</Label>
+            <Input value={groupLabel} onChange={(e) => setGroupLabel(e.target.value)} placeholder={l({ ru: "Ссылка на группу/чат", kk: "Ссылка на группу/чат", en: "Link to the group or chat" })} />
           </div>
           <Button size="sm" onClick={handleSaveLink} disabled={setGroupLink.isPending}>
             {setGroupLink.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            Сохранить ссылку
+            {l({ ru: "Сохранить ссылку", kk: "Сілтемені сақтау", en: "Save the link" })}
           </Button>
         </CardContent>
       </Card>
 
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Объявления</h3>
+        <h3 className="font-medium">{l({ ru: "Объявления", kk: "Хабарландырулар", en: "Announcements" })}</h3>
         {!isAdding && (
           <Button size="sm" onClick={() => { setIsAdding(true); setEditingId(null); }}>
-            <Plus className="w-4 h-4 mr-1" />Создать пост
+            <Plus className="w-4 h-4 mr-1" />{l({ ru: "Создать пост", kk: "Создать пост", en: "Create a post" })}
           </Button>
         )}
       </div>
@@ -129,14 +131,14 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
           onSave={handleCreate}
           onCancel={() => setIsAdding(false)}
           saving={createMut.isPending}
-          submitLabel="Опубликовать"
+          submitLabel={l({ ru: "Опубликовать", kk: "Опубликовать", en: "Publish" })}
         />
       )}
 
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : announcements.length === 0 && !isAdding ? (
-        <p className="text-sm text-muted-foreground text-center py-8">Пока нет объявлений</p>
+        <p className="text-sm text-muted-foreground text-center py-8">{l({ ru: "Пока нет объявлений", kk: "Пока нет объявлений", en: "No announcements yet" })}</p>
       ) : (
         <div className="space-y-3">
           {[...announcements].reverse().map((a) => (
@@ -149,17 +151,17 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
                     onSave={(html) => handleUpdate(a.id, html)}
                     onCancel={() => setEditingId(null)}
                     saving={updateMut.isPending}
-                    submitLabel="Сохранить"
+                    submitLabel={l({ ru: "Сохранить", kk: "Сақтау", en: "Save" })}
                   />
                 ) : (
                   <>
                     <AnnouncementView html={a.content_html} />
                     <div className="flex items-center justify-end gap-2 pt-2">
                       <Button size="sm" variant="toggle" onClick={() => { setEditingId(a.id); setIsAdding(false); }}>
-                        <Pencil className="w-4 h-4 mr-1" />Редактировать
+                        <Pencil className="w-4 h-4 mr-1" />{l({ ru: "Редактировать", kk: "Өңдеу", en: "Edit" })}
                       </Button>
                       <Button size="sm" variant="toggle" onClick={() => setDeletingId(a.id)}>
-                        <Trash2 className="w-4 h-4 mr-1" />Удалить
+                        <Trash2 className="w-4 h-4 mr-1" />{l({ ru: "Удалить", kk: "Жою", en: "Delete" })}
                       </Button>
                     </div>
                   </>
@@ -173,12 +175,12 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
       <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить объявление?</AlertDialogTitle>
-            <AlertDialogDescription>Действие нельзя отменить.</AlertDialogDescription>
+            <AlertDialogTitle>{l({ ru: "Удалить объявление?", kk: "Удалить объявление?", en: "Delete this announcement?" })}</AlertDialogTitle>
+            <AlertDialogDescription>{l({ ru: "Действие нельзя отменить.", kk: "Действие нельзя отменить.", en: "This cannot be undone." })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Удалить</AlertDialogAction>
+            <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>{l({ ru: "Удалить", kk: "Жою", en: "Delete" })}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

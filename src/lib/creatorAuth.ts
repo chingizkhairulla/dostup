@@ -1,7 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyAuthError } from "@/lib/authErrors";
-import { storedLanguage } from "@/lib/language";
+import { inDeviceLanguage as l, storedLanguage } from "@/lib/language";
 
 export const OAUTH_ACCOUNT_TYPE_KEY = "dostup_oauth_account_type";
 export const OAUTH_PROFILE_TYPE_KEY = "dostup_oauth_profile_type";
@@ -198,7 +198,7 @@ export function buyerUserFromSession(
   return {
     id: session.profileId,
     phone: "",
-    name: storedName || emailLocal || "Пользователь",
+    name: storedName || emailLocal || l({ ru: "Пользователь", kk: "Пользователь", en: "User" }),
     role: "student" as const,
     created_at: session.createdAt || new Date().toISOString(),
   };
