@@ -11,6 +11,7 @@ interface Material {
   type: MaterialType;
   content: string | null;
   file_url: string | null;
+  cover_url?: string | null;
   order_index: number;
   created_at: string;
   parent_id?: string | null;
@@ -66,6 +67,7 @@ interface CreateMaterialInput {
   type: MaterialType;
   content?: string | null;
   file_url?: string | null;
+  cover_url?: string | null;
   order_index?: number;
   parent_id?: string | null;
   allow_view?: boolean;
