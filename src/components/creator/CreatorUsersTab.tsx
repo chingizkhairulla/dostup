@@ -170,7 +170,7 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       setRevokeDialog(null);
     },
     onError: () => {
-      toast.error(l({ ru: "Ошибка при закрытии доступа", kk: "Ошибка при закрытии доступа", en: "Couldn't close access" }));
+      toast.error(l({ ru: "Ошибка при закрытии доступа", kk: "Қолжетімділікті жабу кезінде қате", en: "Couldn't close access" }));
     },
   });
 

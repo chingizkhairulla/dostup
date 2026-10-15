@@ -1,6 +1,226 @@
 # Tasks
 
-## Active Task — English language (RU/KK/EN, extensible) + settings renames + white-on-orange
+## Active Task — Follow-ups from the English task's reflection (planned 2026-10-15)
+Source: the user's `/plan` message, «нужно решить проблемы которые были выяснены после рефлексий». The list comes from `memory-bank/reflection/reflection-english-language.md`, "Technical improvements".
+
+**Branch: `английский-язык`, same PR as the English task.** Every in-scope item is about the quality of that task's own work, so it ships with it. **Archiving the English task waits until these land.**
+
+**Complexity: Level 3.** Several independent components and no new architecture: each item extends a mechanism that already exists (`l()`, `Translated`, the two audit scripts, `_shared/i18n.ts`).
+
+### Scope — decided by the user (2026-10-15)
+| Finding | Decision |
+|---|---|
+| 207 phrases show Russian to Kazakh readers | **Translate; a native speaker reviews before the merge.** |
+| Pushes for sellers reach every seller's devices; renewal push probably reaches nobody | **Not now** ("пока не трогать"). Recorded below, not built. |
+| 5 files nothing imports | **Keep.** The guard in `noRawRussian.test.ts` stays. |
+| `noImplicitAny`, harness coverage, server fallback names, «1 слотов», `capitalize`, the trash badge | In scope (from the reflection; no decision needed). |
+| `20260917120000` version collision | **Belongs to the `предпросмотер` integration task.** This branch's file came from there, and `main` already has a different file with that version. Not touched here. |
+
+### Facts measured for this plan (2026-10-15, not assumed)
+- **`noImplicitAny` costs 48 new errors in 26 files** (66 total, minus the 18 baseline errors). Of these:
+  - 40 are TS7018: a property whose value is a literal `null`, which widens to `any` without `strictNullChecks`. Most are in tests.
+  - 7 are TS7011: function return types.
+  - The three English crashes would each have been a TS7053 with the flag on. There are 0 TS7053 now, because Phase 4b fixed them.
+  - For comparison, `strictNullChecks` would cost 42 errors and is a different, larger change, so it is not proposed.
+- **Server text still reaching the UI in Russian: the fallback name «Ученик».** It appears at `manage-bookings` :126 and :191. The client prints it raw at `CreatorNotificationsTab.tsx:421` and in `TeacherNotificationsTab.tsx`.
+  - The other Russian left in edge functions is deliberate: the markers, the `«Продукт»` value stored in the database, `receipt-*` matching, and moderator pushes.
+  - `checkout`, `switch-profile`, `manage-profile` and `create-profile` send Russian `message`s alongside a code, and the client already maps the code.
+- **Russian counted phrases with a bare number: 9** (for example «Создано ${count} слотов!»). They are in both schedule tabs, `CreatorMaterialsTab` and `ProductMaterialsManager`. `pluralRu` already exists in `catalog.ts`.
+- **`capitalize` on the day heading: 4 places**, `CardTitle` and `DialogTitle` in both schedule tabs. The code already upper-cases the first letter itself. `MaterialsTab.tsx:425` also uses it, on a single type word, which is fine.
+- **Trash badge**: `MaterialsSectionsNav.tsx:88`. The compact badge is positioned `absolute -top-1 -right-1` and gets clipped by its button. It also uses Tailwind's `bg-orange-500` instead of the `primary` token.
+- **Screens with no harness scene yet:**
+  - teacher dashboard: `TeacherScheduleTab`, `TeacherNotificationsTab`, `TeacherMaterialsManager`;
+  - buyer dashboard: `HomeTab`, `ScheduleTab`, `MaterialsTab`, `NotificationsTab`;
+  - seller: `CreatorNotificationsTab`, `CreatorPendingPayments`.
+
+### Technology validation
+Nothing new. Everything uses tools already in the repo: vitest, `tsc`, the TypeScript AST scanner, the Chrome DevTools Protocol harness, and `npx deno check` for edge functions.
+
+### Plan
+
+**Phase 0 — Baseline.** Record the current gates: 522 tests / 39 files; typecheck 18; build; `i18n-raw` 0; `audit-languages` 84/84; `audit-orange` pass. Then add the Kazakh counter (see Phase 4) so the starting number, 207, is recorded by a tool rather than quoted.
+
+**Phase 1 — `noImplicitAny` on** (`tsconfig.app.json`).
+- Fix the 48 errors properly, not with blanket `any`:
+  - type the `null` properties (`null as string | null`, or the object's real type);
+  - add return types where TS7011 asks.
+- Gate: typecheck is back to exactly the 18 baseline errors with the flag on.
+- Test first: a vitest that reads `tsconfig.app.json` and fails while `noImplicitAny` is off. A one-line guard, so the flag cannot be quietly turned off again.
+- Test first: a compile-fail fixture. Build an untyped `{ ru, kk }` table indexed by `Language` in a scratch file and check that `tsc` rejects it. Verify by hand once and record it; it is not kept as a permanent test, since it would need a separate tsc run.
+
+**Phase 2 — Russian plurals and the day heading.**
+- Move `pluralRu` from `catalog.ts` to `language.ts` as the shared helper, next to `countEn`. Re-export it from catalog so the existing callers and tests are untouched.
+- Apply it to the 9 `ru` templates.
+- Remove `capitalize` from the 4 day headings.
+- Tests first:
+  - `pluralRu` table: 1 / 2 / 5 / 11 / 21 / 22 / 25 / 111;
+  - a source test that no `ru:` template puts `${…}` directly before «слотов / файлов / дней / элем.» (the shape of the defect, not the 9 known sites);
+  - the heading renders «Записи на 13 октября, вторник», with «на» in lower case.
+
+**Phase 3 — Server fallback name.**
+- `manage-bookings` returns `null` instead of «Ученик».
+- The client prints `name || t("student")` in `CreatorNotificationsTab` and `TeacherNotificationsTab`.
+- For a deploy gap (a new client meeting an old server), the client also treats the literal «Ученик» as missing. This compatibility shim is commented with the date it can go: after `manage-bookings` is deployed.
+- Tests first:
+  - component test: a request without a name shows "Student" in English;
+  - edge-function source test: no Cyrillic name fallback in `manage-bookings`.
+- `deno check` adds 0 errors.
+- **Deploy list grows by one function** (`manage-bookings`), recorded in "What is left".
+
+**Phase 4 — Kazakh for the 207 phrases.**
+1. A counter in `scripts/i18n-raw.mjs`: `kazakhGaps()`. It counts phrases whose `kk` equals `ru`, contains Russian words, and contains no Kazakh-only letter. An allowlist covers strings that are legitimately identical: brand names, «Email», «Kaspi», «PIN», units. `noRawRussian.test.ts` gets a test that fails while the count is above 0.
+2. **Glossary first.** Extract the Kazakh the repository already uses for recurring words (продукт → өнім, материал → материал, слот, оплата → төлем, загрузка → жүктеу, …) from existing phrases and `translations.kk`. Every new string follows it, so the editor does not read in two voices.
+3. Translate, using `i18n-wrap.mjs`'s dictionary format, extended with a `--kk` mode that rewrites only the `kk` slot. It gets the same post-condition as `i18n-apply`: a file is refused if anything except a `kk` slot changes.
+4. **The review file for the native speaker:** `memory-bank/review/kk-review.md`. It is a table: file, Russian, the new Kazakh, and an empty column for the reviewer's correction. A correction applied later goes through the same `--kk` mode. **The merge waits for this review.**
+
+**Phase 5 — Harness coverage and the trash badge.**
+- Add scenes: teacher schedule, teacher notifications, teacher materials, buyer home / schedule / materials / notifications, seller notifications, pending payments. Extend `fakeSupabase.ts` with the requests they make. Every `unanswered:` line is either answered or explained.
+- Kazakh check in the audit: on a `kk` screen, flag visible text found verbatim in the `ru` slot of a phrase whose `kk` differs. That means the Russian was shown where Kazakh exists. It runs alongside the English Cyrillic check.
+- Trash badge: keep it inside the button bounds at 390px, and use `bg-primary text-primary-foreground` so the orange guard covers it. The browser audit confirms it fits in all three languages.
+
+**Phase 6 — Verification and making the checks routine.**
+- `package.json` scripts:
+  - `i18n:check` runs the scanner;
+  - `audit:languages` and `audit:orange` print how to start their harness first (they need a dev server, so they are not run from `npm test`).
+- Final gates:
+  - tests;
+  - typecheck = 18 with `noImplicitAny` on;
+  - build;
+  - `i18n-raw` 0;
+  - Kazakh gap 0 (with its allowlist);
+  - `audit-languages` on all scenes × 2 widths × 3 languages;
+  - `audit-orange`;
+  - `deno check` on `manage-bookings`.
+- Update the Build Log. Next to every count, name the instrument that produced it (reflection, process improvement).
+
+### Dependencies and order
+```
+Phase 0 ─► Phase 1 (noImplicitAny: guards everything after it)
+        ├► Phase 2 (plurals, heading)      ─┐
+        ├► Phase 3 (server fallback name)   ├► Phase 6
+        ├► Phase 4 (Kazakh) ─► review file  │
+        └► Phase 5 (harness, badge) ────────┘
+```
+Phases 2–5 are independent of each other. Phase 4's review gates the merge, not the build.
+
+### Creative phases
+**None.** Every item extends an existing design:
+- `Translated` for Kazakh;
+- the harness for scenes;
+- the established `null` → client-fallback pattern for the server name.
+
+The only judgement calls are small and decided in the build: the trash badge's exact position, and glossary choices recorded in the review file for the native speaker to overrule.
+
+### Risks
+| Risk | Mitigation |
+|---|---|
+| Unreviewed Kazakh reads oddly to sellers | Glossary from the repository's existing Kazakh; review file; merge waits for the review |
+| `noImplicitAny` fixes change behaviour | Type annotations only; the full suite plus the browser audit after the phase |
+| Old client / new server or the reverse, for «Ученик» | The client accepts both `null` and the old literal until `manage-bookings` is deployed |
+| Conflicts with `main` grow (schedule tabs, materials) | Changes stay small and local; the merge with `main` is still the step after this, as planned |
+| Harness scenes need data shapes not yet faked | `unanswered:` lines make every gap visible; a scene does not pass on an empty screen (character check) |
+
+### Not in this task (recorded so it is not lost)
+- **Push recipients** (user: "пока не трогать"):
+  - `manage-push-token` stores seller tokens with `user_id = null`;
+  - `send-reminders` and the `notify-*` functions with `user_role = 'creator'` and no id therefore reach **every seller's devices**;
+  - `process-subscriptions` passes a buyer *profile* id as the `push_tokens.user_id` filter.
+  
+  The fix needs a column for the seller's identity on `push_tokens`, filtering in each function, and a production migration plus deploy. It is a separate branch and task when the user asks.
+- **`20260917120000` collision**: in the `предпросмотер` integration task.
+- **Deleting the 5 unused files**: the user chose to keep them.
+
+### Status
+- [x] PLAN — 2026-10-15
+- [x] BUILD — 2026-10-15, Phases 0–6 ✅ (Build Log below). **Merge still waits for the native speaker's Kazakh review.**
+- [x] REFLECT — 2026-10-15, `memory-bank/reflection/reflection-english-followups.md`
+- [ ] ARCHIVE — together with the English task, after the Kazakh review
+
+### Build Log — follow-ups (2026-10-15)
+Every number below names the instrument that produced it — the reflection's process fix.
+
+**Phase 0 — baseline.**
+- `kazakhGaps()` in `scripts/i18n-raw.mjs` (`--kk`): a three-language object whose `kk` source equals its `ru` source, contains Russian words and no Kazakh-only letter.
+- First count: **203**. The earlier "207" came from a regex.
+- After the allowlist was tightened: **195**.
+  - "Медиа {n}", "Код {n}", «курс» and «Автор» were added as legitimately identical.
+  - «Видео» was taken out of the allowlist, because the repository's Kazakh says «Бейне».
+
+**Phase 1 — `noImplicitAny` on.**
+- Test first: `src/test/compilerSettings.test.ts` failed, then passed.
+- A scratch file confirmed the flag rejects the crash shape (`table[language]` on a `{ ru, kk }` table → TS7053).
+- 48 new errors fixed with explicit types, no `any`:
+  - mostly `null` properties in test mocks;
+  - `Session` types in `creatorAuth`;
+  - `string | null` fields in `productPayload`.
+- `tsc` result: the 18 baseline errors, diffed as the same set.
+
+**Phase 2 — counted phrases and the day heading.**
+- Tests first: `src/test/countedPhrases.test.ts` (shape-based, both languages) and a `pluralRu` table in `language.test.ts`.
+- `pluralRu` moved to `language.ts`, with `countRu` next to `countEn`.
+- 6 Russian phrases now agree, verb included: «Создан 1 слот!», «Перенесено 3 слота», «Скачивание 1 файла», «У 2 файлов…».
+- 5 more English phrases now use `countEn`: «every 1 day» and «to 1 participant».
+- `capitalize` was removed from the four schedule day headings.
+- Deliberately not a defect: «элем.» is an abbreviation, which reads the same after any number.
+
+**Phase 3 — server name fallback.**
+- `manage-bookings` now writes `''` (the column is `NOT NULL`) and returns `null` instead of «Ученик».
+- The client uses `personName(name, t("student"))` in both notification tabs.
+- `personName` also treats a stored «Ученик» as "no name": `booking_cancellations` keeps the old rows, so this is permanent, not just a rollout shim.
+- Tests: `personName.test.ts`, and `manage-bookings` was added to the existing "no Russian text of its own" list in `serverLanguage.test.ts`. Both failed first.
+- `deno check`: 0 errors, before and after.
+- **Deploy list +1: `manage-bookings`.**
+
+**Phase 4 — Kazakh.**
+- The glossary was taken from the repository's own Kazakh: өнім, санат, тақырып, төлем, сынақ мерзімі, қолжетімділік, мұқаба, қалта, сілтеме, жүктеу, қойма, жариялау, ЖИ, бейне, «… мүмкін болмады».
+- `i18n-wrap.mjs --kk` rewrites only `kk` slots. Its post-condition: blank every `kk` slot in the old and new source, and the rest must be identical. `--replace` applies a reviewer's correction.
+- **195 slots written; `kazakhGaps` reports 0**, and `noRawRussian.test.ts` now fails on any new one.
+- Source of the Kazakh: `memory-bank/review/kk-translations.json`.
+- **For the native speaker:** `memory-bank/review/kk-review.md` (165 distinct phrases, glossary, the five choices to check first, and how to apply corrections).
+
+**Phase 5 — harness coverage, the Kazakh check, the toolbar.**
+- **Nine scenes added:** seller notifications, pending payments, teacher schedule / notifications / materials, buyer home / schedule / materials / notifications.
+  - `fakeSupabase.ts` now answers every request they make: 0 `unanswered:` lines across the full run.
+  - It includes a cancellation stored with the old «Ученик». The Kazakh screenshot shows «Оқушы».
+- **The audit also checks Kazakh.** On a `kk` screen, visible text equal to the `ru` of a phrase or `t()` entry whose `kk` differs is reported.
+- **Defect in the audit tooling itself, found here:** `chrome.kill()` on Windows ends only the parent process. Headless Chrome from earlier runs (8 processes) kept port 9555, and later runs could attach to that old browser. That showed up as screens from another scene and language.
+  - `scripts/chrome.mjs` now refuses a port that is already taken, uses a fresh profile per run, and ends the whole process tree.
+  - All three audit scripts use it.
+  - **The 84-screen result of 2026-10-13 may have been read partly through such a browser; the 138-screen run below supersedes it.**
+- **Harness fidelity:** the scene is wrapped in the dashboards' `px-4 py-6 md:px-6`. Without it, the buyer's date strip (`-mx-4`) produced a false sideways scroll.
+- **The toolbar.** The new "squeezed button" check showed that on a phone the materials toolbar crushed all four section buttons to 18px. That had been visible in the old screenshot and was misread as only a badge problem.
+  - The audit failed first.
+  - The fix stacks the toolbar under the product switcher below `sm`.
+  - The trash badge sits inside its button and uses the `primary` token (`MaterialsSectionsNav.test.ts`, which failed first).
+  - The check compares width with height, so square 16px checkboxes and close crosses are not reported.
+
+**Phase 6 — gates.**
+
+| Gate (instrument) | Result |
+|---|---|
+| `npm test` (vitest) | **535 passed / 43 files** |
+| `npm run typecheck` (`tsc`, now with `noImplicitAny`) | **18**, the same set as the baseline |
+| `npm run build` (vite) | green; `dist` has no harness reference |
+| `npm run i18n:check` (`i18n-raw.mjs`, AST) | **0** raw Cyrillic, **0** Kazakh gaps (exits 1 otherwise) |
+| `npm run audit:languages` (real Chrome) | **138 screens** (23 scenes × 2 widths × 3 languages): 0 Cyrillic on English, 0 Russian on Kazakh where Kazakh exists, 0 crashes, 0 sideways scroll, 0 clipped or squeezed controls, 0 unanswered requests |
+| `npm run audit:orange` (real Chrome) | PASS, 0 non-white text on orange |
+| `deno check manage-bookings` | 0 errors |
+| `eslint`, changed files | 0 errors |
+
+New npm scripts: `i18n:check`, `harness:languages` + `audit:languages`, `harness:orange` + `audit:orange`. Each audit names the harness command if the harness is not running.
+
+**Not test-first, honestly:** the harness and fake-data changes, and the `--kk` mode of `i18n-wrap.mjs`. They are checked by the browser audit and the Kazakh-gap test, not by tests of their own.
+
+**Still open (unchanged by this task):**
+- The Kazakh review by a native speaker; the merge waits for it.
+- Deploy the 15 edge functions (14 + `manage-bookings`), then the frontend.
+- Merge with `main`.
+- Push recipients (user: not now).
+- The `20260917120000` collision (in the `предпросмотер` integration task).
+
+---
+
+## Task — English language (RU/KK/EN, extensible) + settings renames + white-on-orange (BUILD + REFLECT done; archive waits for the follow-ups above)
 Source: the user's `/van` message, replanned 2026-09-22 — **the dark theme was cancelled by the user** ("темная тема не нужна"). Everything about "Подсветка", a black palette, a `ThemeProvider`, and the mandatory prototype gate from the first plan is **dropped**. `next-themes` stays installed but unused; do not build a theme toggle unless the user asks again in a fresh request.
 
 **Note:** this file previously also tracked a second task (Product Preview / Storefront, including the round-2 editor window redesign). That task was archived on 2026-09-22 as development-complete but not yet deployed or reviewed by the customer — see `memory-bank/archive/archive-preview-editor-storefront.md` for its full history, lessons and outstanding items. If deploy/review turns up something to fix, that is a new task, started fresh with `/van`, not a reopening of the archived one.
@@ -136,7 +356,7 @@ Tests: `_shared/i18n.ts` picks the recipient's language with `ru` fallback; migr
 | Longer English strings breaking fixed-width buttons/labels | medium | Included in the Phase 6 screenshot matrix explicitly |
 
 ### Status
-VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD complete in code (2026-10-13): Phases 0–6 ✅, including the raw-literal sweep (Phase 4b).** Not deployed: the 14 edge functions and the frontend still have to go out (the migration is already on production). Next: `/reflect`. Current detail is in the Build Log below; this line is the summary.
+VAN → PLAN (replanned 2026-09-22 after the dark theme was cancelled) → **CREATIVE complete (C1, C2)** → **BUILD complete in code (2026-10-13): Phases 0–6 ✅, including the raw-literal sweep (Phase 4b).** Not deployed: the 14 edge functions and the frontend still have to go out (the migration is already on production). **REFLECT complete (2026-10-15)** → `memory-bank/reflection/reflection-english-language.md`. Next: `/archive`. Current detail is in the Build Log below; this line is the summary.
 
 Two creative decisions changed the plan and must be carried into the build:
 1. The taxonomy migration is **cancelled** (C2) — Phase 5 shrinks to server-side notification language only.

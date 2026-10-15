@@ -123,7 +123,9 @@ Deno.serve(async (req) => {
 
       await supabase.from('booking_cancellations').insert({
         booking_id: bookingId,
-        user_name: student?.name || buyerProfile?.display_name || (caller.kind === 'user' ? caller.name : 'Ученик'),
+        // No name is stored as '' (the column is NOT NULL); readers show their own
+        // word for "student" — a Russian placeholder here reached every language.
+        user_name: student?.name || buyerProfile?.display_name || (caller.kind === 'user' ? caller.name : '') || '',
         simple_user_id: bookingBuyerId || booking.simple_user_id,
         product_title: (booking as { schedule?: { product?: { title?: string } } }).schedule?.product?.title || '',
         product_id: productId,
@@ -188,7 +190,7 @@ Deno.serve(async (req) => {
       return json({
         requests: (data ?? []).map((r: { simple_user_id: string | null }) => ({
           ...r,
-          user_name: r.simple_user_id ? userMap.get(r.simple_user_id) || 'Ученик' : 'Ученик',
+          user_name: (r.simple_user_id && userMap.get(r.simple_user_id)) || null,
         })),
       })
     }

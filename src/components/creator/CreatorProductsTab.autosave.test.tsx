@@ -63,7 +63,7 @@ vi.mock("@/lib/aiCategory", () => ({
   }),
   isTopicMatch: () => false,
   isExactTopicMatch: () => false,
-  suggestCustomTopicWithEmoji: async () => null,
+  suggestCustomTopicWithEmoji: async (): Promise<null> => null,
 }));
 
 const uploadProductMedia = vi.fn();
@@ -84,14 +84,14 @@ vi.mock("@/components/ui/RichTextEditor", () => ({
   parseMarkdownToHtml: (v: string) => v,
 }));
 vi.mock("@/components/media/ProductVideoPlayer", () => ({
-  default: () => null,
+  default: (): null => null,
   videoBlobCache: new Map(),
 }));
-vi.mock("./ProductMaterialsManager", () => ({ default: () => null }));
-vi.mock("@/components/share/ShareProductButton", () => ({ default: () => null }));
-vi.mock("./CreatorPendingPayments", () => ({ default: () => null }));
+vi.mock("./ProductMaterialsManager", () => ({ default: (): null => null }));
+vi.mock("@/components/share/ShareProductButton", () => ({ default: (): null => null }));
+vi.mock("./CreatorPendingPayments", () => ({ default: (): null => null }));
 
-vi.mock("@/contexts/SimpleAuthContext", () => ({ useSimpleAuth: () => ({ profiles: [] }) }));
+vi.mock("@/contexts/SimpleAuthContext", () => ({ useSimpleAuth: () => ({ profiles: [] as unknown[] }) }));
 vi.mock("@/lib/sessionApi", () => ({
   invokeApi: vi.fn().mockResolvedValue({}),
   creatorCreds: () => ({}),
@@ -334,16 +334,16 @@ const existing = {
   description: "",
   price: 10000,
   kaspi_link: PAY_LINK,
-  telegram_link: null,
+  telegram_link: null as string | null,
   has_schedule: false,
   is_active: true,
   is_paused: false,
-  image_url: null,
-  video_url: null,
-  media: [],
-  faq: [],
-  kaspi_phone: null,
-  access_duration_days: null,
+  image_url: null as string | null,
+  video_url: null as string | null,
+  media: [] as { type: "image" | "video"; url: string }[],
+  faq: [] as { question: string; answer: string }[],
+  kaspi_phone: null as string | null,
+  access_duration_days: null as number | null,
   payment_type: "one_time",
   category_id: CATEGORY_ID,
   subcategory_id: SUBCATEGORY_ID,

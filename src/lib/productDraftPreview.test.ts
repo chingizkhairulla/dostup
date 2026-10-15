@@ -67,7 +67,7 @@ const categories: CatalogCategory[] = [
   } as CatalogCategory,
 ];
 
-const seller = { displayName: "SAT Academy", handle: "sat-academy", avatarUrl: null };
+const seller = { displayName: "SAT Academy", handle: "sat-academy", avatarUrl: null as string | null };
 
 describe("draftToPreviewProduct", () => {
   it("passes the editable text fields straight through", () => {

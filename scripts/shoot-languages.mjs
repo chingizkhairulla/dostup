@@ -4,12 +4,11 @@
 //
 // Usage: node scripts/shoot-languages.mjs <outputDir> [url] [width] [height]
 
-import { spawn } from "node:child_process";
+import { launchChrome } from "./chrome.mjs";
 import { setTimeout as delay } from "node:timers/promises";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const PORT = 9444;
 
 const [outDir = ".", url = "http://localhost:8080/", width = "1280", height = "900"] =
@@ -43,24 +42,7 @@ async function connect() {
   return { send, close: () => ws.close() };
 }
 
-const chrome = spawn(CHROME, [
-  "--headless=new",
-  `--remote-debugging-port=${PORT}`,
-  "--remote-allow-origins=*",
-  "--no-first-run",
-  "--user-data-dir=" + process.env.TEMP + "\\lang-shots-profile",
-  "about:blank",
-]);
-chrome.stderr.on("data", () => {});
-
-for (let i = 0; i < 40; i += 1) {
-  try {
-    await fetch(`http://127.0.0.1:${PORT}/json/version`);
-    break;
-  } catch {
-    await delay(250);
-  }
-}
+const chrome = await launchChrome(PORT);
 
 const { send, close } = await connect();
 await send("Page.enable");
@@ -104,4 +86,4 @@ for (const language of ["ru", "kk", "en"]) {
 }
 
 close();
-chrome.kill();
+chrome.close();

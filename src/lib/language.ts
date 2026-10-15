@@ -78,6 +78,23 @@ export function pluralForm(language: Language, count: number): Intl.LDMLPluralRu
 }
 
 /**
+ * The Russian form for a count: one (1, 21, 101), few (2–4, 22–24) or many
+ * (5–20, 25–30, 11–14, 0). Kazakh nouns do not change after a number.
+ */
+export function pluralRu(count: number, one: string, few: string, many: string): string {
+  const mod10 = Math.abs(count) % 10;
+  const mod100 = Math.abs(count) % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/** "1 слот", "3 слота", "5 слотов" — for the Russian slot of a counted phrase. */
+export function countRu(count: number, one: string, few: string, many: string): string {
+  return `${count} ${pluralRu(count, one, few, many)}`;
+}
+
+/**
  * "1 slot", "5 slots" — for the English slot of a counted phrase, which
  * otherwise reads "1 slots". The plural defaults to the singular plus "s".
  */

@@ -16,8 +16,8 @@ vi.mock("@/components/account/BioSettingsCard", () => ({
 vi.mock("@/contexts/SimpleAuthContext", () => ({
   useSimpleAuth: () => ({
     logout: vi.fn(),
-    profileType: null,
-    profiles: [],
+    profileType: null as string | null,
+    profiles: [] as unknown[],
     switchProfile: vi.fn(),
     setProfileName: vi.fn(),
     applySession: vi.fn(),

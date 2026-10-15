@@ -58,7 +58,7 @@ export function validateNewTopic(
   if (trimmed.length < 2) {
     return {
       isValid: false,
-      error: l({ ru: "Название темы слишком короткое (минимум 2 символа)", kk: "Название темы слишком короткое (минимум 2 символа)", en: "The topic name is too short (at least 2 characters)" }),
+      error: l({ ru: "Название темы слишком короткое (минимум 2 символа)", kk: "Тақырып атауы тым қысқа (кемінде 2 таңба)", en: "The topic name is too short (at least 2 characters)" }),
       normalized: "",
       formatted: "",
     };
@@ -67,7 +67,7 @@ export function validateNewTopic(
   if (trimmed.length > 50) {
     return {
       isValid: false,
-      error: l({ ru: "Название темы слишком длинное (максимум 50 символов)", kk: "Название темы слишком длинное (максимум 50 символов)", en: "The topic name is too long (50 characters at most)" }),
+      error: l({ ru: "Название темы слишком длинное (максимум 50 символов)", kk: "Тақырып атауы тым ұзын (ең көбі 50 таңба)", en: "The topic name is too long (50 characters at most)" }),
       normalized: "",
       formatted: "",
     };
@@ -78,7 +78,7 @@ export function validateNewTopic(
     if (pattern.test(trimmed)) {
       return {
         isValid: false,
-        error: l({ ru: "Название темы содержит недопустимые слова", kk: "Название темы содержит недопустимые слова", en: "The topic name contains words that are not allowed" }),
+        error: l({ ru: "Название темы содержит недопустимые слова", kk: "Тақырып атауында рұқсат етілмеген сөздер бар", en: "The topic name contains words that are not allowed" }),
         normalized: normalizeTopic(trimmed),
         formatted: formatTopicName(trimmed),
       };
@@ -95,7 +95,7 @@ export function validateNewTopic(
   if (duplicate) {
     return {
       isValid: false,
-      error: l({ ru: `Такая тема уже существует: «${duplicate}»`, kk: `Такая тема уже существует: «${duplicate}»`, en: `This topic already exists: “${duplicate}”` }),
+      error: l({ ru: `Такая тема уже существует: «${duplicate}»`, kk: `Мұндай тақырып бар: «${duplicate}»`, en: `This topic already exists: “${duplicate}”` }),
       normalized,
       formatted: duplicate,
     };

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { studentCreds, invokeApi } from "@/lib/sessionApi";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { personName } from "@/lib/personName";
 import { Bell, Calendar, Clock, User, X, Loader2, Timer, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,7 @@ interface TeacherNotificationsTabProps {
 }
 
 const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: TeacherNotificationsTabProps) => {
-  const { language, l } = useLanguage();
+  const { t, language, l } = useLanguage();
   const queryClient = useQueryClient();
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
 
@@ -268,7 +269,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium text-foreground truncate">{request.user_name}</span>
+                            <span className="text-sm font-medium text-foreground truncate">{personName(request.user_name, t("student"))}</span>
                             {isNew && <Badge variant="default" className="text-[10px] px-1.5 py-0">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                           </div>
                         </div>
@@ -360,7 +361,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{cancellation.user_name}</p>
+                        <p className="text-sm font-medium truncate">{personName(cancellation.user_name, t("student"))}</p>
                         {isNew && <Badge variant="destructive" className="text-xs px-2 py-0.5">{l({ ru: "Новое", kk: "Жаңа", en: "New" })}</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
@@ -418,7 +419,7 @@ const TeacherNotificationsTab = ({ teacherName, productIds, lastViewedAt }: Teac
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        {response.user_name} {isApproved ? (l({ ru: "подтвердил", kk: "растады", en: "confirmed" })) : (l({ ru: "отклонил", kk: "қабылдамады", en: "rejected" }))}
+                        {personName(response.user_name, t("student"))} {isApproved ? (l({ ru: "подтвердил", kk: "растады", en: "confirmed" })) : (l({ ru: "отклонил", kk: "қабылдамады", en: "rejected" }))}
                       </p>
                     </div>
                   </div>

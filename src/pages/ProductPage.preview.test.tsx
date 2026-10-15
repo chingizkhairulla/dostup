@@ -44,7 +44,7 @@ vi.mock("@/contexts/SimpleAuthContext", () => ({
   useSimpleAuth: () => ({
     user: { id: "user-1" },
     profileType: "creator",
-    profiles: [],
+    profiles: [] as unknown[],
     switchProfile: vi.fn(),
     status: "authenticated",
     sessionToken: "session-token",
@@ -53,7 +53,7 @@ vi.mock("@/contexts/SimpleAuthContext", () => ({
 
 vi.mock("@/hooks/useProducts", () => ({
   useProduct: (id?: string) => ({ data: id ? product : null, isLoading: false }),
-  useProductProgram: () => ({ data: [] }),
+  useProductProgram: () => ({ data: [] as unknown[] }),
 }));
 
 const invokeApi = vi.fn().mockResolvedValue({});

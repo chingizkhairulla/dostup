@@ -8,6 +8,12 @@
 //   node scripts/i18n-wrap.mjs <dictionary.json>          dry run: what would change
 //   node scripts/i18n-wrap.mjs <dictionary.json> --write  rewrite the files
 //   … --file <substring>                              limit to matching files
+//   node scripts/i18n-wrap.mjs <kk.json> --kk [--write]   fill Kazakh: rewrite only
+//     the kk slot of phrases whose kk is still a copy of their ru (see
+//     kazakhGaps in i18n-raw.mjs). The dictionary maps the Russian (template
+//     body for a template) to the Kazakh, with the same ${…} expressions.
+//     Add --replace to rewrite the kk slot of every phrase with that Russian,
+//     which is how a reviewer's correction is applied.
 //
 // The dictionary maps the Russian text to English:
 //   { "Сохранить": "Save", "Удалено ${count} файлов": "Deleted ${count} files" }
@@ -26,7 +32,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import ts from "typescript";
-import { isExcluded, rawCyrillic, sourceFiles } from "./i18n-raw.mjs";
+import { isExcluded, kazakhGaps, rawCyrillic, sourceFiles } from "./i18n-raw.mjs";
 import { phraseRegex, readPhrase } from "./i18n-phrases.mjs";
 
 const args = process.argv.slice(2);
@@ -132,6 +138,84 @@ const tick = (body) => "`" + body + "`";
 function phraseSource(ru, kk, en, template) {
   const wrap = template ? tick : quote;
   return `l({ ru: ${wrap(ru)}, kk: ${wrap(kk)}, en: ${wrap(en)} })`;
+}
+
+if (flag("--kk")) {
+  fillKazakh();
+  process.exit(0);
+}
+
+/** Rewrites kk slots only; nothing else in a file can change. */
+function fillKazakh() {
+  const kazakh = JSON.parse(readFileSync(dictionaryPath, "utf8"));
+  const replace = flag("--replace");
+  let written = 0;
+  const missing = new Set();
+  const files = sourceFiles("src").filter((file) => !isExcluded(file) && (!only || file.includes(only)));
+
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+    const targets = replace ? kkSlotsFor(file, source, kazakh) : kazakhGaps(file, source);
+    const edits = [];
+    for (const { node, tree, ru } of targets) {
+      const kk = kazakh[ru];
+      if (kk === undefined) {
+        missing.add(ru);
+        continue;
+      }
+      const template = node.kind !== ts.SyntaxKind.StringLiteral;
+      edits.push({ start: node.getStart(tree), end: node.getEnd(), text: template ? tick(kk) : quote(kk) });
+    }
+    if (!edits.length) continue;
+
+    let out = source;
+    for (const edit of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, edit.start) + edit.text + out.slice(edit.end);
+
+    // Post-condition: only kk slots changed. Blank every kk slot in both
+    // versions; what is left must be identical.
+    if (withoutKazakh(file, out) !== withoutKazakh(file, source)) {
+      console.log(`refused ${file}: something other than a kk slot would change`);
+      continue;
+    }
+    written += edits.length;
+    if (flag("--write")) writeFileSync(file, out);
+  }
+
+  for (const ru of missing) console.log(`no Kazakh yet  ${ru}`);
+  console.log(`
+${flag("--write") ? "wrote" : "would write"} ${written} Kazakh slots; ${missing.size} texts lack Kazakh`);
+}
+
+/** Every kk slot of a three-language phrase whose ru is in the dictionary. */
+function kkSlotsFor(file, source, kazakh) {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = [];
+  const visit = (node) => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const slot = (name) => node.properties.find((p) => ts.isPropertyAssignment(p) && p.name?.getText(tree) === name);
+      const [ru, kk, en] = ["ru", "kk", "en"].map(slot);
+      if (ru && kk && en) {
+        const text = ru.initializer.getText(tree).replace(/^[`"']|[`"']$/g, "");
+        if (kazakh[text] !== undefined) found.push({ node: kk.initializer, tree, ru: text });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return found;
+}
+
+function withoutKazakh(file, source) {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const ranges = [];
+  const visit = (node) => {
+    if (ts.isPropertyAssignment(node) && node.name?.getText(tree) === "kk") ranges.push([node.initializer.getStart(tree), node.initializer.getEnd()]);
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  let out = source;
+  for (const [start, end] of ranges.sort((a, b) => b[0] - a[0])) out = out.slice(0, start) + "KK" + out.slice(end);
+  return out;
 }
 
 const known = knownTranslations();

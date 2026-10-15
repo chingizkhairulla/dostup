@@ -12,10 +12,10 @@ vi.mock("@/hooks/useSellerStorefront", () => ({
 vi.mock("@/contexts/SimpleAuthContext", () => ({
   useSimpleAuth: () => ({
     status: "guest",
-    sessionToken: null,
-    profileType: null,
-    user: null,
-    profiles: [],
+    sessionToken: null as string | null,
+    profileType: null as string | null,
+    user: null as { id: string } | null,
+    profiles: [] as unknown[],
     switchProfile: vi.fn(),
   }),
 }));

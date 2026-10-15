@@ -98,13 +98,13 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   return (
     <div className="flex flex-col h-[70vh] max-h-[70vh] border rounded-lg bg-card">
       <div className="px-4 py-3 border-b font-semibold">
-        {asModerator ? displayName : l({ ru: "Тех. поддержка", kk: "Тех. поддержка", en: "Support" })}
+        {asModerator ? displayName : l({ ru: "Тех. поддержка", kk: "Техникалық қолдау", en: "Support" })}
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {loading ? (
           <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : messages.length === 0 ? (
-          <div className="text-center text-muted-foreground text-sm pt-8">{l({ ru: "Нет сообщений. Напишите первое сообщение.", kk: "Нет сообщений. Напишите первое сообщение.", en: "No messages yet. Write the first one." })}</div>
+          <div className="text-center text-muted-foreground text-sm pt-8">{l({ ru: "Нет сообщений. Напишите первое сообщение.", kk: "Хабарламалар жоқ. Алғашқы хабарламаны жазыңыз.", en: "No messages yet. Write the first one." })}</div>
         ) : (
           messages.map((m) => {
             const mine = asModerator ? m.sender === "moderator" : m.sender === "user";
@@ -124,7 +124,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={l({ ru: "Напишите сообщение...", kk: "Напишите сообщение...", en: "Write a message..." })}
+          placeholder={l({ ru: "Напишите сообщение...", kk: "Хабарлама жазыңыз...", en: "Write a message..." })}
           disabled={sending}
         />
         <Button onClick={send} disabled={sending || !text.trim()} size="icon">

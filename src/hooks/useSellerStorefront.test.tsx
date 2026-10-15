@@ -19,14 +19,14 @@ function row(overrides: Record<string, unknown> = {}) {
   return {
     handle: "sat-academy",
     display_name: "SAT Academy",
-    avatar_url: null,
+    avatar_url: null as string | null,
     type: "creator",
     bio: "Мы готовим учеников к SAT",
     created_at: "2026-04-17T00:00:00.000Z",
     avg_rating: "4.80",
     review_count: 243,
     sales_count: 152,
-    products: [],
+    products: [] as unknown[],
     ...overrides,
   };
 }

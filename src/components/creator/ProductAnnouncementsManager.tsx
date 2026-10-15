@@ -58,18 +58,18 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
         groupLinkUrl: groupUrl.trim() || null,
         groupLinkLabel: groupLabel.trim() || null,
       });
-      toast.success(l({ ru: "Ссылка сохранена", kk: "Ссылка сохранена", en: "Link saved" }));
+      toast.success(l({ ru: "Ссылка сохранена", kk: "Сілтеме сақталды", en: "Link saved" }));
     } catch (e: any) {
       toast.error(e?.message || l({ ru: "Не удалось сохранить", kk: "Сақтау мүмкін болмады", en: "Could not save" }));
     }
   };
 
   const handleCreate = async (html: string) => {
-    if (!html || html === "<p></p>") { toast.error(l({ ru: "Пост пустой", kk: "Пост пустой", en: "The post is empty" })); return; }
+    if (!html || html === "<p></p>") { toast.error(l({ ru: "Пост пустой", kk: "Жазба бос", en: "The post is empty" })); return; }
     try {
       await createMut.mutateAsync({ productId, contentHtml: html });
       setIsAdding(false);
-      toast.success(l({ ru: "Опубликовано", kk: "Опубликовано", en: "Published" }));
+      toast.success(l({ ru: "Опубликовано", kk: "Жарияланды", en: "Published" }));
     } catch (e: any) { toast.error(e?.message || l({ ru: "Ошибка", kk: "Қате", en: "Error" })); }
   };
 
@@ -94,7 +94,7 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
     <div className="space-y-4">
       {!hideBackButton && onBack && (
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />{l({ ru: "К продуктам", kk: "К продуктам", en: "Back to products" })}</Button>
+          <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />{l({ ru: "К продуктам", kk: "Өнімдерге", en: "Back to products" })}</Button>
           <h2 className="text-lg font-semibold truncate">{productTitle}</h2>
         </div>
       )}
@@ -102,12 +102,12 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="space-y-1">
-            <Label>{l({ ru: "Ссылка на чат/группу (URL)", kk: "Ссылка на чат/группу (URL)", en: "Link to the chat or group (URL)" })}</Label>
+            <Label>{l({ ru: "Ссылка на чат/группу (URL)", kk: "Чатқа/топқа сілтеме (URL)", en: "Link to the chat or group (URL)" })}</Label>
             <Input value={groupUrl} onChange={(e) => setGroupUrl(e.target.value)} placeholder="https://t.me/..." />
           </div>
           <div className="space-y-1">
-            <Label>{l({ ru: "Текст кнопки", kk: "Текст кнопки", en: "Button text" })}</Label>
-            <Input value={groupLabel} onChange={(e) => setGroupLabel(e.target.value)} placeholder={l({ ru: "Ссылка на группу/чат", kk: "Ссылка на группу/чат", en: "Link to the group or chat" })} />
+            <Label>{l({ ru: "Текст кнопки", kk: "Түйме мәтіні", en: "Button text" })}</Label>
+            <Input value={groupLabel} onChange={(e) => setGroupLabel(e.target.value)} placeholder={l({ ru: "Ссылка на группу/чат", kk: "Топқа/чатқа сілтеме", en: "Link to the group or chat" })} />
           </div>
           <Button size="sm" onClick={handleSaveLink} disabled={setGroupLink.isPending}>
             {setGroupLink.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
@@ -120,7 +120,7 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
         <h3 className="font-medium">{l({ ru: "Объявления", kk: "Хабарландырулар", en: "Announcements" })}</h3>
         {!isAdding && (
           <Button size="sm" onClick={() => { setIsAdding(true); setEditingId(null); }}>
-            <Plus className="w-4 h-4 mr-1" />{l({ ru: "Создать пост", kk: "Создать пост", en: "Create a post" })}
+            <Plus className="w-4 h-4 mr-1" />{l({ ru: "Создать пост", kk: "Жазба жасау", en: "Create a post" })}
           </Button>
         )}
       </div>
@@ -131,14 +131,14 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
           onSave={handleCreate}
           onCancel={() => setIsAdding(false)}
           saving={createMut.isPending}
-          submitLabel={l({ ru: "Опубликовать", kk: "Опубликовать", en: "Publish" })}
+          submitLabel={l({ ru: "Опубликовать", kk: "Жариялау", en: "Publish" })}
         />
       )}
 
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : announcements.length === 0 && !isAdding ? (
-        <p className="text-sm text-muted-foreground text-center py-8">{l({ ru: "Пока нет объявлений", kk: "Пока нет объявлений", en: "No announcements yet" })}</p>
+        <p className="text-sm text-muted-foreground text-center py-8">{l({ ru: "Пока нет объявлений", kk: "Әзірге хабарландырулар жоқ", en: "No announcements yet" })}</p>
       ) : (
         <div className="space-y-3">
           {[...announcements].reverse().map((a) => (
@@ -175,8 +175,8 @@ const ProductAnnouncementsManager = ({ productId, productTitle, initialGroupLink
       <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{l({ ru: "Удалить объявление?", kk: "Удалить объявление?", en: "Delete this announcement?" })}</AlertDialogTitle>
-            <AlertDialogDescription>{l({ ru: "Действие нельзя отменить.", kk: "Действие нельзя отменить.", en: "This cannot be undone." })}</AlertDialogDescription>
+            <AlertDialogTitle>{l({ ru: "Удалить объявление?", kk: "Хабарландыруды жою керек пе?", en: "Delete this announcement?" })}</AlertDialogTitle>
+            <AlertDialogDescription>{l({ ru: "Действие нельзя отменить.", kk: "Бұл әрекетті қайтару мүмкін емес.", en: "This cannot be undone." })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{l({ ru: "Отмена", kk: "Болдырмау", en: "Cancel" })}</AlertDialogCancel>

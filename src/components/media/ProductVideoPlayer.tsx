@@ -289,9 +289,9 @@ export const ProductVideoPlayer: React.FC<ProductVideoPlayerProps> = ({
           <p className="text-xs font-medium text-white/90">
             {isLoading
               ? (downloadProgress > 0 && downloadProgress < 100
-                  ? l({ ru: `Загрузка видео (${downloadProgress}%)...`, kk: `Загрузка видео (${downloadProgress}%)...`, en: `Loading video (${downloadProgress}%)...` })
-                  : l({ ru: "Загрузка видео...", kk: "Загрузка видео...", en: "Loading video..." }))
-              : l({ ru: "Буферизация...", kk: "Буферизация...", en: "Buffering..." })}
+                  ? l({ ru: `Загрузка видео (${downloadProgress}%)...`, kk: `Бейне жүктелуде (${downloadProgress}%)...`, en: `Loading video (${downloadProgress}%)...` })
+                  : l({ ru: "Загрузка видео...", kk: "Бейне жүктелуде...", en: "Loading video..." }))
+              : l({ ru: "Буферизация...", kk: "Буферлеу...", en: "Buffering..." })}
           </p>
         </div>
       )}

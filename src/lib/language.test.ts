@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   countEn,
+  countRu,
+  pluralRu,
   DEFAULT_LANGUAGE,
   LANGUAGES,
   isLanguage,
@@ -69,6 +71,15 @@ describe("locale-aware formatting", () => {
     expect(countEn(5, "slot")).toBe("5 slots");
     expect(countEn(1, "person", "people")).toBe("1 person");
     expect(countEn(3, "person", "people")).toBe("3 people");
+  });
+
+  it("picks the Russian form by the last digits, the way Russian counts", () => {
+    const form = (n: number) => pluralRu(n, "слот", "слота", "слотов");
+    expect([1, 2, 5, 11, 12, 21, 22, 25, 111, 0].map(form)).toEqual([
+      "слот", "слота", "слотов", "слотов", "слотов", "слот", "слота", "слотов", "слотов", "слотов",
+    ]);
+    expect(countRu(1, "слот", "слота", "слотов")).toBe("1 слот");
+    expect(countRu(3, "файл", "файла", "файлов")).toBe("3 файла");
   });
 
   it("gives English the one/other split and Russian its own", () => {

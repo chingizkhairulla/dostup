@@ -8,7 +8,7 @@ vi.mock("@/lib/sessionApi", () => ({
 }));
 
 vi.mock("@/contexts/SimpleAuthContext", () => ({
-  useSimpleAuth: () => ({ profiles: [] }),
+  useSimpleAuth: () => ({ profiles: [] as unknown[] }),
 }));
 
 const settingsProps = vi.fn();

@@ -195,7 +195,7 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
           </p>
           {product.has_free_trial && (
             <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-              {l({ ru: "Пробный период", kk: "Пробный период", en: "Free trial" })}
+              {l({ ru: "Пробный период", kk: "Сынақ мерзімі", en: "Free trial" })}
             </span>
           )}
         </div>

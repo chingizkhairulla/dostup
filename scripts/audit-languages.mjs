@@ -4,6 +4,8 @@
 //   - Cyrillic on an English screen (the text is read off the rendered page,
 //     so it also catches what no source scan can: text built at run time,
 //     dates, anything inherited from data)
+//   - Russian on a Kazakh screen where the Kazakh exists (the text equals the
+//     ru slot of a phrase, or of a t() entry, whose kk differs)
 //   - a control whose text no longer fits (English runs longer than Russian)
 //   - the page scrolling sideways
 //   - a screen that fails to render at all
@@ -18,12 +20,48 @@
 // scrolls sideways. Clipped controls are listed for a person to judge: some
 // are cut on purpose (an ellipsis on a long file name).
 
-import { spawn } from "node:child_process";
+import { launchChrome } from "./chrome.mjs";
 import { setTimeout as delay } from "node:timers/promises";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { sourceFiles } from "./i18n-raw.mjs";
 
-const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+/**
+ * Russian texts that have a different Kazakh: the ru slot of every phrase and
+ * of every t() entry whose kk is not the same. Seen on a Kazakh screen, one of
+ * these means the Russian was shown although the Kazakh exists.
+ */
+function russianWithKazakh() {
+  const found = new Set();
+  for (const file of sourceFiles("src")) {
+    const source = readFileSync(file, "utf8");
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const visit = (node) => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const slot = (name) => node.properties.find((p) => ts.isPropertyAssignment(p) && p.name?.getText(tree) === name)?.initializer;
+        const [ru, kk] = [slot("ru"), slot("kk")];
+        if (ru && kk && ts.isStringLiteralLike(ru) && ts.isStringLiteralLike(kk) && ru.text !== kk.text) found.add(ru.text.trim());
+        if (ru && kk && ts.isObjectLiteralExpression(ru) && ts.isObjectLiteralExpression(kk)) {
+          const kazakh = new Map(kk.properties.filter(ts.isPropertyAssignment).map((p) => [p.name.getText(tree), p.initializer]));
+          for (const p of ru.properties.filter(ts.isPropertyAssignment)) {
+            const k = kazakh.get(p.name.getText(tree));
+            if (k && ts.isStringLiteralLike(p.initializer) && ts.isStringLiteralLike(k) && p.initializer.text !== k.text && !p.initializer.text.includes("{")) {
+              found.add(p.initializer.text.trim());
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+  }
+  return [...found].filter((text) => /[А-Яа-яЁё]{3,}/.test(text));
+}
+
+const RUSSIAN_WITH_KAZAKH = russianWithKazakh();
+
 const HARNESS = "http://localhost:5198";
 const PORT = 9555;
 
@@ -80,7 +118,7 @@ const expandAll = `(() => {
 const SCENES = [
   {
     name: "editor",
-    steps: [clickButton(["Создать", "Create", "Құру", "Жасау", "Өнім қосу", "Добавить", "Add", "Қосу"]), expandAll, clickText(["Платно", "Paid"]), expandAll, clickText(["Регулярно", "Recurring"]), expandAll],
+    steps: [clickButton(["Создать", "Create", "Құру", "Жасау", "Өнім қосу", "Добавить", "Add", "Қосу"]), expandAll, clickText(["Платно", "Ақылы", "Paid"]), expandAll, clickText(["Регулярно", "Тұрақты", "Recurring"]), expandAll],
   },
   {
     // The same form, scrolled to its payment section — the densest part.
@@ -89,11 +127,11 @@ const SCENES = [
     steps: [
       clickButton(["Создать", "Create", "Құру", "Жасау", "Өнім қосу", "Добавить", "Add", "Қосу"]),
       expandAll,
-      clickText(["Платно", "Paid"]),
+      clickText(["Платно", "Ақылы", "Paid"]),
       expandAll,
-      clickText(["Регулярно", "Recurring"]),
+      clickText(["Регулярно", "Тұрақты", "Recurring"]),
       expandAll,
-      scrollTo(["Оплата", "Payment"]),
+      scrollTo(["Оплата", "Төлем", "Payment"]),
     ],
   },
   { name: "materials-tab", steps: [] },
@@ -108,12 +146,23 @@ const SCENES = [
   { name: "reminders", steps: [] },
   { name: "account-sheet", steps: [] },
   { name: "not-found", steps: [] },
+  { name: "seller-notifications", steps: [] },
+  { name: "pending-payments", steps: [] },
+  { name: "teacher-schedule", steps: [] },
+  { name: "teacher-notifications", steps: [] },
+  { name: "teacher-materials", steps: [] },
+  { name: "buyer-home", steps: [] },
+  { name: "buyer-schedule", steps: [] },
+  { name: "buyer-materials", steps: [] },
+  { name: "buyer-notifications", steps: [] },
 ].filter((scene) => !onlyScene || scene.name === onlyScene || scene.shot === onlyScene);
 
 // Read off the rendered page. Text inside the fake data is Latin, so Cyrillic
 // here is the interface's own.
 const PROBE = `(() => {
   const CYRILLIC = /[\\u0400-\\u04FF]/;
+  const RUSSIAN_WITH_KAZAKH = new Set(${JSON.stringify(RUSSIAN_WITH_KAZAKH)});
+  const russianShown = new Set();
   const visible = (el) => {
     if (!el) return false;
     const box = el.getBoundingClientRect();
@@ -126,6 +175,7 @@ const PROBE = `(() => {
   for (let node; (node = walker.nextNode()); ) {
     const text = node.textContent.trim();
     if (text && CYRILLIC.test(text) && visible(node.parentElement)) cyrillic.add(text.slice(0, 90));
+    if (text && RUSSIAN_WITH_KAZAKH.has(text) && visible(node.parentElement)) russianShown.add(text.slice(0, 90));
   }
   for (const el of document.querySelectorAll("[placeholder],[title],[aria-label],[alt]")) {
     for (const name of ["placeholder", "title", "aria-label", "alt"]) {
@@ -137,11 +187,31 @@ const PROBE = `(() => {
   const clipped = [];
   for (const el of document.querySelectorAll("button, a, label, [role=tab], h1, h2, h3, th")) {
     if (!visible(el) || el.scrollWidth <= el.clientWidth + 2) continue;
-    // For screen readers only: 1px wide by design (Tailwind's sr-only, Radix's VisuallyHidden).
-    if (el.closest(".sr-only") || el.getBoundingClientRect().width <= 2) continue;
+    // For screen readers only, by design: Tailwind's sr-only and Radix's
+    // VisuallyHidden both clip to nothing. Judged by the clip, not by width:
+    // a button squeezed to 2px by its row is exactly what should be reported.
+    const hiddenForScreenReaders = (node) => {
+      for (let current = node; current && current !== document.body; current = current.parentElement) {
+        if (current.classList.contains("sr-only")) return true;
+        if (getComputedStyle(current).clip === "rect(0px, 0px, 0px, 0px)") return true;
+      }
+      return false;
+    };
+    if (hiddenForScreenReaders(el)) continue;
     const style = getComputedStyle(el);
     const deliberate = style.textOverflow === "ellipsis" || el.classList.contains("truncate") || !!el.querySelector(".truncate");
     clipped.push((deliberate ? "(ellipsis) " : "") + el.textContent.trim().replace(/\\s+/g, " ").slice(0, 60));
+  }
+
+  // A button its row has squeezed narrower than any icon or word: its content
+  // shrinks with it, so the overflow test above cannot see it.
+  for (const el of document.querySelectorAll("button")) {
+    const box = el.getBoundingClientRect();
+    const hasContent = el.textContent.trim() || el.querySelector("svg");
+    // Narrower than tall: a square 16px checkbox or close cross is drawn that way on purpose.
+    if (box.height > 0 && box.width > 0 && box.width < 20 && box.width < box.height * 0.75 && hasContent) {
+      clipped.push("(squeezed to " + Math.round(box.width) + "px) " + (el.getAttribute("aria-label") || el.textContent.trim() || "icon button"));
+    }
   }
 
   const crash = document.querySelector("#harness-error");
@@ -150,6 +220,7 @@ const PROBE = `(() => {
     crashed: crash ? crash.textContent.slice(0, 300) : null,
     empty: document.querySelector("#harness-scene")?.textContent.trim().length === 0 && document.body.textContent.trim().length < 5,
     cyrillic: [...cyrillic],
+    russianShown: [...russianShown],
     clipped: [...new Set(clipped)],
     sideways: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
     characters: document.body.innerText.length,
@@ -195,28 +266,11 @@ async function connect() {
 try {
   await fetch(HARNESS);
 } catch {
-  console.error(`The harness is not running on ${HARNESS}.\nStart it first: npx vite --config scripts/language-harness/vite.config.mts`);
+  console.error(`The harness is not running on ${HARNESS}.\nStart it first: npm run harness:languages`);
   process.exit(2);
 }
 
-const chrome = spawn(CHROME, [
-  "--headless=new",
-  `--remote-debugging-port=${PORT}`,
-  "--remote-allow-origins=*",
-  "--no-first-run",
-  "--user-data-dir=" + process.env.TEMP + "\\language-audit-profile",
-  "about:blank",
-]);
-chrome.stderr.on("data", () => {});
-
-for (let attempt = 0; attempt < 40; attempt += 1) {
-  try {
-    await fetch(`http://127.0.0.1:${PORT}/json/version`);
-    break;
-  } catch {
-    await delay(250);
-  }
-}
+const chrome = await launchChrome(PORT);
 
 const { send, close, consoleLines } = await connect();
 await send("Page.enable");
@@ -239,7 +293,8 @@ for (const scene of SCENES) {
       // also waits for Vite to compile it), then let queries settle.
       for (let waited = 0; waited < 15000; waited += 300) {
         await delay(300);
-        const ready = await evaluate(`(document.querySelector("#harness-scene")?.innerText.trim().length ?? 0) > 0 || !!document.querySelector("#harness-error") || document.body.innerText.trim().length > 20`);
+        // The old page can still be there right after navigating: check it is the new one.
+        const ready = await evaluate(`location.search.includes("lang=${language}") && document.documentElement.lang === "${language}" && ((document.querySelector("#harness-scene")?.innerText.trim().length ?? 0) > 0 || !!document.querySelector("#harness-error") || document.body.innerText.trim().length > 20)`);
         if (ready) break;
       }
       await delay(1200);
@@ -267,6 +322,9 @@ for (const scene of SCENES) {
       if (probe.lang !== language) problems.push(`${where}: <html lang> is "${probe.lang}"`);
       if (probe.characters < 20) problems.push(`${where}: the screen is empty`);
       if (probe.sideways > 0) problems.push(`${where}: page scrolls sideways by ${probe.sideways}px`);
+      if (language === "kk" && probe.russianShown.length) {
+        problems.push(`${where}: Russian on a Kazakh screen where Kazakh exists — ${probe.russianShown.join(" | ")}`);
+      }
       if (language === "en" && probe.cyrillic.length) {
         problems.push(`${where}: Cyrillic on an English screen — ${probe.cyrillic.join(" | ")}`);
       }
@@ -278,7 +336,7 @@ for (const scene of SCENES) {
 }
 
 close();
-chrome.kill();
+chrome.close();
 
 for (const row of rows) {
   const hard = row.clipped.filter((text) => !text.startsWith("(ellipsis)"));
@@ -294,4 +352,4 @@ if (problems.length) {
   for (const problem of problems) console.log("  " + problem);
   process.exit(1);
 }
-console.log("No Cyrillic on English screens, no crashes, no sideways scrolling.");
+console.log("No Cyrillic on English screens, no Russian on Kazakh screens where Kazakh exists, no crashes, no sideways scrolling.");

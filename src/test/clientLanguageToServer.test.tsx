@@ -34,7 +34,7 @@ import type { Language } from "@/lib/language";
 
 let switchTo: (language: Language) => void = () => {};
 
-function Probe() {
+function Probe(): null {
   useSyncProfileLanguage();
   const { setLanguage } = useLanguage();
   switchTo = setLanguage;

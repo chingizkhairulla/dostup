@@ -114,13 +114,69 @@ const bookings = [
   { id: "b-2", time_slot_id: "slot-3", simple_user_id: "buyer-2", user: { name: "Daniyar Omarov", phone: "+77010000002" } },
 ];
 
+// One booking changed by its buyer, one move asked for, and the buyer's side of
+// the same story — so notification and schedule screens have something to say.
+const cancellations = [
+  { id: "c-1", user_name: "Aigerim Sadykova", product_title: "SAT Math Bootcamp", product_id: "product-1", schedule_id: "s-1", schedule_title: "Live lessons", slot_date: day(2), slot_time: "18:30:00", cancelled_at: `${day(-1)}T09:00:00Z`, cancelled_by: "student", cancellation_reasons: ["Schedule conflict"], cancellation_comment: null },
+  // Written before the server stopped inventing a name: must read as "Student".
+  { id: "c-2", user_name: "Ученик", product_title: "SAT Math Bootcamp", product_id: "product-1", schedule_id: "s-1", schedule_title: "Live lessons", slot_date: day(3), slot_time: "10:00:00", cancelled_at: `${day(-2)}T09:00:00Z`, cancelled_by: "student", cancellation_reasons: null, cancellation_comment: "Sorry, I am ill" },
+];
+
+const rescheduleRequests = [
+  { id: "r-1", booking_id: "b-1", simple_user_id: "buyer-1", schedule_id: "s-1", product_id: "product-1", product_title: "SAT Math Bootcamp", old_date: day(0), old_time: "10:00:00", new_date: day(4), new_time: "12:00:00", reasons: ["Exam at school"], comment: null, status: "pending", response_comment: null, created_at: `${day(-1)}T12:00:00Z`, responded_at: null, user_name: null, requested_by: "student" },
+];
+
+const myPurchases = [
+  { id: "mp-1", product_id: "product-1", status: "completed", amount: 45000, created_at: "2026-09-20T10:00:00Z", can_choose_teacher: false, assigned_teacher_id: null, product: { id: "product-1", title: "SAT Math Bootcamp", headline: "Twelve weeks to a 750+", telegram_link: null, group_link_label: null } },
+];
+
+const pendingPurchase = { id: "pu-3", status: "pending", amount: 45000, created_at: `${day(0)}T08:00:00Z`, product_id: "product-1", simple_user_id: "buyer-3", assigned_teacher_id: null, can_choose_teacher: null, user: { id: "buyer-3", name: "Timur Akhmetov", phone: "+77010000003" }, latest_submission: null };
+
 /** What each edge function answers, by function and action. */
 function respond(fn: string, body: Record<string, unknown>): unknown {
   switch (`${fn}:${String(body.action ?? "")}`) {
     case "manage-products:list":
       return { products };
     case "manage-products:list_purchases":
-      return { purchases };
+      return { purchases: [...purchases, pendingPurchase] };
+    case "manage-bookings:list_cancellations":
+      return { cancellations };
+    case "manage-bookings:list_reschedule_requests":
+      return { requests: rescheduleRequests };
+    case "checkout:list_my_purchases":
+      return { purchases: myPurchases };
+    case "checkout:list_my_subscriptions":
+      return { subscriptions: [] };
+    case "manage-materials:list_unlocks":
+      return { unlocks: [] };
+    case "manage-materials:list_bookmarks":
+      return { bookmarks: [] };
+    case "manage-schedules:student_list_schedules":
+      return { schedules: schedules.map((schedule) => ({ ...schedule, created_at: "2026-09-01T10:00:00Z", teacher_name: null })) };
+    case "manage-schedules:student_list_slots":
+      return { slots };
+    case "manage-schedules:list_outgoing_reschedules":
+      return { requests: [] };
+    case "manage-materials:list_student":
+      return {
+        materials: materials.map((material) => ({
+          ...material,
+          teacher_id: null,
+          teacher_name: null,
+          is_teacher_material: false,
+          product: { id: "product-1", title: "SAT Math Bootcamp", telegram_link: null },
+        })),
+      };
+    case "manage-products:list_subscriptions":
+      return { subscriptions: [] };
+    case "manage-products:list_creator_teachers":
+      return { teachers: [] };
+    case "manage-profile:get_handle":
+      return { handle: "demo-seller" };
+    case "manage-schedules:me":
+      return { userId: "teacher-1" };
+    case "manage-schedules:list_products":
+      return { products };
     case "manage-materials:list":
       return { materials };
     case "manage-materials:list_announcements":

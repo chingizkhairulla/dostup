@@ -7,10 +7,9 @@
 // Expects the harness dev server on http://localhost:5199 (see README note in
 // scripts/orange-harness/vite.config.mts).
 
-import { spawn } from "node:child_process";
+import { launchChrome } from "./chrome.mjs";
 import { setTimeout as delay } from "node:timers/promises";
 
-const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const HARNESS = "http://localhost:5199";
 const PORT = 9333;
 
@@ -144,26 +143,13 @@ const SCAN = `(() => {
 })()`;
 
 async function run() {
-  const chrome = spawn(CHROME, [
-    "--headless=new",
-    `--remote-debugging-port=${PORT}`,
-    "--remote-allow-origins=*",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--user-data-dir=" + process.env.TEMP + "\\orange-audit-profile",
-    "about:blank",
-  ]);
-  chrome.stderr.on("data", () => {});
-
-  // Wait for the debugging endpoint.
-  for (let i = 0; i < 40; i += 1) {
-    try {
-      await fetch(`http://127.0.0.1:${PORT}/json/version`);
-      break;
-    } catch {
-      await delay(250);
-    }
+  try {
+    await fetch(HARNESS);
+  } catch {
+    console.error(`The harness is not running on ${HARNESS}. Start it first: npm run harness:orange`);
+    process.exit(2);
   }
+  const chrome = await launchChrome(PORT);
 
   const { send, close } = await cdp();
   await send("Page.enable");
@@ -207,7 +193,7 @@ async function run() {
   }
 
   close();
-  chrome.kill();
+  chrome.close();
 
   let failures = 0;
   for (const { scene, findings } of report) {

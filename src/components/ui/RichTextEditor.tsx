@@ -104,7 +104,7 @@ export function RichTextEditor({
   className,
 }: RichTextEditorProps) {
   const { l } = useLanguage();
-  const placeholder = placeholderProp ?? l({ ru: "Введите текст описания...", kk: "Введите текст описания...", en: "Enter the description..." });
+  const placeholder = placeholderProp ?? l({ ru: "Введите текст описания...", kk: "Сипаттама мәтінін енгізіңіз...", en: "Enter the description..." });
   const formatInitial = (val: string) => {
     if (!val) return "<p></p>";
     if (/<[a-z][\s\S]*>/i.test(val)) return val;

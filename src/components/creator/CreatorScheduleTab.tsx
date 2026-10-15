@@ -34,7 +34,7 @@ import {
 } from "date-fns";
 import { ru, enGB } from "date-fns/locale";
 import { dateLocale } from "@/lib/dateLocale";
-import { countEn } from "@/lib/language";
+import { countEn, countRu, pluralRu } from "@/lib/language";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -432,7 +432,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
+      toast.success(l({ ru: `${pluralRu(count, "Создан", "Создано", "Создано")} ${countRu(count, "слот", "слота", "слотов")}!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
       setIsAddingSlots(false);
       setSelectedScheduleForSlots(null);
     },
@@ -740,7 +740,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     },
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
-      toast.success(l({ ru: `Перенесено ${count} слотов на ${manageRescheduleToDate}`, kk: `${count} слот ауыстырылды`, en: `${countEn(count, "slot")} moved to ${manageRescheduleToDate}` }));
+      toast.success(l({ ru: `${pluralRu(count, "Перенесён", "Перенесено", "Перенесено")} ${countRu(count, "слот", "слота", "слотов")} на ${manageRescheduleToDate}`, kk: `${count} слот ауыстырылды`, en: `${countEn(count, "slot")} moved to ${manageRescheduleToDate}` }));
       setIsManagingSlots(false);
       setManageRescheduleFromDate("");
       setManageRescheduleToDate("");
@@ -888,7 +888,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
     onSuccess: (count) => {
       invalidateSlotsAndBookings();
       queryClient.invalidateQueries({ queryKey: ["creator-own-schedules"] });
-      toast.success(l({ ru: `Создано ${count} слотов!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
+      toast.success(l({ ru: `${pluralRu(count, "Создан", "Создано", "Создано")} ${countRu(count, "слот", "слота", "слотов")}!`, kk: `${count} слот жасалды!`, en: `${countEn(count, "slot")} created!` }));
       setIsWizardOpen(false);
     },
     onError: (error: any) => {
@@ -1613,7 +1613,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-base flex items-center gap-2 capitalize">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Users className="w-4 h-4 text-primary" />
                 {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
                 {(() => {
@@ -1767,7 +1767,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
       <Dialog open={isDayScheduleDialogOpen} onOpenChange={setIsDayScheduleDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2 capitalize">
+            <DialogTitle className="text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
               {l({ ru: "Записи на ", kk: "", en: "Bookings for " })}
               {selectedDate && format(selectedDate, "d MMMM, EEEE", { locale: dateLocale(language) })}
@@ -2414,7 +2414,7 @@ const CreatorScheduleTab = ({ creatorName, onGoToProducts }: CreatorScheduleTabP
                 if (!expandingSlot) return "";
                 const currentMax = expandingSlot.slot.max_participants ?? expandingSlot.schedule.max_participants ?? 1;
                 const newMax = currentMax + 1;
-                return l({ ru: `Максимальное количество участников для слота ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} будет увеличено с ${currentMax} до ${newMax}.`, kk: `${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} слотындағы қатысушылардың максималды саны ${currentMax}-ден ${newMax}-ге дейін артады.`, en: `The ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} slot will go from ${currentMax} to ${newMax} participants.` });
+                return l({ ru: `Максимальное количество участников для слота ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} будет увеличено с ${currentMax} до ${newMax}.`, kk: `${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} слотындағы қатысушылардың максималды саны ${currentMax}-ден ${newMax}-ге дейін артады.`, en: `The ${expandingSlot.slot.start_time.slice(0, 5)} - ${expandingSlot.slot.end_time.slice(0, 5)} slot will go from ${currentMax} to ${countEn(newMax, "participant")}.` });
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>

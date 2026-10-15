@@ -22,6 +22,15 @@ import AccountSettingsView from "@/components/account/AccountSettingsView";
 import NotificationPreferences from "@/components/NotificationPreferences";
 import AccountSheet from "@/components/layout/BuyerAccountSheet";
 import NotFound from "@/pages/NotFound";
+import CreatorNotificationsTab from "@/components/creator/CreatorNotificationsTab";
+import CreatorPendingPayments from "@/components/creator/CreatorPendingPayments";
+import TeacherScheduleTab from "@/components/teacher/TeacherScheduleTab";
+import TeacherNotificationsTab from "@/components/teacher/TeacherNotificationsTab";
+import TeacherMaterialsManager from "@/components/teacher/TeacherMaterialsManager";
+import HomeTab from "@/components/dashboard/HomeTab";
+import ScheduleTab from "@/components/dashboard/ScheduleTab";
+import MaterialsTab from "@/components/dashboard/MaterialsTab";
+import NotificationsTab from "@/components/dashboard/NotificationsTab";
 import ProductPreviewRoute from "@/pages/ProductPreviewRoute";
 
 // One screen per `?scene=`, in the language given by `?lang=`. Real components
@@ -104,6 +113,15 @@ const SCENES: Record<string, () => ReactNode> = {
   ),
   "account-sheet": () => <AccountSheet open onOpenChange={() => {}} />,
   "not-found": () => <NotFound />,
+  "seller-notifications": () => <CreatorNotificationsTab creatorName="Demo Seller" lastViewedAt={null} />,
+  "pending-payments": () => <CreatorPendingPayments creatorName="Demo Seller" />,
+  "teacher-schedule": () => <TeacherScheduleTab teacherName="Demo Teacher" productIds={["product-1"]} />,
+  "teacher-notifications": () => <TeacherNotificationsTab teacherName="Demo Teacher" productIds={["product-1"]} lastViewedAt={null} />,
+  "teacher-materials": () => <TeacherMaterialsManager teacherId="teacher-1" productId="product-1" productTitle="SAT Math Bootcamp" />,
+  "buyer-home": () => <HomeTab onBrowseCourses={() => {}} />,
+  "buyer-schedule": () => <ScheduleTab />,
+  "buyer-materials": () => <MaterialsTab />,
+  "buyer-notifications": () => <NotificationsTab lastViewedAt={null} purchasedProductIds={["product-1"]} />,
   "preview-frame": () => <ProductPreviewRoute />,
 };
 
@@ -130,9 +148,11 @@ createRoot(document.getElementById("root")!).render(
           <MemoryRouter>
             <Sonner />
             <Crash>
-              <div id="harness-scene" data-scene={scene}>
+              {/* The dashboards' own padding: some screens (the buyer's date strip)
+                  use negative margins that assume it. */}
+              <main id="harness-scene" data-scene={scene} className="px-4 py-6 md:px-6">
                 {render ? render() : <pre id="harness-error">Unknown scene: {scene}</pre>}
-              </div>
+              </main>
             </Crash>
           </MemoryRouter>
         </TooltipProvider>

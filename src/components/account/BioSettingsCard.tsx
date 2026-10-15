@@ -32,7 +32,7 @@ const BioSettingsCard = () => {
         setValue(bio);
         setInitial(bio);
       })
-      .catch(() => undefined)
+      .catch((): undefined => undefined)
       .finally(() => {
         if (active) setLoading(false);
       });

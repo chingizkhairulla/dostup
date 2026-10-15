@@ -81,12 +81,14 @@ export const MaterialsSectionsNav = ({
         <Icon className="w-4 h-4" />
         {!compact && <span>{it.label}</span>}
         {it.key === "trash" && trashCount > 0 && !compact && (
-          <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-orange-500 text-white font-semibold">
+          <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-semibold">
             {trashCount}
           </span>
         )}
+        {/* Inside the button's own corner: the row is overflow-hidden, so a
+            badge hanging outside it was cut off on phones. */}
         {it.key === "trash" && trashCount > 0 && compact && (
-          <span className="absolute -top-1 -right-1 text-[10px] min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-white font-semibold flex items-center justify-center">
+          <span className="absolute top-0.5 right-0.5 text-[9px] leading-none min-w-[14px] h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground font-semibold flex items-center justify-center">
             {trashCount}
           </span>
         )}

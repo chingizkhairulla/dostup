@@ -156,7 +156,7 @@ export function useCoverCrop() {
 
   const cropResult = async (): Promise<CoverCropResult> => {
     if (!originalFile || !mediaDimensions) {
-      throw new Error(l({ ru: "Нет файла для обработки", kk: "Нет файла для обработки", en: "There is no file to process" }));
+      throw new Error(l({ ru: "Нет файла для обработки", kk: "Өңдейтін файл жоқ", en: "There is no file to process" }));
     }
 
     const baseScale = Math.max(
@@ -185,13 +185,13 @@ export function useCoverCrop() {
 
     // Image: Crop to exact 16:10 rectangle canvas
     const img = imageElementRef.current;
-    if (!img) throw new Error(l({ ru: "Изображение не загружено", kk: "Изображение не загружено", en: "The image has not loaded" }));
+    if (!img) throw new Error(l({ ru: "Изображение не загружено", kk: "Сурет жүктелмеді", en: "The image has not loaded" }));
 
     const canvas = document.createElement("canvas");
     canvas.width = COVER_OUTPUT_WIDTH;
     canvas.height = COVER_OUTPUT_HEIGHT;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error(l({ ru: "Не удалось создать холст", kk: "Не удалось создать холст", en: "Couldn't create the canvas" }));
+    if (!ctx) throw new Error(l({ ru: "Не удалось создать холст", kk: "Кенепті жасау мүмкін болмады", en: "Couldn't create the canvas" }));
 
     const cropW = COVER_FRAME_WIDTH / scale;
     const cropH = COVER_FRAME_HEIGHT / scale;
@@ -214,7 +214,7 @@ export function useCoverCrop() {
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error(l({ ru: "Не удалось сохранить изображение", kk: "Не удалось сохранить изображение", en: "Couldn't save the image" })))),
+        (b) => (b ? resolve(b) : reject(new Error(l({ ru: "Не удалось сохранить изображение", kk: "Суретті сақтау мүмкін болмады", en: "Couldn't save the image" })))),
         "image/jpeg",
         0.92
       );

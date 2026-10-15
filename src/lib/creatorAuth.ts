@@ -198,7 +198,7 @@ export function buyerUserFromSession(
   return {
     id: session.profileId,
     phone: "",
-    name: storedName || emailLocal || l({ ru: "Пользователь", kk: "Пользователь", en: "User" }),
+    name: storedName || emailLocal || l({ ru: "Пользователь", kk: "Пайдаланушы", en: "User" }),
     role: "student" as const,
     created_at: session.createdAt || new Date().toISOString(),
   };
@@ -534,7 +534,7 @@ export async function sendEmailCode(email: string, profileType?: ProfileType) {
           ? data.error
           : error?.message) || "network_failure";
       return {
-        data: { user: null, session: null },
+        data: { user: null as Session["user"] | null, session: null as Session | null },
         error: {
           message,
           code: classifyAuthError({ message, status: error?.status }),
@@ -547,7 +547,7 @@ export async function sendEmailCode(email: string, profileType?: ProfileType) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "network_failure";
     return {
-      data: { user: null, session: null },
+      data: { user: null as Session["user"] | null, session: null as Session | null },
       error: {
         message,
         code: classifyAuthError({ message, name: err instanceof Error ? err.name : undefined }),

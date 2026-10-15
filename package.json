@@ -13,7 +13,12 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "seed:demo:clean": "tsx scripts/seed-demo.ts --clean"
+    "seed:demo:clean": "tsx scripts/seed-demo.ts --clean",
+    "i18n:check": "node scripts/i18n-raw.mjs && node scripts/i18n-raw.mjs --kk",
+    "harness:languages": "vite --config scripts/language-harness/vite.config.mts",
+    "audit:languages": "node scripts/audit-languages.mjs",
+    "harness:orange": "vite --config scripts/orange-harness/vite.config.mts",
+    "audit:orange": "node scripts/audit-orange.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

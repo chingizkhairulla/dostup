@@ -26,7 +26,7 @@ const CreatorAccountTab = ({ creatorName }: CreatorAccountTabProps) => {
       .then((data) => {
         if (active && data.createdAt) setCreatedAt(new Date(data.createdAt));
       })
-      .catch(() => undefined);
+      .catch((): undefined => undefined);
     return () => {
       active = false;
     };

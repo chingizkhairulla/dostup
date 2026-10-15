@@ -79,7 +79,7 @@ const buildHtml = (text: string, attachments: Attachment[]) => {
 
 const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, saving, submitLabel: submitLabelProp }: Props) => {
   const { l } = useLanguage();
-  const submitLabel = submitLabelProp ?? l({ ru: "Опубликовать", kk: "Опубликовать", en: "Publish" });
+  const submitLabel = submitLabelProp ?? l({ ru: "Опубликовать", kk: "Жариялау", en: "Publish" });
   const initial = parseInitial(initialHtml);
   const [text, setText] = useState(initial.text);
   const [attachments, setAttachments] = useState<Attachment[]>(initial.attachments);
@@ -118,7 +118,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
         ]);
       } catch (e) {
         console.error(e);
-        toast.error(l({ ru: `Не удалось загрузить ${file.name}`, kk: `Не удалось загрузить ${file.name}`, en: `Couldn't upload ${file.name}` }));
+        toast.error(l({ ru: `Не удалось загрузить ${file.name}`, kk: `${file.name} жүктеу мүмкін болмады`, en: `Couldn't upload ${file.name}` }));
       } finally {
         setUploading((n) => n - 1);
       }
@@ -186,7 +186,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
           className="shrink-0 h-9 w-9"
           onClick={handlePickFiles}
           disabled={saving}
-          title={l({ ru: "Прикрепить файл", kk: "Прикрепить файл", en: "Attach a file" })}
+          title={l({ ru: "Прикрепить файл", kk: "Файл тіркеу", en: "Attach a file" })}
         >
           <Paperclip className="w-5 h-5" />
         </Button>
@@ -201,7 +201,7 @@ const AnnouncementComposer = ({ productId, initialHtml = "", onSave, onCancel, s
             }
           }}
           rows={1}
-          placeholder={l({ ru: "Напишите сообщение...", kk: "Напишите сообщение...", en: "Write a message..." })}
+          placeholder={l({ ru: "Напишите сообщение...", kk: "Хабарлама жазыңыз...", en: "Write a message..." })}
           className="flex-1 resize-none bg-transparent outline-none px-2 py-2 text-sm leading-5 max-h-60"
         />
         <Button

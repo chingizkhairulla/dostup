@@ -176,6 +176,8 @@ const LOCALIZED_FUNCTIONS = [
   "process-subscriptions",
   "submit-payment-receipt",
   "send-email-code",
+  // Its fallback name «Ученик» reached the seller's screen as-is in every language.
+  "manage-bookings",
 ];
 
 /** Functions that send FCM messages themselves, token by token. */
@@ -195,6 +197,8 @@ describe("edge functions use the shared messages", () => {
   const DATA_NOT_TEXT = [
     // A marker manage-bookings writes into reasons[]; notify-reschedule skips on it.
     'record.reasons?.includes("Запрос ученика подтверждён")',
+    // The same marker, where manage-bookings writes it.
+    "reasons: ['Запрос ученика подтверждён']",
     // The stored product_title of a material_unlocks row for a product with no title.
     'productTitleMap[m.product_id] || "Продукт"',
   ];

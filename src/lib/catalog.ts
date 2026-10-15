@@ -1,4 +1,4 @@
-import { pickLanguage, pluralForm, type Language, type Translated } from "./language";
+import { countEn, pickLanguage, pluralForm, pluralRu, type Language, type Translated } from "./language";
 import { CATEGORY_NAMES_EN, SUBCATEGORY_NAMES_EN } from "./taxonomyEn";
 
 export type LessonFormat = "individual" | "group";
@@ -75,14 +75,6 @@ export type SellerStorefront = {
 };
 
 export const CATALOG_FILTER_THRESHOLD = 12;
-
-function pluralRu(count: number, one: string, few: string, many: string) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
-}
 
 // English has only one/other, so it needs its own branch rather than the
 // Russian one/few/many rule.
@@ -220,7 +212,7 @@ export function pricingOptionLabel(option: PricingOption, language: Language) {
   const every = (days: number): Translated => ({
     ru: `каждые ${days} дн.`,
     kk: `әр ${days} күн сайын`,
-    en: `every ${days} days`,
+    en: `every ${countEn(days, "day")}`,
   });
   const periods: Record<string, Translated> = {
     "7d": every(7),

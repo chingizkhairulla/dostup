@@ -1,5 +1,12 @@
 # Active Context
 
+## Current Focus (2026-10-15): follow-ups from the English task's reflection — BUILD and REFLECT done (`memory-bank/reflection/reflection-english-followups.md`); next: Kazakh review → commit → `/archive`
+Built and verified (Build Log at the top of `tasks.md`): 535 tests, 18 baseline type errors with `noImplicitAny` on, 138 browser screens clean in three languages, orange PASS. **Merge waits for a native speaker's review of `memory-bank/review/kk-review.md`.** Deploy list is now 15 edge functions (+`manage-bookings`). Audit tooling note: always launch Chrome through `scripts/chrome.mjs` — `child.kill()` left headless Chrome holding the debugging port on Windows.
+
+### Plan summary
+Level 3, same branch and PR as the English task; plan in `memory-bank/tasks.md` (top section). In scope: `noImplicitAny` on (48 new errors to fix properly), Russian plurals («1 слотов», 9 sites) and the `capitalize` day heading, the server's «Ученик» fallback name, **Kazakh for the 207 phrases with a native-speaker review before the merge**, harness scenes for the teacher/buyer/notification/payment screens plus the trash badge. User decisions 2026-10-15: push-recipient bug **not now**; the 5 unused files **kept**; the `20260917120000` collision belongs to the `предпросмотер` integration task. The English task's archive waits for this.
+
+
 ## Current Focus: English language (RU/KK/EN) + settings renames + white-on-orange
 **The dark theme is cancelled** — the user dropped it 2026-09-22 ("темная тема не нужна нужен только перевод на англ"). Everything about "Подсветка", a black palette, `ThemeProvider`, and the prototype-approval gate from the first plan is out of scope; `next-themes` stays installed but unused. Branch was renamed from `темная-подсветка` to **`английский-язык`** to match. Level 4, VAN → PLAN (6 phases, down from 8 — no gated theme phase) → CREATIVE → **BUILD in progress** (see "Where the build stands" below). Full plan, audit and risk table in `memory-bank/tasks.md`; the two design docs are `memory-bank/creative/creative-i18n-architecture.md` and `creative-taxonomy-english.md`.
 
@@ -13,7 +20,7 @@ Audit: white-on-orange is mostly already correct — 3 real defects found (`drop
 Phases 0–5 built and green (508 tests / 37 files, 18 baseline type errors, build green). Phase 5: migration `20261003120000_recipient_language.sql` **applied to production 2026-10-03** and verified; the 14 changed edge functions and the frontend are not deployed yet. Also found: production history has `20260917120000` under a different name than this branch's file — `db push` would skip ours (see tasks.md). Language for push lives on `push_tokens` (per device — pushes are addressed to tokens, not profiles), for email on `profiles` (per person, via `manage-profile set_language`). The raw `#FF6B00` orange is now the `primary` token (user's call). Customer fixes done and measured in Chrome: toggle gap before "Sign in" 8→20px, English headline word gaps 19→35px (RU/KK untouched).
 
 ## Build complete in code (2026-10-13)
-Phase 4b and Phase 6 are done; `/reflect` is next. Phase 4b: 623 Russian strings written outside `l()` → 0, measured on the syntax tree by `scripts/i18n-raw.mjs` and held there by `src/test/noRawRussian.test.ts`. Phase 6: `scripts/audit-languages.mjs` over `scripts/language-harness/` — 84 screens in real Chrome, 0 Cyrillic on English screens, 0 crashes, 0 sideways scrolling. 522 tests / 39 files, 18 baseline type errors, build green.
+Phase 4b and Phase 6 are done; reflection written 2026-10-15 (`memory-bank/reflection/reflection-english-language.md`); `/archive` is next. Phase 4b: 623 Russian strings written outside `l()` → 0, measured on the syntax tree by `scripts/i18n-raw.mjs` and held there by `src/test/noRawRussian.test.ts`. Phase 6: `scripts/audit-languages.mjs` over `scripts/language-harness/` — 84 screens in real Chrome, 0 Cyrillic on English screens, 0 crashes, 0 sideways scrolling. 522 tests / 39 files, 18 baseline type errors, build green.
 
 Found on the way, all fixed with a test first: three screens **crashed** in English (404, reminder settings, slot wizard — tables keyed `{ ru, kk }` read with `table[language]`); 29 dates pinned to the Russian locale; upload cancellation recognised by comparing an error message with a Russian sentence.
 

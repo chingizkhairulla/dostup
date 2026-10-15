@@ -116,7 +116,7 @@ const VideoPlayer = ({ url, onClose }: VideoPlayerProps) => {
         )}
         {!youtubeId && !vimeoId && !isDirectVideo && (
           <div className="w-full h-full flex items-center justify-center text-white">
-            <p>{l({ ru: "Видео недоступно для встроенного просмотра", kk: "Видео недоступно для встроенного просмотра", en: "This video can't be played here" })}</p>
+            <p>{l({ ru: "Видео недоступно для встроенного просмотра", kk: "Бейнені осы жерде көру мүмкін емес", en: "This video can't be played here" })}</p>
           </div>
         )}
       </div>
@@ -423,7 +423,7 @@ const MaterialsTab = () => {
             <div className="flex-1 min-w-0 overflow-hidden">
               <h3 className="font-medium text-foreground truncate" title={material.title}>{material.title}</h3>
               <p className="text-sm text-muted-foreground capitalize mt-0.5">
-                {material.type === "video" ? l({ ru: "Видео", kk: "Видео", en: "Video" }) : material.type}
+                {material.type === "video" ? l({ ru: "Видео", kk: "Бейне", en: "Video" }) : material.type}
               </p>
 
               {isVideo && isExpanded && canPlay && (

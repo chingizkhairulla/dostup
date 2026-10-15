@@ -85,7 +85,7 @@ const CheckoutPage = () => {
     headline: "Получите доступ к премиум-контенту",
     price: 49000,
     image_url: heroBackground,
-    kaspi_link: null,
+    kaspi_link: null as string | null,
   };
 
   const hasKaspiLink = !!displayProduct.kaspi_link;

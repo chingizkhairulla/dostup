@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { EXCLUDED, UNREACHABLE, isExcluded, pinnedRussianDates, rawCyrillic, sourceFiles } from "../../scripts/i18n-raw.mjs";
+import { EXCLUDED, UNREACHABLE, isExcluded, kazakhGaps, pinnedRussianDates, rawCyrillic, sourceFiles } from "../../scripts/i18n-raw.mjs";
 
 // The measurable "done" for English across the platform.
 //
@@ -73,6 +73,18 @@ describe("Russian written straight into the interface", () => {
     expect(count(`day.toLocaleDateString("ru-RU");`)).toBe(1);
     expect(count(`format(day, "d MMMM", { locale: dateLocale(language) });`)).toBe(0);
     expect(count("l({ ru: `на ${format(day, \"d MMM\", { locale: ru })}`, kk: \"\", en: \"\" });")).toBe(0);
+  });
+
+  it("is not what a Kazakh reader is shown where a phrase exists in three languages", () => {
+    // A phrase whose kk slot is a copy of its ru slot shows Russian to Kazakh
+    // readers. 203 did on 2026-10-15; the translations were written then and
+    // await a native speaker's review (memory-bank/review/kk-review.md).
+    const gaps = sourceFiles("src")
+      .filter((file) => !isExcluded(file))
+      .flatMap((file) => kazakhGaps(file))
+      .map((gap) => `${gap.file}:${gap.line}  ${gap.ru}`);
+
+    expect(gaps).toEqual([]);
   });
 
   it("only excludes files that exist", () => {

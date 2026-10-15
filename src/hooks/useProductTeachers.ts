@@ -63,7 +63,7 @@ export const useAddProductTeacher = () => {
         return data.teacher;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
-        if (msg.includes("уже добавлен")) throw new Error(l({ ru: "Этот учитель уже добавлен к продукту", kk: "Этот учитель уже добавлен к продукту", en: "This teacher has already been added to the product" }));
+        if (msg.includes("уже добавлен")) throw new Error(l({ ru: "Этот учитель уже добавлен к продукту", kk: "Бұл мұғалім өнімге қосылып қойған", en: "This teacher has already been added to the product" }));
         throw e;
       }
     },

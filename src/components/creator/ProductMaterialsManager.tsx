@@ -142,7 +142,7 @@ interface FormData {
       ...prev,
       fileEntries: [...prev.fileEntries, ...newEntries]
     }));
-    toast.success(arr.length > 1 ? l({ ru: `Добавлено файлов: ${arr.length}`, kk: `Добавлено файлов: ${arr.length}`, en: `Files added: ${arr.length}` }) : l({ ru: "Файл добавлен", kk: "Файл добавлен", en: "File added" }));
+    toast.success(arr.length > 1 ? l({ ru: `Добавлено файлов: ${arr.length}`, kk: `Қосылған файлдар: ${arr.length}`, en: `Files added: ${arr.length}` }) : l({ ru: "Файл добавлен", kk: "Файл қосылды", en: "File added" }));
   }, []);
 
   const getFilesFromClipboard = useCallback((clipboardData: DataTransfer | null): File[] => {
@@ -254,12 +254,12 @@ interface FormData {
       }
 
       if (formData.itemType === "link" && !formData.linkUrl.trim()) {
-        toast.error(l({ ru: "Введите ссылку или текст", kk: "Введите ссылку или текст", en: "Enter a link or text" }));
+        toast.error(l({ ru: "Введите ссылку или текст", kk: "Сілтеме немесе мәтін енгізіңіз", en: "Enter a link or text" }));
         return;
       }
 
       if (formData.itemType === "text" && !formData.content) {
-        toast.error(l({ ru: "Введите текст", kk: "Введите текст", en: "Enter text" }));
+        toast.error(l({ ru: "Введите текст", kk: "Мәтін енгізіңіз", en: "Enter text" }));
         return;
       }
 
@@ -357,7 +357,7 @@ interface FormData {
             }
           }
 
-          toast.success(l({ ru: `Папка "${formData.title}" создана!`, kk: `Папка "${formData.title}" создана!`, en: `Folder "${formData.title}" created!` }));
+          toast.success(l({ ru: `Папка "${formData.title}" создана!`, kk: `"${formData.title}" қалтасы жасалды!`, en: `Folder "${formData.title}" created!` }));
         } else {
           // Upload files
            for (let i = 0; i < formData.fileEntries.length; i++) {
@@ -382,7 +382,7 @@ interface FormData {
                 file_size: entry.file.size,
               });
            }
-          toast.success(formData.fileEntries.length > 1 ? l({ ru: "Файлы добавлены!", kk: "Файлы добавлены!", en: "Files added!" }) : l({ ru: "Файл добавлен!", kk: "Файл добавлен!", en: "File added!" }));
+          toast.success(formData.fileEntries.length > 1 ? l({ ru: "Файлы добавлены!", kk: "Файлдар қосылды!", en: "Files added!" }) : l({ ru: "Файл добавлен!", kk: "Файл қосылды!", en: "File added!" }));
         }
 
         setIsAdding(false);
@@ -503,7 +503,7 @@ interface FormData {
     } catch (err) {
       console.error('Error opening office doc:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      toast.error(l({ ru: `Ошибка: ${errMsg}`, kk: `Ошибка: ${errMsg}`, en: `Error: ${errMsg}` }));
+      toast.error(l({ ru: `Ошибка: ${errMsg}`, kk: `Қате: ${errMsg}`, en: `Error: ${errMsg}` }));
     } finally {
       toast.dismiss(loadingToast);
     }
@@ -548,7 +548,7 @@ interface FormData {
                       type="button"
                       onClick={(e) => { e.stopPropagation(); togglePickerFolder(f.id); }}
                       className="p-1 flex-shrink-0 hover:opacity-80"
-                      aria-label={expanded ? l({ ru: "Свернуть", kk: "Свернуть", en: "Collapse" }) : l({ ru: "Развернуть", kk: "Жаю", en: "Expand" })}
+                      aria-label={expanded ? l({ ru: "Свернуть", kk: "Жию", en: "Collapse" }) : l({ ru: "Развернуть", kk: "Жаю", en: "Expand" })}
                     >
                       {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </button>
@@ -674,7 +674,7 @@ interface FormData {
         {formData.itemType === "link" && (
           <>
           <div className="space-y-2">
-              <Label>{l({ ru: "Название (необязательно)", kk: "Название (необязательно)", en: "Title (optional)" })}</Label>
+              <Label>{l({ ru: "Название (необязательно)", kk: "Атауы (міндетті емес)", en: "Title (optional)" })}</Label>
               <Input
                 placeholder={l({ ru: "Если пусто — показывается сама ссылка", kk: "Бос болса — сілтеменің өзі көрсетіледі", en: "Leave it empty and the link itself is shown" })}
                 value={formData.title}
@@ -735,7 +735,7 @@ interface FormData {
                     </Button>
                    </div>
                    <div className="pl-6 space-y-2">
-                     <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Для ученика:", en: "For the student:" })}</p>
+                     <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Оқушы үшін:", en: "For the student:" })}</p>
                      <label className="flex items-center gap-2 text-xs cursor-pointer">
                       <Checkbox
                         checked={entry.permissions.allow_download}
@@ -792,21 +792,21 @@ interface FormData {
                  />
                  <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                  <p className="text-sm text-muted-foreground">
-                   {formData.fileEntries.length > 0 ? l({ ru: "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)", kk: "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)", en: "Add more file(s) — click, drag and drop, or paste (Ctrl+V)" }) : l({ ru: "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)", kk: "Файлды басып таңдаңыз, сүйреңіз немесе қойыңыз (Ctrl+V)", en: "Click, drag or paste (Ctrl+V) your files" })}
+                   {formData.fileEntries.length > 0 ? l({ ru: "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)", kk: "Тағы файл(дар) қосу — басыңыз, сүйреңіз немесе қойыңыз (Ctrl+V)", en: "Add more file(s) — click, drag and drop, or paste (Ctrl+V)" }) : l({ ru: "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)", kk: "Файлды басып таңдаңыз, сүйреңіз немесе қойыңыз (Ctrl+V)", en: "Click, drag or paste (Ctrl+V) your files" })}
                  </p>
                </div>
              </ContextMenuTrigger>
              <ContextMenuContent>
                <ContextMenuItem onSelect={() => fileInputRef.current?.click()}>
                  <FolderOpen className="w-4 h-4 mr-2" />
-                 {l({ ru: "Выбрать (из компьютера)", kk: "Выбрать (из компьютера)", en: "Choose (from computer)" })}
+                 {l({ ru: "Выбрать (из компьютера)", kk: "Таңдау (компьютерден)", en: "Choose (from computer)" })}
                </ContextMenuItem>
                <ContextMenuItem
                  onSelect={async () => {
                    try {
                      const anyNav = navigator as unknown as { clipboard?: { read?: () => Promise<Array<{ types: string[]; getType: (t: string) => Promise<Blob> }>> } };
                      const items = await anyNav.clipboard?.read?.();
-                     if (!items) { toast.error(l({ ru: "Буфер обмена недоступен", kk: "Буфер обмена недоступен", en: "The clipboard is unavailable" })); return; }
+                     if (!items) { toast.error(l({ ru: "Буфер обмена недоступен", kk: "Алмасу буфері қолжетімсіз", en: "The clipboard is unavailable" })); return; }
                      const files: File[] = [];
                      for (const item of items) {
                        const type = item.types.find((t) => t !== "text/plain" && t !== "text/html") || item.types[0];
@@ -816,14 +816,14 @@ interface FormData {
                        files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
                      }
                      if (files.length > 0) addFilesToForm(files);
-                     else toast.error(l({ ru: "В буфере обмена нет файлов", kk: "В буфере обмена нет файлов", en: "There are no files in the clipboard" }));
+                     else toast.error(l({ ru: "В буфере обмена нет файлов", kk: "Алмасу буферінде файлдар жоқ", en: "There are no files in the clipboard" }));
                    } catch {
-                     toast.error(l({ ru: "Не удалось прочитать буфер. Используйте Cmd+V", kk: "Не удалось прочитать буфер. Используйте Cmd+V", en: "Couldn't read the clipboard. Use Cmd+V" }));
+                     toast.error(l({ ru: "Не удалось прочитать буфер. Используйте Cmd+V", kk: "Буферді оқу мүмкін болмады. Cmd+V пайдаланыңыз", en: "Couldn't read the clipboard. Use Cmd+V" }));
                    }
                  }}
                >
                  <Clipboard className="w-4 h-4 mr-2" />
-                 {l({ ru: "Вставить", kk: "Вставить", en: "Paste" })}
+                 {l({ ru: "Вставить", kk: "Қою", en: "Paste" })}
                </ContextMenuItem>
              </ContextMenuContent>
            </ContextMenu>
@@ -842,7 +842,7 @@ interface FormData {
               }}
             />
             <Clock className="w-4 h-4" />
-            {l({ ru: "Запланировать открытие доступа", kk: "Запланировать открытие доступа", en: "Schedule when access opens" })}
+            {l({ ru: "Запланировать открытие доступа", kk: "Қолжетімділіктің ашылуын жоспарлау", en: "Schedule when access opens" })}
           </label>
           {formData.scheduleAccess && (
             <Input
@@ -904,16 +904,16 @@ interface FormData {
  
       {formData.itemType === "file" && (
         <div className="space-y-3">
-          <Label>{l({ ru: "Доступ", kk: "Доступ", en: "Access" })}</Label>
+          <Label>{l({ ru: "Доступ", kk: "Қолжетімділік", en: "Access" })}</Label>
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Для ученика:", en: "For the student:" })}</p>
+            <p className="text-xs font-medium text-muted-foreground">{l({ ru: "Для ученика:", kk: "Оқушы үшін:", en: "For the student:" })}</p>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox
                 checked={formData.allow_download}
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allow_download: !!checked }))}
               />
               <Download className="w-4 h-4" />
-              {l({ ru: "Скачивание файла", kk: "Скачивание файла", en: "File download" })}
+              {l({ ru: "Скачивание файла", kk: "Файлды жүктеу", en: "File download" })}
             </label>
            </div>
          </div>
@@ -958,7 +958,7 @@ interface FormData {
                 }}
              />
              <Clock className="w-4 h-4" />
-             {l({ ru: "Запланировать открытие доступа", kk: "Запланировать открытие доступа", en: "Schedule when access opens" })}
+             {l({ ru: "Запланировать открытие доступа", kk: "Қолжетімділіктің ашылуын жоспарлау", en: "Schedule when access opens" })}
            </label>
            {formData.scheduleAccess && (
              <Input
@@ -990,7 +990,7 @@ interface FormData {
            {updateMaterial.isPending ? (
              <span className="flex items-center gap-2">
                <Loader2 className="w-4 h-4 animate-spin" />
-               {l({ ru: "Сохранение...", kk: "Сохранение...", en: "Saving..." })}
+               {l({ ru: "Сохранение...", kk: "Сақталуда...", en: "Saving..." })}
              </span>
            ) : (
              t("save")
@@ -1139,12 +1139,12 @@ interface FormData {
                   ) : currentFolderId ? (
                    <>
                      <FolderOpen className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                     <p>{l({ ru: "Папка пуста", kk: "Папка пуста", en: "The folder is empty" })}</p>
+                     <p>{l({ ru: "Папка пуста", kk: "Қалта бос", en: "The folder is empty" })}</p>
                    </>
                  ) : (
                    <>
                      <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                     <p>{l({ ru: "Материалов пока нет", kk: "Материалов пока нет", en: "No materials yet" })}</p>
+                     <p>{l({ ru: "Материалов пока нет", kk: "Әзірге материалдар жоқ", en: "No materials yet" })}</p>
                    </>
                  )}
                </div>
@@ -1174,12 +1174,12 @@ interface FormData {
                                     <p className="font-medium text-sm truncate" title={material.title}>{material.title}</p>
                                     <p className="text-xs text-muted-foreground truncate">
                                       {material.type === "folder" 
-                                        ? l({ ru: `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`, kk: `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`, en: `Folder • ${countEn((allMaterials as Material[]).filter(m => m.parent_id === material.id).length, "item")}` })
+                                        ? l({ ru: `Папка • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элем.`, kk: `Қалта • ${(allMaterials as Material[]).filter(m => m.parent_id === material.id).length} элемент`, en: `Folder • ${countEn((allMaterials as Material[]).filter(m => m.parent_id === material.id).length, "item")}` })
                                         : material.type === "link"
                                         ? l({ ru: "Ссылка", kk: "Сілтеме", en: "Link" })
                                         : material.type === "text"
                                         ? l({ ru: "Текст", kk: "Мәтін", en: "Text" })
-                                        : `${l({ ru: "Файл • уч:", kk: "Файл • уч:", en: "File • student:" })} ${material.allow_download !== false ? l({ ru: "скач.", kk: "скач.", en: "download" }) : '—'} • ${l({ ru: "учит:", kk: "учит:", en: "teacher:" })} ${material.teacher_allow_download !== false ? l({ ru: "скач.", kk: "скач.", en: "download" }) : '—'}${material.available_at ? ` • 🕐 ${new Date(material.available_at).toLocaleDateString(localeTag(language), { day: '2-digit', month: '2-digit' })} ${new Date(material.available_at).toLocaleTimeString(localeTag(language), { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                                        : `${l({ ru: "Файл • уч:", kk: "Файл • оқушы:", en: "File • student:" })} ${material.allow_download !== false ? l({ ru: "скач.", kk: "жүктеу", en: "download" }) : '—'} • ${l({ ru: "учит:", kk: "мұғалім:", en: "teacher:" })} ${material.teacher_allow_download !== false ? l({ ru: "скач.", kk: "жүктеу", en: "download" }) : '—'}${material.available_at ? ` • 🕐 ${new Date(material.available_at).toLocaleDateString(localeTag(language), { day: '2-digit', month: '2-digit' })} ${new Date(material.available_at).toLocaleTimeString(localeTag(language), { hour: '2-digit', minute: '2-digit' })}` : ''}`
                                       }
                                    </p>
                                  </div>
@@ -1269,9 +1269,9 @@ interface FormData {
            <AlertDialogHeader>
              <AlertDialogTitle>{l({ ru: "Удалить?", kk: "Жою керек пе?", en: "Delete?" })}</AlertDialogTitle>
              <AlertDialogDescription>
-               {l({ ru: `Вы уверены, что хотите удалить "${deletingMaterial?.title ?? ""}"?`, kk: `Вы уверены, что хотите удалить "${deletingMaterial?.title ?? ""}"?`, en: `Are you sure you want to delete "${deletingMaterial?.title ?? ""}"?` })}
+               {l({ ru: `Вы уверены, что хотите удалить "${deletingMaterial?.title ?? ""}"?`, kk: `"${deletingMaterial?.title ?? ""}" шынымен жойғыңыз келе ме?`, en: `Are you sure you want to delete "${deletingMaterial?.title ?? ""}"?` })}
                {(allMaterials as Material[]).find(m => m.id === deletingMaterial?.id)?.type === "folder" && 
-                 l({ ru: " Все файлы внутри папки также будут удалены.", kk: " Все файлы внутри папки также будут удалены.", en: " All files inside the folder will be deleted too." })
+                 l({ ru: " Все файлы внутри папки также будут удалены.", kk: " Қалтадағы барлық файл да жойылады.", en: " All files inside the folder will be deleted too." })
                }
              </AlertDialogDescription>
            </AlertDialogHeader>

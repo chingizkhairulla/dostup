@@ -14,7 +14,8 @@
 // expressions are matching logic, not text anyone reads, so they are not
 // reported. Everything else is.
 //
-// Usage: node scripts/i18n-raw.mjs [--all] [--file <substring>] [--json]
+// Usage: node scripts/i18n-raw.mjs [--all] [--file <substring>] [--json] [--kk]
+//   --kk lists phrases that show Russian to Kazakh readers instead.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -53,6 +54,8 @@ export const ALLOWED = [
   { file: "src/lib/language.ts", text: "Қазақша" },
   // Not shown to anyone: it recognises the server's own (Russian) error text.
   { file: "src/hooks/useProductTeachers.ts", text: "уже добавлен" },
+  // A placeholder old rows hold instead of a name: matched, never shown.
+  { file: "src/lib/personName.ts", text: "Ученик" },
 ];
 
 export function isExcluded(file) {
@@ -170,10 +173,70 @@ export function pinnedRussianDates(file, source = readFileSync(file, "utf8")) {
   return found;
 }
 
+const KAZAKH_ONLY = /[әіңғүұқөһӘІҢҒҮҰҚӨҺ]/;
+const RUSSIAN_WORD = /[А-Яа-яЁё]{3,}/;
+
+// Phrases whose Kazakh is legitimately the same as the Russian: loanwords
+// Kazakh uses as they are, and labels that are only a word plus a number.
+export const KAZAKH_SAME_AS_RUSSIAN = new Set([
+  "Email", "Kaspi", "PIN", "мин", "файл", "Файл", "Масштаб", "Слот", "слот", "курс", "Автор",
+  "Медиа ${i + 1}", "Код ${putRes.status}", "код ${xhr.status}",
+]);
+
+/**
+ * Phrases that show Russian to a Kazakh reader: an object with ru, kk and en
+ * whose `kk` is exactly its `ru`, holds Russian words and no Kazakh-only
+ * letter. Compared as source text, so a template counts the same as a string.
+ */
+export function kazakhGaps(file, source = readFileSync(file, "utf8")) {
+  const normalisedFile = file.replace(/\\/g, "/");
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = [];
+
+  const visit = (node) => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const slot = (name) => node.properties.find((property) => ts.isPropertyAssignment(property) && propertyName(property) === name);
+      const ru = slot("ru");
+      const kk = slot("kk");
+      const en = slot("en");
+      if (ru && kk && en) {
+        const ruText = ru.initializer.getText(tree);
+        const kkText = kk.initializer.getText(tree);
+        const plain = ruText.replace(/^[`"']|[`"']$/g, "");
+        if (
+          ruText === kkText &&
+          RUSSIAN_WORD.test(ruText) &&
+          !KAZAKH_ONLY.test(kkText) &&
+          !KAZAKH_SAME_AS_RUSSIAN.has(plain)
+        ) {
+          const { line } = tree.getLineAndCharacterOfPosition(node.getStart(tree));
+          found.push({ file: normalisedFile, line: line + 1, ru: plain, node: kk.initializer, tree });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(tree);
+  return found;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const only = args.includes("--file") ? args[args.indexOf("--file") + 1] : null;
   const files = sourceFiles("src").filter((file) => !isExcluded(file) && (!only || file.includes(only)));
+
+  if (args.includes("--kk")) {
+    const gaps = files.flatMap((file) => kazakhGaps(file).map(({ node, tree, ...gap }) => gap));
+    if (args.includes("--json")) return console.log(JSON.stringify(gaps, null, 1));
+    const perFile = new Map();
+    for (const gap of gaps) perFile.set(gap.file, (perFile.get(gap.file) ?? 0) + 1);
+    for (const [file, count] of [...perFile].sort((a, b) => b[1] - a[1])) console.log(String(count).padStart(4) + "  " + file);
+    if (only) for (const gap of gaps) console.log(`${gap.file}:${gap.line}  ${gap.ru}`);
+    console.log(`\n${gaps.length} phrases show Russian to Kazakh readers, across ${perFile.size} files`);
+    process.exitCode = gaps.length ? 1 : 0;
+    return;
+  }
 
   const rows = [];
   const all = [];
@@ -198,6 +261,7 @@ function main() {
   if (rows.length > show.length) console.log(`     … and ${rows.length - show.length} more files`);
 
   console.log(`\n${all.length} raw Cyrillic strings across ${rows.length} files`);
+  process.exitCode = all.length ? 1 : 0;
 }
 
 if (process.argv[1] && process.argv[1].replace(/\\/g, "/").endsWith("scripts/i18n-raw.mjs")) main();

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bell, Calendar, Clock, X, Check, Loader2, XCircle, Timer } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { personName } from "@/lib/personName";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import { useCreatorSimpleBookings } from "@/hooks/useSimplePurchases";
 import { format, differenceInMinutes, differenceInHours } from "date-fns";
@@ -18,7 +19,7 @@ import RejectRescheduleDialog from "@/components/RejectRescheduleDialog";
 
 interface BookingCancellation {
   id: string;
-  user_name: string;
+  user_name: string | null;
   product_title: string;
   product_id: string;
   schedule_id: string | null;
@@ -418,7 +419,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm font-medium text-foreground truncate">
-                              {request.user_name}
+                              {personName(request.user_name, t("student"))}
                             </span>
                             {isNewRequest && (
                               <Badge variant="default" className="text-[10px] px-1.5 py-0">
@@ -628,7 +629,7 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt }: CreatorNotificat
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium text-foreground">
-                            {cancellation.user_name || t("student")}
+                            {personName(cancellation.user_name, t("student"))}
                           </span>
                           <span className="text-sm text-muted-foreground">
                             {t("cancelledSession")}

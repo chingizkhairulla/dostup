@@ -29,7 +29,7 @@ import ProductMaterialsManager from "./ProductMaterialsManager";
 import ProductSwitcher from "./ProductSwitcher";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { countEn } from "@/lib/language";
+import { countEn, countRu } from "@/lib/language";
 import {
   useProductMaterials,
   useUpdateMaterial,
@@ -162,7 +162,9 @@ const CreatorMaterialsTab = ({ creatorName, onGoToProducts }: Props) => {
       <h2 className="text-lg font-semibold text-foreground">
         {l({ ru: "Материалы", kk: "Материалдар", en: "Materials" })}
       </h2>
-      <div className="flex items-center justify-between gap-3">
+      {/* On a phone the product switcher and the section buttons do not fit in
+          one row: the buttons were squeezed to 18px. Stacked there, side by side from sm. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ProductSwitcher
           products={products.map((p) => ({ id: p.id, title: p.title }))}
           selectedId={selectedId}
@@ -828,7 +830,7 @@ const CreatorMaterialsReadOnlyList = ({
       return;
     }
     toast.success(
-      l({ ru: `Скачивание ${files.length} файлов...`, kk: `${files.length} файл жүктелуде...`, en: `Downloading ${countEn(files.length, "file")}...` })
+      l({ ru: `Скачивание ${countRu(files.length, "файла", "файлов", "файлов")}...`, kk: `${files.length} файл жүктелуде...`, en: `Downloading ${countEn(files.length, "file")}...` })
     );
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
@@ -1913,7 +1915,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
           {missingCount > 0 && (
             <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground">
               <span>
-                {l({ ru: `У ${missingCount} файлов размер не определён`, kk: `${missingCount} файлдың өлшемі белгісіз`, en: `${countEn(missingCount, "file has", "files have")} no known size` })}
+                {l({ ru: `У ${countRu(missingCount, "файла", "файлов", "файлов")} размер не определён`, kk: `${missingCount} файлдың өлшемі белгісіз`, en: `${countEn(missingCount, "file has", "files have")} no known size` })}
               </span>
               <Button
                 size="sm"

@@ -6,18 +6,18 @@ import type { Product } from "@/hooks/useProducts";
 
 vi.mock("@/contexts/SimpleAuthContext", () => ({
   useSimpleAuth: () => ({
-    user: null,
-    profileType: null,
-    profiles: [],
+    user: null as { id: string } | null,
+    profileType: null as string | null,
+    profiles: [] as unknown[],
     switchProfile: vi.fn(),
     status: "guest",
-    sessionToken: null,
+    sessionToken: null as string | null,
   }),
 }));
 
 vi.mock("@/hooks/useProducts", () => ({
-  useProduct: () => ({ data: null, isLoading: false }),
-  useProductProgram: () => ({ data: [] }),
+  useProduct: () => ({ data: null as unknown, isLoading: false }),
+  useProductProgram: () => ({ data: [] as unknown[] }),
 }));
 
 vi.mock("@/lib/sessionApi", () => ({

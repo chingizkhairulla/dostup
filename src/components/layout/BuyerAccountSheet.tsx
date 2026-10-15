@@ -311,7 +311,7 @@ const AccountSheet = ({
               </span>
               {missingCount > 0 ? (
                 <span className="text-[12px] font-semibold text-destructive animate-pulse">
-                  {l({ ru: `Добавьте ещё ${missingCount}`, kk: `Добавьте ещё ${missingCount}`, en: `Add ${missingCount} more` })}
+                  {l({ ru: `Добавьте ещё ${missingCount}`, kk: `Тағы ${missingCount} қосыңыз`, en: `Add ${missingCount} more` })}
                 </span>
               ) : (
                 <span className="text-[11px] font-medium text-muted-foreground">
@@ -333,7 +333,7 @@ const AccountSheet = ({
                           <Plus className="h-4 w-4" />
                         </span>
                         <span className="text-[14px] font-medium text-muted-foreground">
-                          {l({ ru: "Пустое место", kk: "Пустое место", en: "Empty slot" })}
+                          {l({ ru: "Пустое место", kk: "Бос орын", en: "Empty slot" })}
                         </span>
                       </div>
                     </div>
@@ -368,8 +368,8 @@ const AccountSheet = ({
                         handleRemoveSlot(index);
                       }}
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-destructive/15 hover:text-destructive active:scale-95 transition-all shrink-0 cursor-pointer"
-                      aria-label={l({ ru: "Убрать", kk: "Убрать", en: "Remove" })}
-                      title={l({ ru: "Убрать", kk: "Убрать", en: "Remove" })}
+                      aria-label={l({ ru: "Убрать", kk: "Алып тастау", en: "Remove" })}
+                      title={l({ ru: "Убрать", kk: "Алып тастау", en: "Remove" })}
                     >
                       <Minus className="h-4 w-4" strokeWidth={2.5} />
                     </button>

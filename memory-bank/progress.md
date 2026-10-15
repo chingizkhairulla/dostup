@@ -6,14 +6,20 @@
 ## Archived tasks
 - **Product Preview / Editor / Storefront** (including its round 2, the editor window rework) — tracked and archived on the `предпросмотер` branch, not this one. Full history: `memory-bank/archive/archive-preview-editor-storefront.md`. If its customer review or deploy turns up something to fix, that starts as a new task via `/van`, not a reopening of it.
 
-## Task phases — Active Task (English language RU/KK/EN, settings renames, white-on-orange)
+## Task phases — Active Task (follow-ups from the English task's reflection, Level 3)
+- [x] PLAN — 2026-10-15, plan at the top of `memory-bank/tasks.md`; no creative phases
+- [x] BUILD — 2026-10-15: `noImplicitAny` on (18 baseline), Russian/English counted phrases, «Ученик» → reader's word, Kazakh 195 → 0 gaps (review file `memory-bank/review/kk-review.md` — **merge waits for a native speaker**), 9 more harness scenes + a Kazakh check, materials toolbar fixed on phones, audit Chrome launcher fixed (stale browsers had been holding the port). Gates: 535 tests / 43 files, 138 browser screens clean, orange PASS.
+- [x] REFLECT — 2026-10-15, `memory-bank/reflection/reflection-english-followups.md`. Main lessons: verify the audit instrument itself (stale Chrome held the port); "clipped" and "squeezed" are different checks; a fallback written into data outlives its code.
+- [ ] ARCHIVE (together with the English task, after the Kazakh review)
+
+## Task phases — English language RU/KK/EN, settings renames, white-on-orange (archive pending)
 - [x] VAN — audit complete, findings in `memory-bank/tasks.md`
 - [x] PLAN — replanned 2026-09-22 after the user cancelled the dark-theme part of the original request; 6-phase plan (down from 8)
 - [x] CREATIVE — both flagged decisions settled (`memory-bank/creative/`):
   - **C1** (`creative-i18n-architecture.md`): hybrid `l({ru,kk,en})` helper + the existing 615 `t()` calls kept; real count is 730 sites (not ~800), and the codemod runs as two passes because 155 are KK-first with inverted operands; completeness is measured by "no Cyrillic in any `en:` value".
   - **C2** (`creative-taxonomy-english.md`): **reverses** the plan's original Phase 5a — no `name_en` DB migration; a client-side slug→English map instead, since category names are display-only (search/filter use `title`/`headline`/slug, never category name) and the tables are seed-only config.
 - [x] BUILD — **complete in code 2026-10-13**: Phases 0-6, including Phase 4b (623 Russian strings written outside `l()` → 0, measured on the syntax tree) and Phase 6 (84 screens in real Chrome: 0 Cyrillic on English screens, 0 crashes, 0 sideways scrolling). Found and fixed on the way: three screens that crashed in English (404, reminder settings, slot wizard), 29 dates pinned to the Russian locale, upload cancellation recognised by a Russian error message. **Not deployed:** migration `20261003120000` is on production (2026-10-03); the 14 edge functions and the frontend are not. Commit `7b238f7` (pushed) holds Phases 0-5; Phase 4b/6 are in the working tree until the user asks for a commit. Per-phase detail and gate results are in the Build Log at the end of `tasks.md`.
-- [ ] REFLECT — next
+- [x] REFLECT — 2026-10-15, `memory-bank/reflection/reflection-english-language.md`. Main lesson: the definition of done measured what the tooling already covered (`l()` phrases), not what a reader sees.
 - [ ] ARCHIVE
 
 ## Build status (branch `английский-язык`)

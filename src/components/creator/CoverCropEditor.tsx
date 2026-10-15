@@ -44,8 +44,8 @@ const CoverCropEditor = ({
         <Move className="w-3.5 h-3.5" />
         <span>
           {mediaType === "video"
-            ? l({ ru: "Перетащите видео мышкой или пальцем для выравнивания", kk: "Перетащите видео мышкой или пальцем для выравнивания", en: "Drag the video with your mouse or finger to position it" })
-            : l({ ru: "Перетащите фото мышкой или пальцем для выравнивания", kk: "Перетащите фото мышкой или пальцем для выравнивания", en: "Drag the photo with your mouse or finger to position it" })}
+            ? l({ ru: "Перетащите видео мышкой или пальцем для выравнивания", kk: "Туралау үшін бейнені тінтуірмен немесе саусақпен жылжытыңыз", en: "Drag the video with your mouse or finger to position it" })
+            : l({ ru: "Перетащите фото мышкой или пальцем для выравнивания", kk: "Туралау үшін фотоны тінтуірмен немесе саусақпен жылжытыңыз", en: "Drag the photo with your mouse or finger to position it" })}
         </span>
       </div>
 

@@ -11,7 +11,7 @@ import { inDeviceLanguage as l } from "@/lib/language";
  */
 export class UploadCancelledError extends Error {
   constructor() {
-    super(l({ ru: "Загрузка отменена", kk: "Загрузка отменена", en: "Upload cancelled" }));
+    super(l({ ru: "Загрузка отменена", kk: "Жүктеу тоқтатылды", en: "Upload cancelled" }));
     this.name = "UploadCancelledError";
   }
 }
