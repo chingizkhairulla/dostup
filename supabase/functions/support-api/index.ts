@@ -100,7 +100,7 @@ serve(async (req) => {
     if (action === 'get_thread') {
       const { data: rows } = await supabase.from('support_messages').select('*').eq('thread_id', thread.id).order('created_at', { ascending: true })
       const messages = await withSignedAttachmentUrls(supabase, 'support-attachments', rows ?? [])
-      if ((thread.unread_for_user ?? 0) > 0) {
+      if (body.mark_read !== false && (thread.unread_for_user ?? 0) > 0) {
         await supabase.from('support_threads').update({ unread_for_user: 0 }).eq('id', thread.id)
         await supabase.from('support_messages').update({ read_at: new Date().toISOString() }).eq('thread_id', thread.id).eq('sender', 'moderator').is('read_at', null)
       }
