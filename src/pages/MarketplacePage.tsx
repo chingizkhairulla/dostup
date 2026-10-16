@@ -31,9 +31,6 @@ const MarketplacePage = () => {
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
-  if (signedIn && profileType !== "buyer") {
-    return <Navigate to={profileHomePath(profileType)} replace />;
-  }
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [categorySlug, setCategorySlug] = useState("");
@@ -246,6 +243,10 @@ const MarketplacePage = () => {
         <div className="pb-20 md:pb-0">{page}</div>
       </BuyerAppShell>
     );
+  }
+
+  if (signedIn && profileType !== "buyer") {
+    return <Navigate to={profileHomePath(profileType)} replace />;
   }
 
   return page;

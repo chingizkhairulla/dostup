@@ -53,6 +53,15 @@ const ONBOARDING_ALLOWED_PATHS = new Set([
 
 const queryClient = new QueryClient()
 
+function LocationResetBoundary({ children }: { children: React.ReactNode }) {
+	const location = useLocation()
+	return (
+		<ErrorBoundary resetKeys={[location.pathname]}>
+			{children}
+		</ErrorBoundary>
+	)
+}
+
 function AppRoutes() {
 	const location = useLocation()
 	const navigate = useNavigate()
@@ -218,7 +227,9 @@ const App = () => (
 									<Sonner />
 									<BrowserRouter>
 										<ScrollManager />
-										<AppRoutes />
+										<LocationResetBoundary>
+											<AppRoutes />
+										</LocationResetBoundary>
 									</BrowserRouter>
 								</TooltipProvider>
 							</AuthProvider>

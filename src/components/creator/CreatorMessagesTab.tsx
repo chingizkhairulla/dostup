@@ -149,6 +149,11 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
 
   useEffect(() => {
     if (productsLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("chat") === "support" || params.get("prefill")) {
+      setSelectedId(SUPPORT_CHAT_ID);
+      return;
+    }
     const stillThere =
       selectedId === SUPPORT_CHAT_ID ||
       channels.some((c) => c.id === selectedId) ||

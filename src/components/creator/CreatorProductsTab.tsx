@@ -3039,6 +3039,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
             <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
             <AlertDialogDescription>
               Вы уверены, что хотите удалить "{deletingProduct?.title}"? Это действие нельзя отменить.
+              <br /><br />
+              <span className="text-foreground font-medium">Расписание, материалы, объявления и пользователи будут удалены вместе с этим продуктом.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3149,7 +3151,11 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                   className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
                 >
                   <Globe className="w-3.5 h-3.5" />
-                  <span className="ml-1">{language === "ru" ? "Выставить" : "Жариялау"}</span>
+                  <span className="ml-1">
+                    {(product as any).is_published
+                      ? (language === "ru" ? "Скрыть" : "Жасыру")
+                      : (language === "ru" ? "Выставить" : "Жариялау")}
+                  </span>
                 </Button>
                 <Button
                   variant="outline"
@@ -3231,7 +3237,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
     {/* Pause Dialog */}
     <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" hideCloseButton>
         <DialogHeader>
           <DialogTitle>
             {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
@@ -3240,31 +3246,23 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
             {language === "ru"
-              ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
+              ? "На продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
+              : "Өнімге кіруге болады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
           </p>
-          <div className="space-y-2">
-            <Label htmlFor="pause-message">
-              {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
-            </Label>
-            <Textarea
-              id="pause-message"
-              rows={4}
-              value={pauseMessage}
-              onChange={(e) => setPauseMessage(e.target.value)}
-              placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
-            />
-            <p className="text-xs text-muted-foreground">
-              {language === "ru"
-                ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
-                : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
-            </p>
-          </div>
+          <p>
+            {language === "ru"
+              ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
+              : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
+          </p>
+          <Textarea
+            id="pause-message"
+            rows={4}
+            value={pauseMessage}
+            onChange={(e) => setPauseMessage(e.target.value)}
+            placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
+          />
         </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setPausingProduct(null)}>
-            {t("cancel")}
-          </Button>
+        <div className="flex justify-end pt-2">
           <Button
             onClick={() => {
               if (!pausingProduct) return;

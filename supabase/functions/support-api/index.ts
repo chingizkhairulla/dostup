@@ -134,7 +134,11 @@ serve(async (req) => {
       await notifyModerators(
         `Новое сообщение: ${senderName}`,
         preview.slice(0, 120),
-        { type: 'moderator_support', threadId: thread.id }
+        {
+          type: 'moderator_support',
+          threadId: thread.id,
+          url: `/moderator?section=support&thread=${thread.id}`,
+        }
       )
 
       return json({ success: true })
