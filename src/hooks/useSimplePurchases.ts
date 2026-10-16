@@ -4,12 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { creatorCreds, sessionCreds, studentCreds, invokeApi } from "@/lib/sessionApi";
 
-interface SimplePurchase {
+export interface SimplePurchase {
   id: string;
   product_id: string;
   status: string;
   amount: number;
   created_at: string;
+  confirmed_at?: string | null;
+  access_expires_at?: string | null;
+  is_trial?: boolean | null;
+  trial_ends_at?: string | null;
   can_choose_teacher: boolean | null;
   assigned_teacher_id: string | null;
   product: {
@@ -134,6 +138,8 @@ export const useSimplePurchases = () => {
 export interface BuyerSubscription {
   id: string;
   product_id: string;
+  created_at?: string | null;
+  price: number;
   status: string;
   current_period_end: string;
   current_period_start: string;
