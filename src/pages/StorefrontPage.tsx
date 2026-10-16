@@ -1,18 +1,22 @@
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import CatalogGrid from "@/components/marketplace/CatalogGrid";
 import MarketplaceHeader from "@/components/marketplace/MarketplaceHeader";
 import PublicContainer from "@/components/marketplace/PublicContainer";
 import PublicFooter from "@/components/layout/PublicFooter";
+import { Stars } from "@/components/reviews/ReviewItem";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSellerStorefront } from "@/hooks/useSellerStorefront";
+import { sellerRating } from "@/lib/catalog";
 import { sellerInitial } from "@/lib/productCover";
 
 const StorefrontPage = () => {
   const { handle } = useParams();
   const { t } = useLanguage();
   const { data: seller, isLoading } = useSellerStorefront(handle);
+  const rating = useMemo(() => sellerRating(seller?.products ?? []), [seller]);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -39,6 +43,13 @@ const StorefrontPage = () => {
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
                   {seller.display_name || seller.handle}
                 </h1>
+                {rating.count > 0 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Stars rating={rating.avg} iconClassName="h-4 w-4" />
+                    <span className="font-semibold text-foreground">{rating.avg.toFixed(1)}</span>
+                    <span className="text-muted-foreground">({rating.count})</span>
+                  </div>
+                )}
                 <p className="public-meta">
                   {seller.type === "school" ? t("sellerRoleSchool") : t("sellerRoleCreator")}
                 </p>
