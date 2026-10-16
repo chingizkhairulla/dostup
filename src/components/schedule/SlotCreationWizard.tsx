@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +131,18 @@ const centerSelectedIn = (container: HTMLElement | null) => {
   const eRect = el.getBoundingClientRect();
   container.scrollTop += eRect.top - cRect.top - container.clientHeight / 2 + eRect.height / 2;
 };
+
+// Radix scroll area with a permanently visible scrollbar at a fixed position (no overlay-scrollbar jump)
+const AlwaysScrollArea = ({ className, viewportClassName, children }: { className?: string; viewportClassName?: string; children: React.ReactNode }) => (
+  <ScrollAreaPrimitive.Root type="always" className={cn("relative overflow-hidden", className)}>
+    <ScrollAreaPrimitive.Viewport className={cn("h-full w-full rounded-[inherit] overscroll-contain", viewportClassName)}>
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollAreaPrimitive.Scrollbar orientation="vertical" className="flex touch-none select-none w-1.5 p-0 my-1 mr-0.5 rounded-full bg-muted/30">
+      <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-muted-foreground/35" />
+    </ScrollAreaPrimitive.Scrollbar>
+  </ScrollAreaPrimitive.Root>
+);
 
 // Editable time popover picker: no keyboard input into numbers, only free hours from 09:00 to 01:00, no past time, minTime for end box
 function EditableTime({
@@ -2351,14 +2364,14 @@ export default function SlotCreationWizard({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                          <p className="text-xs font-medium text-foreground">
+                          <p className="text-sm font-medium text-left text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex items-center justify-center">
+                          <div className="flex justify-end">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-9 px-5 text-sm text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2624,14 +2637,14 @@ export default function SlotCreationWizard({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                          <p className="text-xs font-medium text-foreground">
+                          <p className="text-sm sm:text-base font-medium text-left text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex items-center justify-center">
+                          <div className="flex justify-end">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-9 px-5 min-w-[48px] text-sm sm:text-base text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2837,11 +2850,12 @@ export default function SlotCreationWizard({
 
                     {/* Slot keys as selectable vertical list - exactly 2 visible */}
                     {daySlotKeys.length === 0 ? (
-                      <div className="h-[80px] flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-xl bg-card/50">
+                      <div className="h-[88px] flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-xl bg-card/50">
                         {t.noSlotsForDay}
                       </div>
                     ) : (
-                      <div className={cn("flex flex-col gap-2 h-[80px] overscroll-contain touch-pan-y pr-2.5 [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/55 [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full", daySlotKeys.length > 1 ? "overflow-y-scroll" : "overflow-y-hidden")}>
+                      <AlwaysScrollArea className="h-[88px]" viewportClassName="pr-3">
+                      <div className="flex flex-col gap-2">
                         {daySlotKeys.map((key) => {
                           const isSelected = selectedSlotKeys.has(key);
                           const [, start, end] = key.split("_");
@@ -2865,7 +2879,7 @@ export default function SlotCreationWizard({
                               title={label}
                               aria-label={label}
                               className={cn(
-                                "w-full h-[80px] rounded-xl border-2 relative overflow-hidden shrink-0 cursor-pointer transition-colors",
+                                "w-full h-10 rounded-xl border-2 relative overflow-hidden shrink-0 cursor-pointer transition-colors",
                                 isSelected ? "bg-primary border-primary" : "bg-card border-primary/40"
                               )}
                             >
@@ -2902,6 +2916,7 @@ export default function SlotCreationWizard({
                           );
                         })}
                       </div>
+                      </AlwaysScrollArea>
                     )}
                   </div>
                     );
@@ -2911,16 +2926,18 @@ export default function SlotCreationWizard({
                 {/* Settings Card: Product, Duration, Participants, Conference, Details, Repetition */}
                 <div
                   className={cn(
-                    "flex-1 min-h-0 overflow-y-auto overscroll-contain bg-card border p-4 pr-2.5 rounded-2xl shadow-sm space-y-4 transition-all [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full",
+                    "flex-1 min-h-0 flex flex-col overflow-hidden bg-card border rounded-2xl shadow-sm transition-all",
                     selectedSlotKeys.size > 0
                       ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                      : "border-border/60 opacity-60 [&>*]:pointer-events-none"
+                      : "border-border/60 opacity-60 [&_[data-radix-scroll-area-viewport]>*]:pointer-events-none"
                   )}
                 >
+                  <AlwaysScrollArea className="flex-1 min-h-0" viewportClassName="p-4 pr-5">
+                  <div className="space-y-4">
                   {/* For Product */}
                   {products && products.length > 0 && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                         <Package className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.forProduct}</span>
                         <ReqStar />
@@ -2943,7 +2960,7 @@ export default function SlotCreationWizard({
 
                   {/* Lesson Duration */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.lessonDuration}</span>
                       <ReqStar />
@@ -3008,7 +3025,7 @@ export default function SlotCreationWizard({
 
                   {/* Max Participants */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.participants}</span>
                       <ReqStar />
@@ -3073,7 +3090,7 @@ export default function SlotCreationWizard({
 
                   {/* Conference Link Section */}
                   <div className="pt-1 space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Video className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.conferenceLink}</span>
                       <ReqStar />
@@ -3118,7 +3135,7 @@ export default function SlotCreationWizard({
 
                   {/* Lesson Details */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.details}</span>
                     </Label>
@@ -3138,7 +3155,7 @@ export default function SlotCreationWizard({
                     <div className="flex items-center justify-between">
                       <Label
                         htmlFor="mobile-repeat-switch"
-                        className="text-xs font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
+                        className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
                       >
                         <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.everyWeek}</span>
@@ -3259,6 +3276,8 @@ export default function SlotCreationWizard({
                       </div>
                     )}
                   </div>
+                  </div>
+                  </AlwaysScrollArea>
                 </div>
 
               </div>
@@ -3419,8 +3438,8 @@ export default function SlotCreationWizard({
                                     "group absolute left-1 right-1 transition-all cursor-pointer select-none flex items-center justify-center text-center overflow-hidden",
                                     isShortSlot ? "p-0.5 rounded-lg" : "p-1.5 rounded-xl",
                                     isSelected
-                                      ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                      : "bg-card text-primary border-2 border-primary/40 hover:border-primary/60 z-10"
+                                      ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+                                      : "bg-card text-primary z-10"
                                   )}
                                   title={`${interval.start} - ${interval.end}`}
                                 >
@@ -3430,9 +3449,11 @@ export default function SlotCreationWizard({
                                   {lessons.map((lesson, li) => {
                                     if (lesson.end >= durationM) return null;
                                     const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
-                                    // -3px: block sits at topPx + 1 and has border-2, so padding-box coords are shifted by 3
-                                    const breakTop = lesson.end * pixelsPerMinute - 3;
-                                    const breakHeight = (nextStart - lesson.end) * pixelsPerMinute;
+                                    // Block top sits at topPx + 1, so y = t * pixelsPerMinute - 1 maps time t exactly onto the grid
+                                    const breakTop = lesson.end * pixelsPerMinute - 1;
+                                    const isLastBreak = li + 1 >= lessons.length;
+                                    // minus 1px so middle breaks match the last one, which stops at the 1px gap above the grid line
+                                    const breakHeight = (nextStart - lesson.end) * pixelsPerMinute - 1;
                                     return [
                                       <div
                                         key={`lesson-line-${li}`}
@@ -3449,11 +3470,21 @@ export default function SlotCreationWizard({
                                             "absolute left-0 right-0 pointer-events-none",
                                             isSelected ? "bg-white/45" : "bg-muted-foreground/25"
                                           )}
-                                          style={{ top: `${breakTop}px`, height: `${breakHeight}px` }}
+                                          style={
+                                            isLastBreak
+                                              ? { top: `${breakTop}px`, bottom: 0 }
+                                              : { top: `${breakTop}px`, height: `${breakHeight}px` }
+                                          }
                                         />
                                       ) : null,
                                     ];
                                   })}
+                                  <div
+                                    className={cn(
+                                      "absolute inset-0 rounded-[inherit] border-2 pointer-events-none z-30",
+                                      isSelected ? "border-primary" : "border-primary/40 group-hover:border-primary/60"
+                                    )}
+                                  />
                                 </div>
                               );
                             })}
@@ -3571,7 +3602,7 @@ export default function SlotCreationWizard({
                       <div className="space-y-1.5 -mx-1 sm:-mx-1.5">
                         <Label
                           className={cn(
-                            "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                            "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                             selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                           )}
                         >
@@ -3600,7 +3631,7 @@ export default function SlotCreationWizard({
                     <div className="space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3667,7 +3698,7 @@ export default function SlotCreationWizard({
                     <div className="space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3734,7 +3765,7 @@ export default function SlotCreationWizard({
                     <div className="pt-1 -mx-1 sm:-mx-1.5 space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3788,7 +3819,7 @@ export default function SlotCreationWizard({
                     <div className="space-y-2 -mx-1 sm:-mx-1.5">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3820,7 +3851,7 @@ export default function SlotCreationWizard({
                         <Label
                           htmlFor="repeat-switch"
                           className={cn(
-                            "text-xs sm:text-sm font-semibold cursor-pointer flex items-center gap-1.5 transition-colors",
+                            "text-sm sm:text-base font-semibold cursor-pointer flex items-center gap-1.5 transition-colors",
                             selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                           )}
                         >
