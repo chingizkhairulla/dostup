@@ -12,9 +12,10 @@ interface AllReviewsDialogProps {
   reviews: ProductReview[];
   avgRating: number;
   reviewCount: number;
+  initialFilter?: RatingFilter;
 }
 
-type RatingFilter = "all" | 1 | 2 | 3 | 4 | 5;
+export type RatingFilter = "all" | 1 | 2 | 3 | 4 | 5;
 
 const RATING_FILTERS: Array<5 | 4 | 3 | 2 | 1> = [5, 4, 3, 2, 1];
 
@@ -24,13 +25,14 @@ export default function AllReviewsDialog({
   reviews,
   avgRating,
   reviewCount,
+  initialFilter = "all",
 }: AllReviewsDialogProps) {
   const { t } = useLanguage();
-  const [filter, setFilter] = useState<RatingFilter>("all");
+  const [filter, setFilter] = useState<RatingFilter>(initialFilter);
 
   useEffect(() => {
-    if (open) setFilter("all");
-  }, [open]);
+    if (open) setFilter(initialFilter);
+  }, [open, initialFilter]);
 
   const visible = useMemo(() => {
     const list = filter === "all" ? reviews : reviews.filter((r) => r.rating === filter);
@@ -47,12 +49,14 @@ export default function AllReviewsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+      <DialogContent
+        hideCloseButton
+        overlayClassName="bg-black/40 backdrop-blur-sm"
+        className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0"
+      >
         <div className="border-b border-border p-6">
-          <DialogTitle className="text-center">{t("reviewsTitle")}</DialogTitle>
-
-          <div className="mt-5 flex flex-col items-center text-center">
-            <p className="text-sm text-muted-foreground">{t("reviewsOverall")}</p>
+          <div className="flex flex-col items-center text-center">
+            <DialogTitle className="text-base font-semibold text-foreground">{t("reviewsOverall")}</DialogTitle>
             <div className="mt-1 flex items-center gap-2">
               <span className="text-4xl font-bold tabular-nums text-foreground">{avgRating.toFixed(2)}</span>
               <Star className="h-8 w-8 fill-[#FFB020] text-[#FFB020]" />

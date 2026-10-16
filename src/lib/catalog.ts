@@ -69,6 +69,22 @@ export type SellerStorefront = {
 
 export const CATALOG_FILTER_THRESHOLD = 12;
 
+/** Review-weighted average across a seller's products; avg is 0 when there are no reviews. */
+export function sellerRating(products: Pick<CatalogProduct, "avg_rating" | "review_count">[]): {
+  avg: number;
+  count: number;
+} {
+  let count = 0;
+  let weighted = 0;
+  for (const product of products) {
+    const reviews = Number(product.review_count) || 0;
+    const rating = Number(product.avg_rating) || 0;
+    count += reviews;
+    weighted += rating * reviews;
+  }
+  return { avg: count > 0 ? weighted / count : 0, count };
+}
+
 export function productHref(product: { id: string; slug?: string | null }) {
   return `/p/${encodeURIComponent(product.slug || product.id)}`;
 }
