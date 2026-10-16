@@ -280,7 +280,18 @@ const ModeratorDashboard = () => {
   const loadThreads = useCallback(
     async (overrideToken?: string) => {
       const data = await call({ action: "support_list_threads" }, overrideToken);
-      if (data?.success) setThreads(data.threads);
+      if (data?.success) {
+        setThreads(data.threads);
+        const params = new URLSearchParams(window.location.search);
+        const threadId = params.get("thread");
+        if (threadId && data.threads) {
+          const match = data.threads.find((t: Thread) => t.id === threadId);
+          if (match) {
+            setSelectedThread(match);
+            setActiveSection("support");
+          }
+        }
+      }
     },
     [call]
   );

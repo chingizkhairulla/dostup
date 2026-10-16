@@ -16,6 +16,7 @@ import {
   Trash2,
   Check,
   Clock,
+  Bug,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -615,7 +616,26 @@ export const AccountSettingsView = ({
           </div>
 
           {/* Fixed Logout Button at bottom of sidebar */}
-          <div className="border-t border-border pt-3 mt-2 shrink-0">
+          <div className="border-t border-border pt-3 mt-2 shrink-0 space-y-1">
+            {typeof window !== "undefined" &&
+              !window.location.hostname.includes("trydostup.online") &&
+              (window.location.hostname.includes("fix-small-fixes") ||
+                window.location.hostname.includes("vercel.app") ||
+                window.location.hostname === "localhost" ||
+                window.location.hostname === "127.0.0.1") && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    onClose?.();
+                    window.dispatchEvent(new CustomEvent("trigger-debug-error"));
+                  }}
+                  className="w-full justify-start gap-3 h-9 px-3 rounded-xl text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Bug className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                  <span className="truncate">Тест экрана ошибки</span>
+                </Button>
+              )}
             <Button
               type="button"
               variant="ghost"

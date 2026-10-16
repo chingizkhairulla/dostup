@@ -53,6 +53,15 @@ const ONBOARDING_ALLOWED_PATHS = new Set([
 
 const queryClient = new QueryClient()
 
+function LocationResetBoundary({ children }: { children: React.ReactNode }) {
+	const location = useLocation()
+	return (
+		<ErrorBoundary resetKeys={[location.pathname]}>
+			{children}
+		</ErrorBoundary>
+	)
+}
+
 function AppRoutes() {
 	const location = useLocation()
 	const navigate = useNavigate()
@@ -94,6 +103,25 @@ function AppRoutes() {
 		if (isPurchaseIntentPath(here)) rememberAuthNext(here)
 		navigate(ONBOARDING_PATH, { replace: true })
 	}, [location.pathname, location.search, navigate, needsOnboarding, status])
+
+	useEffect(() => {
+		const isPreview =
+			!window.location.hostname.includes('trydostup.online') &&
+			(window.location.hostname.includes('fix-small-fixes') ||
+				window.location.hostname.includes('vercel.app') ||
+				window.location.hostname === 'localhost' ||
+				window.location.hostname === '127.0.0.1' ||
+				location.search.includes('debug'))
+		if (!isPreview) return
+		const params = new URLSearchParams(location.search)
+		if (params.get('debug') === 'error') {
+			const nextParams = new URLSearchParams(location.search)
+			nextParams.delete('debug')
+			const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : ''
+			window.history.replaceState({}, '', `${location.pathname}${nextSearch}`)
+			window.dispatchEvent(new CustomEvent('trigger-debug-error'))
+		}
+	}, [location.pathname, location.search])
 
 	if (status === 'loading' && !isAuthCallback) {
 		return <AuthSplash />
@@ -218,7 +246,9 @@ const App = () => (
 									<Sonner />
 									<BrowserRouter>
 										<ScrollManager />
-										<AppRoutes />
+										<LocationResetBoundary>
+											<AppRoutes />
+										</LocationResetBoundary>
 									</BrowserRouter>
 								</TooltipProvider>
 							</AuthProvider>

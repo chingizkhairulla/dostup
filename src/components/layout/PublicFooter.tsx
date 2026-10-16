@@ -24,7 +24,7 @@ const PublicFooter = ({ className }: PublicFooterProps) => {
             <Link to="/privacy" className={FOOTER_LINK_CLASS}>
               {t("footerPrivacy")}
             </Link>
-            <a href="mailto:dostup.support@gmail.com" className={FOOTER_LINK_CLASS}>
+            <a href="mailto:chingizkhairulla@gmail.com" className={FOOTER_LINK_CLASS}>
               {t("footerContactEmail")}
             </a>
           </div>
