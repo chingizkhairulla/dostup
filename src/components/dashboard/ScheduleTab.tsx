@@ -384,9 +384,6 @@ const ScheduleTab = () => {
       <div className="text-center py-12">
         <Calendar className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
         <p className="text-muted-foreground">{t("noPurchasedProducts")}</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {t("purchaseForSchedule")}
-        </p>
       </div>
     );
   }

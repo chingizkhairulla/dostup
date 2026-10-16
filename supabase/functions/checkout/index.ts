@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     if (action === 'list_my_purchases') {
       const { data, error } = await supabase
         .from('simple_purchases')
-        .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id, access_expires_at')
+        .select('id, product_id, status, amount, created_at, confirmed_at, can_choose_teacher, assigned_teacher_id, access_expires_at, is_trial, trial_ends_at')
         .eq('buyer_profile_id', user.userId)
         .eq('status', body.status || 'completed')
       if (error) return json({ error: error.message }, 500)
@@ -117,11 +117,14 @@ Deno.serve(async (req) => {
     if (action === 'get_my_purchase') {
       const productId = String(body.productId || '').trim()
       if (!productId) return json({ error: 'Missing productId' }, 400)
+      // A subscription gets a new purchase row for every paid period, so take the newest one.
       let { data } = await supabase
         .from('simple_purchases')
         .select('*')
         .eq('buyer_profile_id', user.userId)
         .eq('product_id', productId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
       if (!data) {
         const fallback = await supabase
@@ -129,6 +132,8 @@ Deno.serve(async (req) => {
           .select('*')
           .eq('simple_user_id', user.userId)
           .eq('product_id', productId)
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle()
         data = fallback.data
       }
