@@ -252,7 +252,7 @@ const Dashboard = () => {
           ) : buyerSection === "materials" ? (
             <MaterialsTab />
           ) : (
-            <HomeTab onBrowseCourses={() => navigate("/")} />
+            <HomeTab />
           )}
         </main>
       </div>
