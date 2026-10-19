@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import LegalDocumentBody from "@/components/legal/LegalDocumentBody";
-import PublicFooter from "@/components/layout/PublicFooter";
 import PublicContainer from "@/components/marketplace/PublicContainer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getLegalDocument, type LegalDocId } from "@/lib/legalDocs";
@@ -59,7 +58,6 @@ const LegalPage = ({ docId }: LegalPageProps) => {
           </article>
         </PublicContainer>
       </main>
-      <PublicFooter />
     </div>
   );
 };
