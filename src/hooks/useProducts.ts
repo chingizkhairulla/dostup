@@ -64,6 +64,8 @@ export interface ProductPricingOption {
   kaspi_card?: string | null;
   bank?: string | null;
   bank_name?: string | null;
+  last_payment_method?: "link" | "phone" | "card" | null;
+  billing_period?: string | null;
 }
 
 export interface ProductProgramItem {
