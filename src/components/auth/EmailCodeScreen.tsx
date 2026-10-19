@@ -140,11 +140,13 @@ const EmailCodeScreen = ({
           ))}
         </div>
 
-        {verifying && (
-          <div className="flex justify-center text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" />
-          </div>
-        )}
+        <div className="h-8 mt-4 flex items-center justify-center">
+          {verifying ? (
+            <div className="flex justify-center text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          ) : null}
+        </div>
 
         {exchangeError ? (
           <div className="space-y-2 text-center">
