@@ -812,6 +812,8 @@ export type Database = {
       }
       products: {
         Row: {
+          after_access_enabled: boolean
+          after_access_url: string | null
           access_duration_days: number | null
           billing_period: string | null
           capacity: number | null
@@ -870,6 +872,8 @@ export type Database = {
           subcategory_id: string
           telegram_link?: string | null
           title: string
+          after_access_enabled?: boolean
+          after_access_url?: string | null
           updated_at?: string
           video_url?: string | null
         }
@@ -901,6 +905,8 @@ export type Database = {
           subcategory_id?: string
           telegram_link?: string | null
           title?: string
+          after_access_enabled?: boolean
+          after_access_url?: string | null
           updated_at?: string
           video_url?: string | null
         }

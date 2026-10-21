@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "seed:demo:clean": "tsx scripts/seed-demo.ts --clean",
+    "test:messages": "node --import tsx --test tests/messages*.test.ts",
+    "support:welcome": "tsx scripts/support-welcome.ts",
     "seed:preview": "tsx scripts/manage-preview-data.ts",
     "clean:preview": "tsx scripts/manage-preview-data.ts --clean"
   },
@@ -79,6 +81,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/dompurify": "^3.2.0",
