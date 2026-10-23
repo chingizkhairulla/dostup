@@ -114,6 +114,8 @@ const products = productSeeds.map((p, i) => ({
   billing_period: p.billing ?? null,
   payment_type: p.billing ? "recurring" : "one_time",
   recurring_interval: p.billing ?? null,
+  // Kaspi transfer by phone, so the checkout page offers a way to pay and upload a receipt.
+  kaspi_phone: "+7 700 000 00 00",
   has_free_trial: Boolean(p.trialDays),
   trial_days: p.trialDays ?? null,
   faq: [
