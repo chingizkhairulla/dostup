@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Star } from "lucide-react";
+import { Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useProductReviews, useSaveProductReview } from "@/hooks/useProductReviews";
@@ -53,8 +54,27 @@ const ReviewProductDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="max-w-md">
-        <DialogTitle className="line-clamp-2 text-base font-semibold">{productTitle}</DialogTitle>
+      {/* Nothing is saved until the button is pressed, so a click outside must not close it. */}
+      <DialogContent
+        hideCloseButton
+        className="max-w-md"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <DialogTitle className="line-clamp-2 text-base font-semibold">{productTitle}</DialogTitle>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DialogClose
+                aria-label={t("unsavedChangesHint")}
+                className="-mr-2 -mt-2 shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-ring"
+              >
+                <X className="h-4 w-4" />
+              </DialogClose>
+            </TooltipTrigger>
+            <TooltipContent className="hidden md:block">{t("unsavedChangesHint")}</TooltipContent>
+          </Tooltip>
+        </div>
 
         <div className="flex justify-center gap-1">
           {STAR_VALUES.map((value) => (

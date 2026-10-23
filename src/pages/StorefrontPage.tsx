@@ -30,7 +30,7 @@ const StorefrontPage = () => {
           <p className="py-16 public-body text-[#6B7280]">{t("storefrontNotFound")}</p>
         ) : (
           <>
-            <section className="flex items-start gap-5">
+            <section className="flex items-center gap-5">
               <Avatar className="h-20 w-20">
                 {seller.avatar_url && (
                   <AvatarImage src={seller.avatar_url} alt={seller.display_name || seller.handle} />
@@ -49,14 +49,6 @@ const StorefrontPage = () => {
                     <span className="font-semibold text-foreground">{rating.avg.toFixed(1)}</span>
                     <span className="text-muted-foreground">({rating.count})</span>
                   </div>
-                )}
-                <p className="public-meta">
-                  {seller.type === "school" ? t("sellerRoleSchool") : t("sellerRoleCreator")}
-                </p>
-                {seller.bio && (
-                  <p className="public-body max-w-2xl whitespace-pre-wrap text-[#6B7280]">
-                    {seller.bio}
-                  </p>
                 )}
               </div>
             </section>

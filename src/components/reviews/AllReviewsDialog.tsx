@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -28,11 +28,8 @@ export default function AllReviewsDialog({
   initialFilter = "all",
 }: AllReviewsDialogProps) {
   const { t } = useLanguage();
+  // The parent remounts the dialog for every opening, so the initial value is enough.
   const [filter, setFilter] = useState<RatingFilter>(initialFilter);
-
-  useEffect(() => {
-    if (open) setFilter(initialFilter);
-  }, [open, initialFilter]);
 
   const visible = useMemo(() => {
     const list = filter === "all" ? reviews : reviews.filter((r) => r.rating === filter);
@@ -57,10 +54,7 @@ export default function AllReviewsDialog({
         <div className="border-b border-border p-6">
           <div className="flex flex-col items-center text-center">
             <DialogTitle className="text-base font-semibold text-foreground">{t("reviewsOverall")}</DialogTitle>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-4xl font-bold tabular-nums text-foreground">{avgRating.toFixed(2)}</span>
-              <Star className="h-8 w-8 fill-[#FFB020] text-[#FFB020]" />
-            </div>
+            <span className="mt-1 text-4xl font-bold tabular-nums text-foreground">{avgRating.toFixed(2)}</span>
             <p className="mt-1 text-sm text-muted-foreground">
               {t("reviewsRatingsCount", { count: reviewCount })}
             </p>

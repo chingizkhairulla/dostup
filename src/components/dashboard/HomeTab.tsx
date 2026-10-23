@@ -23,6 +23,7 @@ import {
   GraduationCap,
   Loader2,
   Play,
+  ShoppingBag,
 } from "lucide-react";
 
 const HomeTab = () => {
@@ -111,13 +112,11 @@ const HomeTab = () => {
 
   if (allEmpty) {
     return (
-      <div className="py-4">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <p className="text-muted-foreground">
-            {language === "ru"
-              ? "Пока ничего не куплено — начните с каталога"
-              : "Әзірге ештеңе сатып алынбады — каталогтан бастаңыз"}
-          </p>
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-foreground">{t("myProducts")}</h2>
+        <div className="py-12 text-center">
+          <ShoppingBag className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
+          <p className="text-muted-foreground">{t("purchasesEmpty")}</p>
         </div>
       </div>
     );

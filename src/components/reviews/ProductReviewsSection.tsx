@@ -10,6 +10,13 @@ export default function ProductReviewsSection({ productId }: { productId: string
   const { data } = useProductReviews(productId);
   /** null = dialog closed; otherwise the filter the dialog opens with. */
   const [dialogFilter, setDialogFilter] = useState<RatingFilter | null>(null);
+  // Every opening mounts a fresh dialog, so the chosen chip is lit from the first frame
+  // instead of switching over from the one picked last time.
+  const [dialogKey, setDialogKey] = useState(0);
+  const openDialog = (filter: RatingFilter) => {
+    setDialogKey((k) => k + 1);
+    setDialogFilter(filter);
+  };
 
   const reviews = data?.reviews;
   const distribution = useMemo(() => ratingDistribution(reviews ?? []), [reviews]);
@@ -21,7 +28,18 @@ export default function ProductReviewsSection({ productId }: { productId: string
 
   return (
     <div className="mt-8">
-      <h2 className="mb-4 text-lg font-semibold text-foreground">{t("reviewsTitle")}</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-foreground">{t("reviewsTitle")}</h2>
+        {reviewCount > 0 && (
+          <button
+            type="button"
+            onClick={() => openDialog("all")}
+            className="rounded-md text-sm text-muted-foreground transition-colors hover:text-[#FF6B00] focus-ring"
+          >
+            {t("reviewsSeeAll")}
+          </button>
+        )}
+      </div>
 
       {reviewCount === 0 ? (
         <p className="public-meta">{t("reviewsEmpty")}</p>
@@ -45,7 +63,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
                     key={star}
                     type="button"
                     aria-label={`${star} ★: ${count}`}
-                    onClick={() => setDialogFilter(star as RatingFilter)}
+                    onClick={() => openDialog(star as RatingFilter)}
                     className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted focus-ring"
                   >
                     <span className="w-3 text-sm tabular-nums text-muted-foreground">{star}</span>
@@ -62,18 +80,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
             </div>
           </div>
 
-          <div className="mt-8 mb-4 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-foreground">{t("reviewsTop")}</h3>
-            <button
-              type="button"
-              onClick={() => setDialogFilter("all")}
-              className="text-sm text-muted-foreground transition-colors hover:text-[#FF6B00]"
-            >
-              {t("reviewsSeeAll")}
-            </button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {top.map((review) => (
               <div key={review.id} className="rounded-2xl border border-border bg-card p-4">
                 <ReviewItem review={review} clamp />
@@ -82,6 +89,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
           </div>
 
           <AllReviewsDialog
+            key={dialogKey}
             open={dialogFilter !== null}
             onOpenChange={(open) => {
               if (!open) setDialogFilter(null);
