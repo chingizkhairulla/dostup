@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
+import { Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid, differenceInCalendarWeeks } from "date-fns";
@@ -18,9 +18,6 @@ import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import AccountSettingsDialog, { openAccountSettings } from "@/components/account/AccountSettingsDialog";
-import { useTimezone } from "@/contexts/TimezoneContext";
-import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import ProductSwitcher from "@/components/creator/ProductSwitcher";
 import { invokeApi, sessionCreds } from "@/lib/sessionApi";
 import { splitIntoLessons } from "@/lib/timeSlots";
@@ -549,27 +546,6 @@ export default function SlotCreationWizard({
   onDeleteSlots,
   isPending,
 }: SlotCreationWizardProps) {
-  const { timezone, userCity, convertSlotToUser, convertUserToSlot } = useTimezone();
-  const { user, profileType, profiles } = useSimpleAuth();
-  const [isTimezoneSettingsOpen, setIsTimezoneSettingsOpen] = useState(false);
-
-  const primaryCity =
-    userCity ||
-    (typeof window !== "undefined" ? localStorage.getItem("app_user_city") : null) ||
-    (language === "kk" && timezone.cityKk ? timezone.cityKk : timezone.city)
-      .split(",")[0]
-      .trim();
-  const gmtLabel = timezone.offsetLabel.replace("UTC", "GMT");
-
-  const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") : null;
-  const currentUserId = typeof window !== "undefined" ? localStorage.getItem("simple_user_id") || "" : "";
-  const creatorName = typeof window !== "undefined" ? localStorage.getItem("creator_name") : null;
-  const teacherData = typeof window !== "undefined" ? localStorage.getItem("teacher_data") : null;
-  const activeProfile = profiles.find((p) => p.id === activeProfileId);
-  const shownName = activeProfile?.displayName?.trim() || user?.name || creatorName || (teacherData ? "Учитель" : "—");
-  const effectiveUserId = user?.id || currentUserId || creatorName || "";
-  const effectiveRole = (profileType || (teacherData ? "teacher" : "creator")) as "buyer" | "creator" | "school" | "teacher";
-
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [showLateHours, setShowLateHours] = useState(false);
@@ -598,6 +574,9 @@ export default function SlotCreationWizard({
   const [slotSettingsMap, setSlotSettingsMap] = useState<Record<string, SlotSettings>>({});
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  // Phone bottom panels ("Выбранное время" on step 1, "Параметры" on step 2), opened with the arrow
+  const [isMobileTimesExpanded, setIsMobileTimesExpanded] = useState(false);
+  const [isMobileParamsExpanded, setIsMobileParamsExpanded] = useState(false);
   const [pressedToolbarBtn, setPressedToolbarBtn] = useState<"selectAll" | "unselectAll" | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -823,6 +802,8 @@ export default function SlotCreationWizard({
       setRepeatMonth("");
       setRepeatYear("");
       setIsDetailsDialogOpen(false);
+      setIsMobileTimesExpanded(false);
+      setIsMobileParamsExpanded(false);
       coverCrop.resetCrop();
     }
   }, [open, existingSlots, realCurrentWeekStart, initialWeekStart, getInitialCellsForDates]);
@@ -835,8 +816,8 @@ export default function SlotCreationWizard({
 
   const dict = {
     ru: {
-      wizTitleStep1: "Создание, перенос и удаление",
-      wizTitleStep2: "Настройки параметров",
+      wizTitleStep1: "Создание и удаление слотов",
+      wizTitleStep2: "Настройка параметров",
       step1: "Слоты",
       step2: "Параметры",
       showLateHours: "Показать поздние часы",
@@ -879,7 +860,7 @@ export default function SlotCreationWizard({
       yes: "Да",
       no: "Нет",
       noSlotsWarning: "Выберите хотя бы одну клетку",
-      repeatSummary: "Интервалы слотов",
+      repeatSummary: "Выбранное время",
       selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
       different: "Разные",
@@ -888,7 +869,7 @@ export default function SlotCreationWizard({
       conferenceLinkPlaceholder: "Zoom, Google Meet, Яндекс Телемост…",
     },
     kk: {
-      wizTitleStep1: "Жасау, ауыстыру және жою",
+      wizTitleStep1: "Слоттарды жасау және жою",
       wizTitleStep2: "Параметрлерді баптау",
       step1: "Слоттар",
       step2: "Параметрлер",
@@ -933,7 +914,7 @@ export default function SlotCreationWizard({
       yes: "Иә",
       no: "Жоқ",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
-      repeatSummary: "Слот аралықтары",
+      repeatSummary: "Таңдалған уақыт",
       selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
       different: "Әртүрлі",
@@ -1214,6 +1195,8 @@ export default function SlotCreationWizard({
 
   // When switching to step 2: auto-select new slots!
   const handleStepChange = (newStep: 1 | 2) => {
+    // Re-entering the current step would reset the slot selection
+    if (newStep === step) return;
     if (newStep === 2) {
       if (editableDaysOnDesktop.length === 0) return;
       setRepeatDays(editableDaysOnDesktop);
@@ -2002,10 +1985,10 @@ export default function SlotCreationWizard({
     if (visibleHalfHours.length === 0) return null;
 
     return (
-      <div key={`${isLate ? "late_" : ""}${h}`} className="grid grid-cols-[100px_repeat(7,1fr)] relative">
+      <div key={`${isLate ? "late_" : ""}${h}`} className="grid grid-cols-[64px_repeat(7,1fr)] relative">
         <div className="relative border-r border-border/60 select-none">
           {!isFirstLateHour && (
-            <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+            <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
               {hourStr}:00
             </span>
           )}
@@ -2043,15 +2026,220 @@ export default function SlotCreationWizard({
     );
   };
 
+  // Selected intervals grouped by day, each time editable (desktop column and expanded phone panel)
+  const renderTimesByDay = () =>
+    editableDaysOnDesktop.map((dayIdx) => {
+      const dayEditableIntervals = (effectiveIntervalsByDay[dayIdx] || [])
+        .map((interval, originalIdx) => ({ interval, originalIdx }))
+        .filter(({ interval }) => !isIntervalUnderGrid(dayIdx, interval));
+
+      return (
+        <div
+          key={dayIdx}
+          className="py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-xl border border-border bg-card shadow-xs space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs sm:text-sm font-medium text-foreground">
+              {t.weekDaysFull[dayIdx]}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            {dayEditableIntervals.map(({ interval, originalIdx }) => (
+              <div
+                key={originalIdx}
+                className="text-xs font-mono gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-md border border-border/70 bg-muted/60 hover:bg-muted items-center justify-center flex w-full"
+              >
+                <EditableTime
+                  time={interval.start}
+                  availableHours={getAvailableHoursForDay(dayIdx, interval.start, originalIdx, false)}
+                  isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
+                  language={language}
+                  onChange={(newTime, isSilent) =>
+                    updateIntervalTime(dayIdx, originalIdx, newTime, interval.end, isSilent)
+                  }
+                />
+                <span className="mx-0.5 text-muted-foreground">–</span>
+                <EditableTime
+                  time={interval.end}
+                  availableHours={getAvailableHoursForDay(
+                    dayIdx,
+                    interval.end,
+                    originalIdx,
+                    true,
+                    addMinutesToTime(interval.start, 30)
+                  )}
+                  minTime={addMinutesToTime(interval.start, 30)}
+                  isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
+                  language={language}
+                  onChange={(newTime, isSilent) =>
+                    updateIntervalTime(dayIdx, originalIdx, interval.start, newTime, isSilent)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    });
+
+  // Previous / next week arrows, side by side in the time column header
+  const renderWeekArrows = () => (
+    <div className="flex items-center justify-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          changeWeek(weekOffset - 1);
+        }}
+        disabled={weekOffset === 0}
+        className="w-6 h-6 rounded-full bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary flex items-center justify-center text-foreground/80 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-card disabled:hover:text-foreground/80 disabled:hover:border-border/80"
+        title={language === "ru" ? "Предыдущая неделя" : "Алдыңғы апта"}
+        aria-label={language === "ru" ? "Предыдущая неделя" : "Алдыңғы апта"}
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          changeWeek(weekOffset + 1);
+        }}
+        className="w-6 h-6 rounded-full bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary flex items-center justify-center text-foreground/80 transition-colors cursor-pointer"
+        title={language === "ru" ? "Следующая неделя" : "Келесі апта"}
+        aria-label={language === "ru" ? "Следующая неделя" : "Келесі апта"}
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
+  // Step 2: one day's interval blocks, split into lessons with breaks (desktop columns and the phone day view)
+  const renderStep2DayBlocks = (dayIdx: number) => {
+    const intervals = (effectiveIntervalsByDay[dayIdx] || []).filter(
+      (interval) => !isIntervalUnderGrid(dayIdx, interval)
+    );
+    const startHour = displayHours[0] ?? 9;
+    const getMinutesFromStart = (timeStr: string) => {
+      const [h, m] = timeStr.split(":").map(Number);
+      let diffHours = h - startHour;
+      if (diffHours < 0) diffHours += 24;
+      return diffHours * 60 + m;
+    };
+    const pixelsPerMinute = 48 / 60;
+
+    return intervals.map((interval) => {
+      const date = weekDates[dayIdx];
+      const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
+      const key = `${dateStr}_${interval.start}_${interval.end}`;
+      const isSelected = selectedSlotKeys.has(key);
+
+      const startM = getMinutesFromStart(interval.start);
+      let endM = getMinutesFromStart(interval.end);
+      if (endM <= startM) endM += 24 * 60;
+      const durationM = Math.max(30, endM - startM);
+      const topPx = startM * pixelsPerMinute;
+      const heightPx = Math.max(24, durationM * pixelsPerMinute);
+      const isShortSlot = heightPx <= 32;
+      const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
+      const lessons = lessonDuration > 0 ? splitIntoLessons(0, durationM, lessonDuration) : [];
+
+      return (
+        <div
+          key={key}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSlotSelection(key);
+          }}
+          style={{ top: `${topPx + 1}px`, height: `${heightPx - 2}px` }}
+          className={cn(
+            "group absolute left-1 right-1 transition-all cursor-pointer select-none overflow-hidden",
+            isShortSlot ? "rounded-lg" : "rounded-xl",
+            isSelected
+              ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+              : "bg-card text-primary z-10"
+          )}
+          title={`${interval.start} - ${interval.end}`}
+        >
+          {!isSelected && (
+            <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
+          )}
+          {lessons.map((lesson, li) => {
+            if (lesson.end >= durationM) return null;
+            const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
+            const reachesBlockEnd = nextStart >= durationM;
+            // Block top sits at topPx + 1, so y = t * pixelsPerMinute - 1 maps time t onto the grid.
+            // A break that runs into the block end is partly hidden by the 2px outline,
+            // so it is lifted by 2px to look as tall as the breaks inside the block.
+            const lineTop = lesson.end * pixelsPerMinute - 1 - (reachesBlockEnd ? 2 : 0);
+            const breakHeight = (nextStart - lesson.end) * pixelsPerMinute - 1;
+            return [
+              <div
+                key={`lesson-line-${li}`}
+                className={cn("absolute left-0 right-0 h-px pointer-events-none", isSelected ? "bg-white/70" : "bg-primary/50")}
+                style={{ top: `${lineTop}px` }}
+              />,
+              nextStart > lesson.end ? (
+                <div
+                  key={`lesson-break-${li}`}
+                  className={cn("absolute left-0 right-0 pointer-events-none", isSelected ? "bg-white/45" : "bg-muted-foreground/25")}
+                  style={reachesBlockEnd ? { top: `${lineTop}px`, bottom: 0 } : { top: `${lineTop}px`, height: `${breakHeight}px` }}
+                />
+              ) : null,
+            ];
+          })}
+          <div
+            className={cn(
+              "absolute inset-0 rounded-[inherit] border-2 pointer-events-none z-30",
+              isSelected ? "border-primary" : "border-primary/40 group-hover:border-primary/60"
+            )}
+          />
+        </div>
+      );
+    });
+  };
+
+  // Hour labels for the step 2 time column: one per hour line, including the closing line
+  const step2HourLabels = useMemo(() => {
+    const first = displayHours[0] ?? 9;
+    return Array.from({ length: displayHours.length + 1 }, (_, i) => `${String((first + i) % 24).padStart(2, "0")}:00`);
+  }, [displayHours]);
+
+  // Step switcher: two numbered circles joined by a line (light orange on step 1, orange on step 2)
+  const renderStepSwitcher = () => {
+    const circle = (n: 1 | 2) => (
+      <button
+        type="button"
+        onClick={() => handleStepChange(n)}
+        disabled={n === 2 && editableDaysOnDesktop.length === 0}
+        aria-label={n === 1 ? t.step1 : t.step2}
+        title={n === 1 ? t.step1 : t.step2}
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+          step === n
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+        )}
+      >
+        {n}
+      </button>
+    );
+    return (
+      <div className="flex items-center gap-2">
+        {circle(1)}
+        <div className={cn("h-1 w-12 rounded-full transition-colors", step === 2 ? "bg-primary" : "bg-primary/30")} />
+        {circle(2)}
+      </div>
+    );
+  };
+
   const lateMaxHeight = lateHoursArr.length * 2 * 24 + 32;
 
-  const currentDayIntervals = effectiveIntervalsByDay[mobileDayIdx] || [];
-  const totalIntervalsCount = Object.values(effectiveIntervalsByDay).flat().length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="max-w-full h-full max-h-full m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50"
       >
         <VisuallyHidden>
@@ -2068,51 +2256,8 @@ export default function SlotCreationWizard({
           </div>
 
           {/* Center on desktop: 2-step switcher strictly in center */}
-          <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center pointer-events-auto">
-            <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-full border border-border/50">
-              <button
-                type="button"
-                onClick={() => handleStepChange(1)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                  step === 1
-                    ? "bg-background text-foreground shadow-sm border border-border/60"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  1
-                </span>
-                <span>{t.step1}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleStepChange(2)}
-                disabled={editableDaysOnDesktop.length === 0}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
-                  step === 2
-                    ? "bg-background text-foreground shadow-sm border border-border/60"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  2
-                </span>
-                <span>{t.step2}</span>
-              </button>
-            </div>
+          <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center">
+            {renderStepSwitcher()}
           </div>
 
           {/* Right: "Готово" button pinned strictly to the far right corner */}
@@ -2193,15 +2338,12 @@ export default function SlotCreationWizard({
                         {language === "ru" ? "Время" : "Уақыт"}
                       </span>
                     </div>
-                    <div className="py-1 px-2 text-center flex items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => setIsTimezoneSettingsOpen(true)}
-                        className="text-xs font-semibold text-foreground hover:text-primary flex items-center justify-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <span>🌍 {primaryCity} ({gmtLabel})</span>
-                        <span className="text-[9px] text-muted-foreground">▼</span>
-                      </button>
+                    <div className="py-2 px-2 text-center flex items-center justify-center">
+                      {isCurrentDayToday && (
+                        <span className="text-xs font-semibold text-primary">
+                          {language === "ru" ? "Сегодня" : "Бүгін"}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -2363,15 +2505,15 @@ export default function SlotCreationWizard({
                             <span>{language === "ru" ? "Удалить" : "Жою"}</span>
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
+                        <PopoverContent className="w-72 p-3 shadow-lg" align="end">
+                          <div className="flex items-center gap-3">
                           <p className="text-sm font-medium text-left text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex justify-end">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-9 px-3 shrink-0 text-base font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2404,26 +2546,10 @@ export default function SlotCreationWizard({
               <div className="flex-1 min-w-0">
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
                   {/* Grid header with days */}
-                  <div className="grid grid-cols-[100px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsTimezoneSettingsOpen(true);
-                      }}
-                      className="py-1.5 px-1.5 text-center font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 border-r border-border/60 flex flex-col items-center justify-center gap-1 transition-colors group cursor-pointer"
-                      title={
-                        language === "ru"
-                          ? "Нажмите для изменения"
-                          : "Өзгерту үшін басыңыз"
-                      }
-                    >
-                      <span className="text-[11.5px] sm:text-[12.5px] font-semibold leading-tight text-foreground flex items-center justify-center gap-1 text-center px-0.5 whitespace-nowrap">
-                        <span className="text-xs sm:text-sm">🌍</span> {primaryCity}
-                      </span>
-                      <span className="text-[10px] sm:text-[11px] font-medium leading-none text-muted-foreground group-hover:text-foreground flex items-center gap-0.5 whitespace-nowrap">
-                        ({gmtLabel}) <span className="text-[8.5px] leading-none">▼</span>
-                      </span>
-                    </button>
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <div className="border-r border-border/60 flex items-center justify-center">
+                      {renderWeekArrows()}
+                    </div>
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
@@ -2439,19 +2565,6 @@ export default function SlotCreationWizard({
                             hasSlots && "bg-primary/15"
                           )}
                         >
-                          {idx === 0 && weekOffset > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset - 1);
-                              }}
-                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Предыдущая неделя"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
@@ -2465,26 +2578,13 @@ export default function SlotCreationWizard({
                           >
                             {format(date, "d")}
                           </div>
-                          {idx === 6 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset + 1);
-                              }}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Следующая неделя"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
                   {/* Spacer */}
-                  <div className="grid grid-cols-[100px_repeat(7,1fr)] bg-muted/10">
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/10">
                     <div className="border-r border-border/60 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
                       <div
@@ -2503,10 +2603,10 @@ export default function SlotCreationWizard({
                     {baseHours.map((h) => renderHourRow(h, false))}
 
                     {/* Stationary boundary label (e.g. 21:00) */}
-                    <div className="relative grid grid-cols-[100px_repeat(7,1fr)] select-none pointer-events-none">
+                    <div className="relative grid grid-cols-[64px_repeat(7,1fr)] select-none pointer-events-none">
                       <div className="relative border-r border-border/60 h-0">
                         {!workingHours.end.endsWith(":30") && (
-                          <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
                             {workingHours.end}
                           </span>
                         )}
@@ -2524,10 +2624,10 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Final closing line */}
-                    <div className="grid grid-cols-[100px_repeat(7,1fr)] relative">
+                    <div className="grid grid-cols-[64px_repeat(7,1fr)] relative">
                       <div className="relative border-r border-border/60 h-3 select-none">
                         {showLateHours && lateHoursArr.length > 0 && (
-                          <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
                             {closingHourStr}
                           </span>
                         )}
@@ -2636,15 +2736,15 @@ export default function SlotCreationWizard({
                             {t.clearAll}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
+                        <PopoverContent className="w-72 p-3 shadow-lg" align="end">
+                          <div className="flex items-center gap-3">
                           <p className="text-sm sm:text-base font-medium text-left text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex justify-end">
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-9 px-3 shrink-0 text-base font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2685,59 +2785,7 @@ export default function SlotCreationWizard({
                         {t.noSlotsWarning}
                       </div>
                     ) : (
-                      editableDaysOnDesktop.map((dayIdx) => {
-                        const dayEditableIntervals = (effectiveIntervalsByDay[dayIdx] || [])
-                          .map((interval, originalIdx) => ({ interval, originalIdx }))
-                          .filter(({ interval }) => !isIntervalUnderGrid(dayIdx, interval));
-
-                        return (
-                          <div
-                            key={dayIdx}
-                            className="py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-xl border border-border bg-card shadow-xs space-y-2"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs sm:text-sm font-medium text-foreground">
-                                {t.weekDaysFull[dayIdx]}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                              {dayEditableIntervals.map(({ interval, originalIdx }) => (
-                                <div
-                                  key={originalIdx}
-                                  className="text-xs font-mono gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-md border border-border/70 bg-muted/60 hover:bg-muted items-center justify-center flex w-full"
-                                >
-                                  <EditableTime
-                                    time={interval.start}
-                                    availableHours={getAvailableHoursForDay(dayIdx, interval.start, originalIdx, false)}
-                                    isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
-                                    language={language}
-                                    onChange={(newTime, isSilent) =>
-                                      updateIntervalTime(dayIdx, originalIdx, newTime, interval.end, isSilent)
-                                    }
-                                  />
-                                  <span className="mx-0.5 text-muted-foreground">–</span>
-                                  <EditableTime
-                                    time={interval.end}
-                                    availableHours={getAvailableHoursForDay(
-                                      dayIdx,
-                                      interval.end,
-                                      originalIdx,
-                                      true,
-                                      addMinutesToTime(interval.start, 30)
-                                    )}
-                                    minTime={addMinutesToTime(interval.start, 30)}
-                                    isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
-                                    language={language}
-                                    onChange={(newTime, isSilent) =>
-                                      updateIntervalTime(dayIdx, originalIdx, interval.start, newTime, isSilent)
-                                    }
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })
+                      renderTimesByDay()
                     )}
                   </div>
                 </div>
@@ -2749,537 +2797,177 @@ export default function SlotCreationWizard({
           {/* STEP 2: Configure Slot Groups */}
           {step === 2 && (
             <>
-              {/* MOBILE STEP 2: Settings with sticky top slot summary */}
-              <div className="flex sm:hidden flex-col h-full p-3.5 gap-3.5" style={{ paddingBottom: 96 }}>
-                {/* Summary of Selected Slots - fixed at top, does not scroll */}
-                <div className="flex-none bg-background/95 backdrop-blur-md pt-0.5 pb-2 -mx-3.5 px-3.5 border-b border-border/40 shadow-2xs">
-                  {/* Day Switcher Bar with < and > */}
-                  <div
-                    className="flex items-center justify-between gap-2 px-2 py-2 mb-2 bg-card border border-border/80 rounded-xl shadow-2xs"
-                    onTouchStart={handleHeaderTouchStart}
-                    onTouchEnd={handleHeaderTouchEnd}
+              {/* MOBILE STEP 2: day grid with blocks; parameters live in the bottom panel */}
+              <div
+                className="block sm:hidden p-3 space-y-2.5"
+                style={{ paddingBottom: `${mobileBottomBarHeight + 8}px` }}
+              >
+                {/* Day Switcher Bar with < and > */}
+                <div
+                  className="flex items-center justify-between gap-2 px-2 py-2 bg-card border border-border/80 rounded-xl shadow-2xs"
+                  onTouchStart={handleHeaderTouchStart}
+                  onTouchEnd={handleHeaderTouchEnd}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handlePrevMobileDay}
+                    disabled={isPrevMobileDayDisabled}
+                    className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 disabled:opacity-30 cursor-pointer"
+                    aria-label={language === "ru" ? "Предыдущий день" : "Алдыңғы күн"}
                   >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={handlePrevMobileDay}
-                      disabled={isPrevMobileDayDisabled}
-                      className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 disabled:opacity-30 cursor-pointer"
-                      aria-label={language === "ru" ? "Предыдущий день" : "Алдыңғы күн"}
-                    >
-                      <ChevronLeft className="w-5 h-5 text-foreground" />
-                    </Button>
-
-                    <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 text-center">
-                      <span className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
-                        {formattedMobileDayTitle}
+                    <ChevronLeft className="w-5 h-5 text-foreground" />
+                  </Button>
+                  <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 text-center">
+                    <span className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
+                      {formattedMobileDayTitle}
+                    </span>
+                    {isCurrentDayToday && (
+                      <span className="px-1.5 py-0.2 text-[9.5px] font-semibold bg-primary/15 text-primary rounded-full shrink-0 mt-0.5">
+                        {language === "ru" ? "Сегодня" : "Бүгін"}
                       </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNextMobileDay}
+                    className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 cursor-pointer"
+                    aria-label={language === "ru" ? "Следующий день" : "Келесі күн"}
+                  >
+                    <ChevronRight className="w-5 h-5 text-foreground" />
+                  </Button>
+                </div>
+
+                {/* Single day grid: time column + blocks, same layout as step 1 */}
+                <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
+                  <div className="grid grid-cols-[64px_1fr] bg-muted/50 border-b border-border">
+                    <div className="py-2 text-center border-r border-border/60 flex items-center justify-center">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        {language === "ru" ? "Время" : "Уақыт"}
+                      </span>
+                    </div>
+                    <div className="py-2 px-2 text-center flex items-center justify-center">
                       {isCurrentDayToday && (
-                        <span className="px-1.5 py-0.2 text-[9.5px] font-semibold bg-primary/15 text-primary rounded-full shrink-0 mt-0.5">
+                        <span className="text-xs font-semibold text-primary">
                           {language === "ru" ? "Сегодня" : "Бүгін"}
                         </span>
                       )}
                     </div>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleNextMobileDay}
-                      className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 cursor-pointer"
-                      aria-label={language === "ru" ? "Следующий день" : "Келесі күн"}
-                    >
-                      <ChevronRight className="w-5 h-5 text-foreground" />
-                    </Button>
                   </div>
-
-                  {(() => {
-                    const dayPrefix = format(currentMobileDate, "yyyy-MM-dd") + "_";
-                    const daySlotKeys = allSlotKeys.filter((k) => k.startsWith(dayPrefix));
-                    const isDayAllSelected =
-                      daySlotKeys.length > 0 && daySlotKeys.every((k) => selectedSlotKeys.has(k));
-                    return (
-                  <div className="bg-card border border-border rounded-xl p-3 shadow-xs space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <CalendarIcon className="w-4 h-4 text-primary shrink-0" />
-                        {language === "ru" ? "Настраиваемые слоты:" : "Бапталатын слоттар:"}
-                      </span>
-                      {(() => {
-                        const isAllSelected = isDayAllSelected;
-                        return (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={daySlotKeys.length === 0}
-                            onClick={() => {
-                              if (isAllSelected) {
-                                setSelectedSlotKeys((prev) => {
-                                  const next = new Set(prev);
-                                  daySlotKeys.forEach((k) => next.delete(k));
-                                  return next;
-                                });
-                              } else {
-                                setSlotSettingsMap((prev) => {
-                                  let map = { ...prev };
-                                  daySlotKeys.forEach((k) => {
-                                    map = ensureSlotInitialized(k, map);
-                                  });
-                                  return map;
-                                });
-                                setSelectedSlotKeys((prev) => {
-                                  const next = new Set(prev);
-                                  daySlotKeys.forEach((k) => next.add(k));
-                                  return next;
-                                });
-                              }
-                            }}
-                            className={cn(
-                              "text-xs h-7 px-2.5 rounded-lg transition-colors border shadow-2xs font-medium cursor-pointer",
-                              isAllSelected
-                                ? "bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-white hover:border-destructive font-semibold"
-                                : "bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40"
-                            )}
-                          >
-                            {isAllSelected ? t.unselectAll : t.selectAll}
-                          </Button>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Slot keys as selectable vertical list - exactly 2 visible */}
-                    {daySlotKeys.length === 0 ? (
-                      <div className="h-[88px] flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-xl bg-card/50">
-                        {t.noSlotsForDay}
-                      </div>
-                    ) : (
-                      <AlwaysScrollArea className="h-[88px]" viewportClassName="pr-3">
-                      <div className="flex flex-col gap-2">
-                        {daySlotKeys.map((key) => {
-                          const isSelected = selectedSlotKeys.has(key);
-                          const [, start, end] = key.split("_");
-                          const toMinutes = (time: string) => {
-                            const [h, m] = time.split(":").map(Number);
-                            return h * 60 + (m || 0);
-                          };
-                          const startMin = toMinutes(start);
-                          let endMin = toMinutes(end);
-                          if (endMin <= startMin) endMin += 24 * 60;
-                          const blockMinutes = Math.max(1, endMin - startMin);
-                          const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
-                          const lessons = lessonDuration > 0 ? splitIntoLessons(0, blockMinutes, lessonDuration) : [];
-                          const label = `${start}–${end}`;
-
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => toggleSlotSelection(key)}
-                              title={label}
-                              aria-label={label}
-                              className={cn(
-                                "w-full h-10 rounded-xl border-2 relative overflow-hidden shrink-0 cursor-pointer transition-colors",
-                                isSelected ? "bg-primary border-primary" : "bg-card border-primary/40"
-                              )}
-                            >
-                              {!isSelected && (
-                                <div className="absolute inset-0 bg-primary/15 pointer-events-none" />
-                              )}
-                              {lessons.map((lesson, li) => {
-                                if (lesson.end >= blockMinutes) return null;
-                                const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : blockMinutes;
-                                const leftPct = (lesson.end / blockMinutes) * 100;
-                                const widthPct = ((nextStart - lesson.end) / blockMinutes) * 100;
-                                return [
-                                  <div
-                                    key={`lesson-line-${li}`}
-                                    className={cn(
-                                      "absolute top-0 bottom-0 w-px pointer-events-none",
-                                      isSelected ? "bg-white/70" : "bg-primary/50"
-                                    )}
-                                    style={{ left: `${leftPct}%` }}
-                                  />,
-                                  nextStart > lesson.end ? (
-                                    <div
-                                      key={`lesson-break-${li}`}
-                                      className={cn(
-                                        "absolute top-0 bottom-0 pointer-events-none",
-                                        isSelected ? "bg-white/45" : "bg-muted-foreground/25"
-                                      )}
-                                      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                                    />
-                                  ) : null,
-                                ];
-                              })}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      </AlwaysScrollArea>
-                    )}
+                  <div className="grid grid-cols-[64px_1fr] pointer-events-none">
+                    <div className="border-r border-border/60 h-3 bg-muted/20" />
+                    <div className="h-3" />
                   </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Settings Card: Product, Duration, Participants, Conference, Details, Repetition */}
-                <div
-                  className={cn(
-                    "flex-1 min-h-0 flex flex-col overflow-hidden bg-card border rounded-2xl shadow-sm transition-all",
-                    selectedSlotKeys.size > 0
-                      ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                      : "border-border/60 opacity-60 [&_[data-radix-scroll-area-viewport]>*]:pointer-events-none"
-                  )}
-                >
-                  <AlwaysScrollArea className="flex-1 min-h-0" viewportClassName="p-4 pr-5">
-                  <div className="space-y-4">
-                  {/* For Product */}
-                  {products && products.length > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.forProduct}</span>
-                        <ReqStar />
-                        {isDifferentProduct && (
-                          <span className="text-[11px] text-muted-foreground font-normal italic">
-                            ({t.different})
-                          </span>
-                        )}
-                      </Label>
-                      <ProductSwitcher
-                        products={products}
-                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
-                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
-                        placeholder={isDifferentProduct ? t.different : undefined}
-                        hideIcon
-                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
-                      />
+                  <div className="grid grid-cols-[64px_1fr]">
+                    <div className="relative border-r border-border/60 bg-muted/20 select-none pointer-events-none">
+                      {step2HourLabels.map((label, i) => (
+                        <span
+                          key={label + i}
+                          className="absolute right-2 -translate-y-1/2 text-xs font-mono font-medium text-foreground/80"
+                          style={{ top: `${i * 48}px` }}
+                        >
+                          {label}
+                        </span>
+                      ))}
                     </div>
-                  )}
-
-                  {/* Lesson Duration */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.lessonDuration}</span>
-                      <ReqStar />
-                    </Label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder={isDifferentDuration ? t.different : t.customValue}
-                        value={isDifferentDuration ? "" : currentPanelSettings?.customDuration || ""}
-                        className={cn(
-                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                          (isDifferentDuration || currentPanelSettings?.customDuration) &&
-                            "border-primary font-semibold text-primary"
-                        )}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "");
-                          updateSelectedSlotsField("customDuration", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("slotDuration", Number(val));
-                          } else if (!val) {
-                            updateSelectedSlotsField("slotDuration", 0);
-                          }
-                        }}
-                        onBlur={() => {
-                          if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
-                            updateSelectedSlotsField("slotDuration", 60);
-                          }
-                        }}
-                      />
-                      {[50, 60, 90].map((dur) => {
-                        const isActive =
-                          !isDifferentDuration &&
-                          currentPanelSettings?.slotDuration === dur &&
-                          !currentPanelSettings?.customDuration;
-                        return (
-                          <Button
-                            key={dur}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              updateSelectedSlotsField("customDuration", "");
-                              updateSelectedSlotsField("slotDuration", dur);
-                            }}
-                            className={cn(
-                              "h-11 min-h-[44px] flex-1 px-1.5 text-xs transition-all rounded-lg",
-                              isActive
-                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            )}
-                          >
-                            <span className="whitespace-nowrap">
-                              {dur} {t.min}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Max Participants */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.participants}</span>
-                      <ReqStar />
-                    </Label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder={isDifferentParticipants ? t.different : t.customValue}
-                        value={
-                          isDifferentParticipants ? "" : currentPanelSettings?.customParticipants || ""
+                    <div
+                      onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setSelectedSlotKeys(new Set());
                         }
-                        className={cn(
-                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                          (isDifferentParticipants || currentPanelSettings?.customParticipants) &&
-                            "border-primary font-semibold text-primary"
-                        )}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "");
-                          updateSelectedSlotsField("customParticipants", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("maxParticipants", Number(val));
-                          }
-                        }}
-                      />
-                      {[
-                        { value: 1, label: "1" },
-                        { value: 5, label: "5" },
-                        { value: 10, label: "10" },
-                        { value: 999999, label: "∞" },
-                      ].map((preset) => {
-                        const isActive =
-                          !isDifferentParticipants &&
-                          currentPanelSettings?.maxParticipants === preset.value &&
-                          !currentPanelSettings?.customParticipants;
-                        return (
-                          <Button
-                            key={preset.value}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              updateSelectedSlotsField("customParticipants", "");
-                              updateSelectedSlotsField("maxParticipants", preset.value);
-                            }}
-                            className={cn(
-                              "h-11 min-h-[44px] flex-1 px-1 text-xs transition-all rounded-lg",
-                              isActive
-                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            )}
-                          >
-                            <span className={preset.value === 999999 ? "text-base sm:text-lg font-bold leading-none select-none" : ""}>
-                              {preset.label}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Conference Link Section */}
-                  <div className="pt-1 space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.conferenceLink}</span>
-                      <ReqStar />
-                    </Label>
-
-                    <div className="relative flex items-center">
-                      <input
-                        type="url"
-                        placeholder={t.conferenceLinkPlaceholder}
-                        value={currentPanelSettings?.customConferenceLink || ""}
-                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                        className={cn(
-                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
-                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
-                        )}
-                      />
-                      {Boolean(currentPanelSettings?.customConferenceLink) && (
-                        <div className="absolute right-1.5 flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
-                          >
-                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateSelectedSlotsField("customConferenceLink", "");
-                              setCopiedLink(false);
-                            }}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Lesson Details */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.details}</span>
-                    </Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsDetailsDialogOpen(true)}
-                      className="w-full justify-between h-11 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer"
+                      }}
+                      className="relative border-t border-foreground/35"
+                      style={{ height: `${displayHours.length * 48}px` }}
                     >
-                      <span className="text-xs text-foreground">{t.detailsHint}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    </Button>
-                  </div>
-
-                  {/* Repetition: separated from the settings above */}
-                  <div className="pt-3 border-t border-border/50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="mobile-repeat-switch"
-                        className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
-                      >
-                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.everyWeek}</span>
-                        {isDifferentRepeat && (
-                          <span className="text-[11px] text-muted-foreground font-normal italic">
-                            ({t.different})
-                          </span>
-                        )}
-                        <ReqStar />
-                      </Label>
-                      <Switch
-                        id="mobile-repeat-switch"
-                        checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
-                        onCheckedChange={(checked) => {
-                          setRepeatWeekly(checked);
-                          updateSelectedSlotsField("repeatWeekly", checked);
-                          if (checked && !currentPanelSettings?.repeatPeriod) {
-                            updateSelectedSlotsField("repeatPeriod", "1week");
-                          }
-                        }}
-                      />
-                    </div>
-
-                    {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
-                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold text-foreground">
-                            {t.repeatPeriodLabel}
-                          </Label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(["1week", "2weeks", "1month", "custom"] as const).map((period) => {
-                              const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
-                              const isSelected = !isDifferentPeriod && activePeriod === period;
-                              return (
-                                <Button
-                                  key={period}
-                                  type="button"
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    setRepeatPeriod(period);
-                                    updateSelectedSlotsField("repeatPeriod", period);
-                                    if (period === "custom") {
-                                      const currentUntil = currentPanelSettings?.repeatUntil;
-                                      if (currentUntil) {
-                                        const parts = currentUntil.split("-");
-                                        if (parts.length === 3) {
-                                          setRepeatYear(parts[0]);
-                                          setRepeatMonth(parts[1]);
-                                          setRepeatDay(parts[2]);
-                                        }
-                                        setRepeatUntil(currentUntil);
-                                      } else {
-                                        setRepeatYear("");
-                                        setRepeatMonth("");
-                                        setRepeatDay("");
-                                        setRepeatUntil("");
-                                      }
-                                      setIsCustomRepeatDialogOpen(true);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-11 min-h-[44px] text-xs font-semibold rounded-lg transition-all",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground font-semibold"
-                                      : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                  )}
-                                >
-                                  {period === "1week"
-                                    ? t.oneWeek
-                                    : period === "1month"
-                                    ? t.oneMonth
-                                    : period === "2weeks"
-                                    ? t.twoWeeks
-                                    : t.custom}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {currentPanelSettings?.repeatPeriod === "custom" && (
-                          <div className="pt-0.5">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                const currentUntil = currentPanelSettings?.repeatUntil;
-                                if (currentUntil) {
-                                  const parts = currentUntil.split("-");
-                                  if (parts.length === 3) {
-                                    setRepeatYear(parts[0]);
-                                    setRepeatMonth(parts[1]);
-                                    setRepeatDay(parts[2]);
-                                  }
-                                  setRepeatUntil(currentUntil);
-                                } else {
-                                  setRepeatYear("");
-                                  setRepeatMonth("");
-                                  setRepeatDay("");
-                                  setRepeatUntil("");
-                                }
-                                setIsCustomRepeatDialogOpen(true);
-                              }}
-                              className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs font-medium hover:bg-primary/10 transition-all rounded-lg cursor-pointer"
-                            >
-                              <span className="truncate font-semibold text-foreground">
-                                {currentPanelSettings?.repeatUntil
-                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
-                                  : language === "ru"
-                                  ? "Выберите дату окончания"
-                                  : "Аяқталу күнін таңдаңыз"}
-                              </span>
-                              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            </Button>
-                          </div>
-                        )}
+                      <div className="absolute inset-0 pointer-events-none flex flex-col">
+                        {displayHours.map((_, i) => (
+                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                        ))}
                       </div>
-                    )}
+                      {renderStep2DayBlocks(mobileDayIdx)}
+                    </div>
                   </div>
+                  <div className="grid grid-cols-[64px_1fr] pointer-events-none">
+                    <div className="border-r border-border/60 h-3 bg-muted/20" />
+                    <div className="h-3" />
                   </div>
-                  </AlwaysScrollArea>
                 </div>
 
+                {/* Toolbar: select all (left) / late hours (center) / unselect (right) for this day */}
+                {(() => {
+                  const dayPrefix = format(currentMobileDate, "yyyy-MM-dd") + "_";
+                  const daySlotKeys = allSlotKeys.filter((k) => k.startsWith(dayPrefix));
+                  const selectedCount = daySlotKeys.filter((k) => selectedSlotKeys.has(k)).length;
+                  return (
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-0.5">
+                      <div className="flex justify-start">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={daySlotKeys.length === 0 || selectedCount === daySlotKeys.length}
+                          onClick={() => {
+                            setSlotSettingsMap((prev) => {
+                              let map = { ...prev };
+                              daySlotKeys.forEach((k) => {
+                                map = ensureSlotInitialized(k, map);
+                              });
+                              return map;
+                            });
+                            setSelectedSlotKeys((prev) => {
+                              const next = new Set(prev);
+                              daySlotKeys.forEach((k) => next.add(k));
+                              return next;
+                            });
+                          }}
+                          className="h-8 px-2.5 text-xs font-medium rounded-lg bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 disabled:opacity-40"
+                        >
+                          {t.selectAll}
+                        </Button>
+                      </div>
+                      {lateHoursArr.length > 0 ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleToggleLateHours}
+                          className="text-xs font-medium text-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/40 gap-1 rounded-lg px-3 h-8 border border-border bg-card transition-colors cursor-pointer"
+                        >
+                          <ChevronDown
+                            className={cn("w-3.5 h-3.5 transition-transform duration-300", showLateHours && "rotate-180")}
+                          />
+                          <span>
+                            {showLateHours
+                              ? language === "ru" ? "Скрыть" : "Жасыру"
+                              : language === "ru" ? "Показать" : "Көрсету"}
+                          </span>
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={selectedCount === 0}
+                          onClick={() => {
+                            setSelectedSlotKeys((prev) => {
+                              const next = new Set(prev);
+                              daySlotKeys.forEach((k) => next.delete(k));
+                              return next;
+                            });
+                          }}
+                          className="h-8 px-2.5 text-xs font-medium rounded-lg bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-white hover:border-destructive disabled:opacity-40"
+                        >
+                          {t.unselectAll}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* DESKTOP STEP 2: 7-day schedule grid with right sidebar */}
@@ -3297,8 +2985,11 @@ export default function SlotCreationWizard({
                   }}
                   className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none"
                 >
-                  {/* 7 Days Header (Mon-Sun) */}
-                  <div className="grid grid-cols-7 bg-muted/50 border-b border-border sticky top-0 z-10">
+                  {/* 7 Days Header (Mon-Sun) with week arrows in the time column */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <div className="border-r border-border/60 flex items-center justify-center">
+                      {renderWeekArrows()}
+                    </div>
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
@@ -3308,23 +2999,10 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
                             isDaySelectedInStep2 && "bg-primary/15"
                           )}
                         >
-                          {idx === 0 && weekOffset > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset - 1);
-                              }}
-                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Предыдущая неделя"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
@@ -3338,63 +3016,51 @@ export default function SlotCreationWizard({
                           >
                             {format(date, "d")}
                           </div>
-                          {idx === 6 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset + 1);
-                              }}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Следующая неделя"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Timeline Grid with solid blocks without square splits */}
-                  <div
-                    onClick={(e) => {
-                      if (e.target === e.currentTarget) {
-                        setSelectedSlotKeys(new Set());
-                      }
-                    }}
-                    className="relative bg-card"
-                    style={{
-                      height: `${Math.max(360, displayHours.length * 48)}px`,
-                    }}
-                  >
-                    {/* Background horizontal hour lines */}
-                    <div className="absolute inset-0 pointer-events-none flex flex-col">
-                      {displayHours.map((_, i) => (
-                        <div
-                          key={i}
-                          className="border-b last:border-b-0 border-foreground/35"
-                          style={{ height: "48px" }}
-                        />
+                  {/* Top spacer, same as step 1 */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/10 pointer-events-none">
+                    <div className="border-r border-border/60 h-2.5" />
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2.5" />
+                    ))}
+                  </div>
+
+                  {/* Time column + timeline */}
+                  <div className="grid grid-cols-[64px_1fr]">
+                    <div className="relative border-r border-border/60 select-none pointer-events-none">
+                      {step2HourLabels.map((label, i) => (
+                        <span
+                          key={label + i}
+                          className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80"
+                          style={{ top: `${i * 48}px` }}
+                        >
+                          {label}
+                        </span>
                       ))}
                     </div>
+                    <div
+                      onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setSelectedSlotKeys(new Set());
+                        }
+                      }}
+                      className="relative bg-card border-t border-foreground/35"
+                      style={{ height: `${displayHours.length * 48}px` }}
+                    >
+                      {/* Background horizontal hour lines */}
+                      <div className="absolute inset-0 pointer-events-none flex flex-col">
+                        {displayHours.map((_, i) => (
+                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                        ))}
+                      </div>
 
-                    {/* 7 Day Columns */}
-                    <div className="relative grid grid-cols-7 h-full divide-x divide-foreground/35">
-                      {Array.from({ length: 7 }).map((_, dayIdx) => {
-                        const intervals = (effectiveIntervalsByDay[dayIdx] || []).filter(
-                          (interval) => !isIntervalUnderGrid(dayIdx, interval)
-                        );
-                        const startHour = displayHours[0] ?? 9;
-
-                        const getMinutesFromStart = (timeStr: string) => {
-                          const [h, m] = timeStr.split(":").map(Number);
-                          let diffHours = h - startHour;
-                          if (diffHours < 0) diffHours += 24;
-                          return diffHours * 60 + m;
-                        };
-
-                        return (
+                      {/* 7 Day Columns */}
+                      <div className="relative grid grid-cols-7 h-full">
+                        {Array.from({ length: 7 }).map((_, dayIdx) => (
                           <div
                             key={dayIdx}
                             onClick={(e) => {
@@ -3402,96 +3068,21 @@ export default function SlotCreationWizard({
                                 setSelectedSlotKeys(new Set());
                               }
                             }}
-                            className="relative h-full"
+                            className="relative h-full border-r last:border-r-0 border-foreground/35"
                           >
-                            {intervals.map((interval) => {
-                              const date = weekDates[dayIdx];
-                              const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
-                              const key = `${dateStr}_${interval.start}_${interval.end}`;
-                              const isSelected = selectedSlotKeys.has(key);
-
-                              const startM = getMinutesFromStart(interval.start);
-                              let endM = getMinutesFromStart(interval.end);
-                              if (endM <= startM) {
-                                endM += 24 * 60;
-                              }
-                              const durationM = Math.max(30, endM - startM);
-                              const pixelsPerMinute = 48 / 60;
-                              const topPx = startM * pixelsPerMinute;
-                              const heightPx = Math.max(24, durationM * pixelsPerMinute);
-                              const isShortSlot = heightPx <= 32;
-                              const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
-                              const lessons = lessonDuration > 0 ? splitIntoLessons(0, durationM, lessonDuration) : [];
-
-                              return (
-                                <div
-                                  key={key}
-                                  onClick={(e) => {
-                                   e.stopPropagation();
-                                   toggleSlotSelection(key);
-                                  }}
-                                  style={{
-                                    top: `${topPx + 1}px`,
-                                    height: `${heightPx - 2}px`,
-                                  }}
-                                  className={cn(
-                                    "group absolute left-1 right-1 transition-all cursor-pointer select-none flex items-center justify-center text-center overflow-hidden",
-                                    isShortSlot ? "p-0.5 rounded-lg" : "p-1.5 rounded-xl",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                      : "bg-card text-primary z-10"
-                                  )}
-                                  title={`${interval.start} - ${interval.end}`}
-                                >
-                                  {!isSelected && (
-                                    <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
-                                  )}
-                                  {lessons.map((lesson, li) => {
-                                    if (lesson.end >= durationM) return null;
-                                    const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
-                                    // Block top sits at topPx + 1, so y = t * pixelsPerMinute - 1 maps time t exactly onto the grid
-                                    const breakTop = lesson.end * pixelsPerMinute - 1;
-                                    const isLastBreak = li + 1 >= lessons.length;
-                                    // minus 1px so middle breaks match the last one, which stops at the 1px gap above the grid line
-                                    const breakHeight = (nextStart - lesson.end) * pixelsPerMinute - 1;
-                                    return [
-                                      <div
-                                        key={`lesson-line-${li}`}
-                                        className={cn(
-                                          "absolute left-0 right-0 h-px pointer-events-none",
-                                          isSelected ? "bg-white/70" : "bg-primary/50"
-                                        )}
-                                        style={{ top: `${breakTop}px` }}
-                                      />,
-                                      nextStart > lesson.end ? (
-                                        <div
-                                          key={`lesson-break-${li}`}
-                                          className={cn(
-                                            "absolute left-0 right-0 pointer-events-none",
-                                            isSelected ? "bg-white/45" : "bg-muted-foreground/25"
-                                          )}
-                                          style={
-                                            isLastBreak
-                                              ? { top: `${breakTop}px`, bottom: 0 }
-                                              : { top: `${breakTop}px`, height: `${breakHeight}px` }
-                                          }
-                                        />
-                                      ) : null,
-                                    ];
-                                  })}
-                                  <div
-                                    className={cn(
-                                      "absolute inset-0 rounded-[inherit] border-2 pointer-events-none z-30",
-                                      isSelected ? "border-primary" : "border-primary/40 group-hover:border-primary/60"
-                                    )}
-                                  />
-                                </div>
-                              );
-                            })}
+                            {renderStep2DayBlocks(dayIdx)}
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Bottom spacer, same as step 1 */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] pointer-events-none">
+                    <div className="border-r border-border/60 h-3" />
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-3" />
+                    ))}
                   </div>
                 </div>
 
@@ -3585,9 +3176,10 @@ export default function SlotCreationWizard({
               {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-72 sm:w-80 md:w-96 flex-none"
+                className="w-80 sm:w-96 md:w-[410px] flex-none"
               >
                 <div className="sticky top-4 space-y-3.5">
+                  <p className="text-base sm:text-[17px] font-medium text-foreground">{t.step2}</p>
                   {/* Settings Card for selected slot groups: Product, Duration, Participants, Conference, Details, Repetition */}
                   <div
                     className={cn(
@@ -4301,106 +3893,446 @@ export default function SlotCreationWizard({
           </DialogContent>
         </Dialog>
 
-        {/* Mobile bottom container: Step 1 Intervals Panel + Step Switcher */}
+        {/* Mobile bottom container: step panel ("Выбранное время" / "Параметры") + step switcher */}
         <div ref={mobileBottomBarRef} className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 flex-col">
           {step === 1 && (
             <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-primary" />
-                {t.repeatSummary}
-              </span>
-              {currentDayEditableIntervals.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2 h-9 overflow-y-auto overscroll-contain touch-pan-y pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-track]:bg-transparent">
-                  {currentDayEditableIntervals.map(({ interval, originalIdx }) => (
-                    <div
-                      key={originalIdx}
-                      className="flex items-center justify-center gap-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-sm px-2.5 h-9 rounded-xl w-full"
-                    >
-                      <EditableTime
-                        time={interval.start}
-                        availableHours={getAvailableHoursForDay(mobileDayIdx, interval.start, originalIdx, false)}
-                        isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                        language={language}
-                        onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, newTime, interval.end, isSilent)}
-                      />
-                      <span className="text-muted-foreground font-semibold text-sm">–</span>
-                      <EditableTime
-                        time={interval.end}
-                        availableHours={getAvailableHoursForDay(
-                          mobileDayIdx,
-                          interval.end,
-                          originalIdx,
-                          true,
-                          addMinutesToTime(interval.start, 30)
+              <button
+                type="button"
+                onClick={() => setIsMobileTimesExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                aria-expanded={isMobileTimesExpanded}
+              >
+                <span className="text-base font-semibold text-foreground flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-primary" />
+                  {t.repeatSummary}
+                </span>
+                <ChevronUp
+                  className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileTimesExpanded && "rotate-180")}
+                />
+              </button>
+              {isMobileTimesExpanded ? (
+                editableDaysOnDesktop.length > 0 ? (
+                  <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
+                    <div className="space-y-2 pb-1">{renderTimesByDay()}</div>
+                  </AlwaysScrollArea>
+                ) : (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">{t.noSlotsWarning}</div>
+                )
+              ) : currentDayEditableIntervals.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 h-9 overflow-y-auto overscroll-contain touch-pan-y pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-track]:bg-transparent">
+                    {currentDayEditableIntervals.map(({ interval, originalIdx }) => (
+                      <div
+                        key={originalIdx}
+                        className="flex items-center justify-center gap-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-sm px-2.5 h-9 rounded-xl w-full"
+                      >
+                        <EditableTime
+                          time={interval.start}
+                          availableHours={getAvailableHoursForDay(mobileDayIdx, interval.start, originalIdx, false)}
+                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
+                          language={language}
+                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, newTime, interval.end, isSilent)}
+                        />
+                        <span className="text-muted-foreground font-semibold text-sm">–</span>
+                        <EditableTime
+                          time={interval.end}
+                          availableHours={getAvailableHoursForDay(
+                            mobileDayIdx,
+                            interval.end,
+                            originalIdx,
+                            true,
+                            addMinutesToTime(interval.start, 30)
+                          )}
+                          minTime={addMinutesToTime(interval.start, 30)}
+                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
+                          language={language}
+                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, interval.start, newTime, isSilent)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">
+                    {t.noSlotsWarning}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
+              <button
+                type="button"
+                onClick={() => setIsMobileParamsExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                aria-expanded={isMobileParamsExpanded}
+              >
+                <span className="text-base font-semibold text-foreground">{t.step2}</span>
+                <ChevronUp
+                  className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileParamsExpanded && "rotate-180")}
+                />
+              </button>
+              {isMobileParamsExpanded && (
+                <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
+                  <div
+                    className={cn(
+                      "space-y-4 pt-1 pb-1 transition-opacity",
+                      selectedSlotKeys.size > 0 ? "opacity-100" : "opacity-60 pointer-events-none"
+                    )}
+                  >
+                  {/* For Product */}
+                  {products && products.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.forProduct}</span>
+                        <ReqStar />
+                        {isDifferentProduct && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
                         )}
-                        minTime={addMinutesToTime(interval.start, 30)}
-                        isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                        language={language}
-                        onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, interval.start, newTime, isSilent)}
+                      </Label>
+                      <ProductSwitcher
+                        products={products}
+                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
+                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                        placeholder={isDifferentProduct ? t.different : undefined}
+                        hideIcon
+                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
                       />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="h-9 flex items-center text-xs text-muted-foreground">
-                  {t.noSlotsWarning}
-                </div>
+                  )}
+
+                  {/* Lesson Duration */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.lessonDuration}</span>
+                      <ReqStar />
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={isDifferentDuration ? t.different : t.customValue}
+                        value={isDifferentDuration ? "" : currentPanelSettings?.customDuration || ""}
+                        className={cn(
+                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
+                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                          (isDifferentDuration || currentPanelSettings?.customDuration) &&
+                            "border-primary font-semibold text-primary"
+                        )}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          updateSelectedSlotsField("customDuration", val);
+                          if (val && Number(val) > 0) {
+                            updateSelectedSlotsField("slotDuration", Number(val));
+                          } else if (!val) {
+                            updateSelectedSlotsField("slotDuration", 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
+                            updateSelectedSlotsField("slotDuration", 60);
+                          }
+                        }}
+                      />
+                      {[50, 60, 90].map((dur) => {
+                        const isActive =
+                          !isDifferentDuration &&
+                          currentPanelSettings?.slotDuration === dur &&
+                          !currentPanelSettings?.customDuration;
+                        return (
+                          <Button
+                            key={dur}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              updateSelectedSlotsField("customDuration", "");
+                              updateSelectedSlotsField("slotDuration", dur);
+                            }}
+                            className={cn(
+                              "h-11 min-h-[44px] flex-1 px-1.5 text-xs transition-all rounded-lg",
+                              isActive
+                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                            )}
+                          >
+                            <span className="whitespace-nowrap">
+                              {dur} {t.min}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Max Participants */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.participants}</span>
+                      <ReqStar />
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={isDifferentParticipants ? t.different : t.customValue}
+                        value={
+                          isDifferentParticipants ? "" : currentPanelSettings?.customParticipants || ""
+                        }
+                        className={cn(
+                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
+                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                          (isDifferentParticipants || currentPanelSettings?.customParticipants) &&
+                            "border-primary font-semibold text-primary"
+                        )}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          updateSelectedSlotsField("customParticipants", val);
+                          if (val && Number(val) > 0) {
+                            updateSelectedSlotsField("maxParticipants", Number(val));
+                          }
+                        }}
+                      />
+                      {[
+                        { value: 1, label: "1" },
+                        { value: 5, label: "5" },
+                        { value: 10, label: "10" },
+                        { value: 999999, label: "∞" },
+                      ].map((preset) => {
+                        const isActive =
+                          !isDifferentParticipants &&
+                          currentPanelSettings?.maxParticipants === preset.value &&
+                          !currentPanelSettings?.customParticipants;
+                        return (
+                          <Button
+                            key={preset.value}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              updateSelectedSlotsField("customParticipants", "");
+                              updateSelectedSlotsField("maxParticipants", preset.value);
+                            }}
+                            className={cn(
+                              "h-11 min-h-[44px] flex-1 px-1 text-xs transition-all rounded-lg",
+                              isActive
+                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                            )}
+                          >
+                            <span className={preset.value === 999999 ? "text-base sm:text-lg font-bold leading-none select-none" : ""}>
+                              {preset.label}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Conference Link Section */}
+                  <div className="pt-1 space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.conferenceLink}</span>
+                      <ReqStar />
+                    </Label>
+
+                    <div className="relative flex items-center">
+                      <input
+                        type="url"
+                        placeholder={t.conferenceLinkPlaceholder}
+                        value={currentPanelSettings?.customConferenceLink || ""}
+                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
+                        className={cn(
+                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
+                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
+                        )}
+                      />
+                      {Boolean(currentPanelSettings?.customConferenceLink) && (
+                        <div className="absolute right-1.5 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
+                          >
+                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateSelectedSlotsField("customConferenceLink", "");
+                              setCopiedLink(false);
+                            }}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lesson Details */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.details}</span>
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDetailsDialogOpen(true)}
+                      className="w-full justify-between h-11 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer"
+                    >
+                      <span className="text-xs text-foreground">{t.detailsHint}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </Button>
+                  </div>
+
+                  {/* Repetition: separated from the settings above */}
+                  <div className="pt-3 border-t border-border/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="mobile-repeat-switch"
+                        className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
+                      >
+                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.everyWeek}</span>
+                        {isDifferentRepeat && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
+                        )}
+                        <ReqStar />
+                      </Label>
+                      <Switch
+                        id="mobile-repeat-switch"
+                        checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
+                        onCheckedChange={(checked) => {
+                          setRepeatWeekly(checked);
+                          updateSelectedSlotsField("repeatWeekly", checked);
+                          if (checked && !currentPanelSettings?.repeatPeriod) {
+                            updateSelectedSlotsField("repeatPeriod", "1week");
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
+                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-foreground">
+                            {t.repeatPeriodLabel}
+                          </Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["1week", "2weeks", "1month", "custom"] as const).map((period) => {
+                              const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
+                              const isSelected = !isDifferentPeriod && activePeriod === period;
+                              return (
+                                <Button
+                                  key={period}
+                                  type="button"
+                                  variant={isSelected ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    setRepeatPeriod(period);
+                                    updateSelectedSlotsField("repeatPeriod", period);
+                                    if (period === "custom") {
+                                      const currentUntil = currentPanelSettings?.repeatUntil;
+                                      if (currentUntil) {
+                                        const parts = currentUntil.split("-");
+                                        if (parts.length === 3) {
+                                          setRepeatYear(parts[0]);
+                                          setRepeatMonth(parts[1]);
+                                          setRepeatDay(parts[2]);
+                                        }
+                                        setRepeatUntil(currentUntil);
+                                      } else {
+                                        setRepeatYear("");
+                                        setRepeatMonth("");
+                                        setRepeatDay("");
+                                        setRepeatUntil("");
+                                      }
+                                      setIsCustomRepeatDialogOpen(true);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "h-11 min-h-[44px] text-xs font-semibold rounded-lg transition-all",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground font-semibold"
+                                      : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                  )}
+                                >
+                                  {period === "1week"
+                                    ? t.oneWeek
+                                    : period === "1month"
+                                    ? t.oneMonth
+                                    : period === "2weeks"
+                                    ? t.twoWeeks
+                                    : t.custom}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {currentPanelSettings?.repeatPeriod === "custom" && (
+                          <div className="pt-0.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const currentUntil = currentPanelSettings?.repeatUntil;
+                                if (currentUntil) {
+                                  const parts = currentUntil.split("-");
+                                  if (parts.length === 3) {
+                                    setRepeatYear(parts[0]);
+                                    setRepeatMonth(parts[1]);
+                                    setRepeatDay(parts[2]);
+                                  }
+                                  setRepeatUntil(currentUntil);
+                                } else {
+                                  setRepeatYear("");
+                                  setRepeatMonth("");
+                                  setRepeatDay("");
+                                  setRepeatUntil("");
+                                }
+                                setIsCustomRepeatDialogOpen(true);
+                              }}
+                              className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs font-medium hover:bg-primary/10 transition-all rounded-lg cursor-pointer"
+                            >
+                              <span className="truncate font-semibold text-foreground">
+                                {currentPanelSettings?.repeatUntil
+                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                  : language === "ru"
+                                  ? "Выберите дату окончания"
+                                  : "Аяқталу күнін таңдаңыз"}
+                              </span>
+                              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                </AlwaysScrollArea>
               )}
             </div>
           )}
 
           <div className="flex items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center gap-2 bg-muted/70 p-1.5 rounded-full border border-border/50">
-              <button
-                type="button"
-                onClick={() => handleStepChange(1)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                  step === 1 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  1
-                </span>
-                <span>{t.step1}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStepChange(2)}
-                disabled={editableDaysOnDesktop.length === 0}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all disabled:opacity-40 cursor-pointer",
-                  step === 2 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  2
-                </span>
-                <span>{t.step2}</span>
-              </button>
-            </div>
+            {renderStepSwitcher()}
           </div>
         </div>
 
-        {/* Account Settings Dialog for Timezone Selection */}
-        <AccountSettingsDialog
-          open={isTimezoneSettingsOpen}
-          onOpenChange={setIsTimezoneSettingsOpen}
-          role={effectiveRole}
-          displayName={shownName}
-          userId={effectiveUserId}
-          initialSection="timezone"
-        />
       </DialogContent>
     </Dialog>
   );
