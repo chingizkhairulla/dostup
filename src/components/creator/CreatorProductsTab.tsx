@@ -3251,14 +3251,14 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
       {/* Delete Confirmation */}
       <Dialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
-        <DialogContent className="max-w-md" hideCloseButton>
-          <DialogHeader>
-            <DialogTitle>Удалить продукт?</DialogTitle>
-            <DialogDescription className="text-base text-foreground font-normal pt-2">
+        <DialogContent className="max-w-md gap-2.5 p-5" hideCloseButton>
+          <DialogHeader className="text-center sm:text-center items-center space-y-1">
+            <DialogTitle className="text-center text-lg font-semibold">Удалить продукт?</DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-foreground font-normal text-center">
               Расписание, материалы, объявления и пользователи будут удалены вместе с этим продуктом.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-end pt-1">
             <Button 
               variant="destructive"
               onClick={handleDelete}
@@ -3352,7 +3352,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                   id={product.id}
                   slug={product.slug}
                   sellerHandle={sellerHandle}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  className={cn(
+                    isMobile ? "h-8 px-2 text-xs" : "h-9",
+                    "hover:bg-[#FF6B00]/10 hover:border-[#FF6B00]/40 hover:text-[#FF6B00] active:bg-[#FF6B00] active:text-white active:border-[#FF6B00] transition-colors [&:active_*]:text-white",
+                  )}
                   warning={
                     language === "ru"
                       ? "Перед отправкой добавьте необходимые материалы и/или расписание. Иначе после оплаты покупатель может получить доступ к продукту, в котором пока нет содержимого."
@@ -3363,7 +3366,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                   variant="outline"
                   size="sm"
                   onClick={() => setVisibilityProductId(product.id)}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  className={cn(
+                    isMobile ? "h-8 px-2 text-xs" : "h-9",
+                    "hover:bg-[#FF6B00]/10 hover:border-[#FF6B00]/40 hover:text-[#FF6B00] active:bg-[#FF6B00] active:text-white active:border-[#FF6B00] transition-colors [&:active_*]:text-white",
+                  )}
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span className="ml-1">
@@ -3376,7 +3382,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                   variant="outline"
                   size="sm"
                   onClick={() => handleEdit(product)}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  className={cn(
+                    isMobile ? "h-8 px-2 text-xs" : "h-9",
+                    "hover:bg-[#FF6B00]/10 hover:border-[#FF6B00]/40 hover:text-[#FF6B00] active:bg-[#FF6B00] active:text-white active:border-[#FF6B00] transition-colors [&:active_*]:text-white",
+                  )}
                 >
                   <Edit className="w-3.5 h-3.5" />
                   <span className="ml-1">{t("edit")}</span>
@@ -3397,13 +3406,16 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                       setPauseMessage(
                         (product as any).paused_message ||
                           (language === "ru"
-                            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
-                            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
+                            ? "Мы набрали достаточное количество учеников — ждите новый поток."
+                            : "Біз оқушылардың жеткілікті санын жинадық — жаңа лекті күтіңіз.")
                       );
                       setPausingProduct(product as Product);
                     }
                   }}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
+                  className={cn(
+                    isMobile ? "h-8 px-2 text-xs" : "h-9",
+                    "hover:bg-[#FF6B00]/10 hover:border-[#FF6B00]/40 hover:text-[#FF6B00] active:bg-[#FF6B00] active:text-white active:border-[#FF6B00] transition-colors [&:active_*]:text-white",
+                  )}
                 >
                   {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
                   <span className="ml-1">
@@ -3459,23 +3471,28 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
+          <p className="text-sm sm:text-base leading-relaxed text-foreground font-medium">
             {language === "ru"
-              ? "На продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Өнімге кіруге болады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
+              ? "Вместо кнопки покупки люди увидят сообщение ниже:"
+              : "Сатып алу батырмасының орнына адамдар төмендегі хабарламаны көреді:"}
           </p>
-          <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
+          <Textarea
+            id="pause-message"
+            rows={2}
+            value={pauseMessage}
+            onChange={(e) => setPauseMessage(e.target.value)}
+            className="min-h-[56px] text-sm leading-snug py-2 px-3 resize-y"
+            placeholder={
+              language === "ru"
+                ? "Мы набрали достаточное количество учеников — ждите новый поток."
+                : "Біз оқушылардың жеткілікті санын жинадық — жаңа лекті күтіңіз."
+            }
+          />
+          <p className="text-sm sm:text-base leading-relaxed text-foreground font-medium">
             {language === "ru"
               ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
               : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
           </p>
-          <Textarea
-            id="pause-message"
-            rows={4}
-            value={pauseMessage}
-            onChange={(e) => setPauseMessage(e.target.value)}
-            placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
-          />
         </div>
         <div className="flex justify-end pt-2">
           <Button

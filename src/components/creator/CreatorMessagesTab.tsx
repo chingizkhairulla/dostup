@@ -131,7 +131,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
             filterKeys: ["all"],
           },
           ...[...contacts]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || (a.name || "").localeCompare(b.name || ""))
             .map((c) => ({
               id: `${DIRECT_PREFIX}${c.peer_id}`,
               title: c.name,

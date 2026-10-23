@@ -466,8 +466,8 @@ export const translations = {
 
     marketplaceHeadline: "Покупай. Обучайся. Продавай.",
     footerCopyright: "© 2026 Dostup",
-    footerTerms: "Условия использования",
-    footerPrivacy: "Политика конфиденциальности",
+    footerTerms: "Условия пользования",
+    footerPrivacy: "Политика безопасности",
     footerContactEmail: "chingizkhairulla@gmail.com",
     termsPageTitle: "Условия использования",
     privacyPageTitle: "Политика конфиденциальности",

@@ -14,6 +14,7 @@ import { BUYER_PERIODS, periodStart, type BuyerPeriod } from "./buyerAccess";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import { useSelectedCreatorProduct } from "@/hooks/useSelectedCreatorProduct";
 import { cn } from "@/lib/utils";
+import { getMockPaidPurchases } from "@/lib/mockBuyersData";
 
 type PurchaseWithUser = BuyerPurchase & {
   latest_submission?: {
@@ -81,15 +82,25 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
       const products = productsRes.products ?? [];
       const purchasesData = purchasesRes.purchases ?? [];
-      if (!purchasesData.length) return [];
 
-      return purchasesData.map(purchase => ({
-        ...purchase,
-        simple_user: purchase.user || { id: "", name: "Unknown", phone: "" },
-        product: products.find(p => p.id === purchase.product_id) || { title: "Unknown" },
-        receipts: purchase.receipts ?? [],
-        subscription: purchase.subscription ?? null,
-      })) as PurchaseWithUser[];
+      const realPaid = purchasesData
+        .filter((p) => p.status === "completed" || p.status === "revoked")
+        .map(purchase => ({
+          ...purchase,
+          simple_user: purchase.user || { id: "", name: "Unknown", phone: "" },
+          product: products.find(p => p.id === purchase.product_id) || { title: "Unknown" },
+          receipts: purchase.receipts ?? [],
+          subscription: purchase.subscription ?? null,
+        })) as PurchaseWithUser[];
+
+      const mockPaid = getMockPaidPurchases(products) as unknown as PurchaseWithUser[];
+
+      if (realPaid.length > 0) {
+        const hasTempAccess = realPaid.some((p) => p.access_expires_at || p.trial_ends_at || p.subscription);
+        if (hasTempAccess) return realPaid;
+        return [...realPaid, ...mockPaid];
+      }
+      return mockPaid;
     },
     enabled: !!creatorName,
   });
@@ -252,13 +263,13 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 onClick={() => setAllProducts((v) => !v)}
                 aria-pressed={showAll}
                 className={cn(
-                  "shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border px-3 text-xs sm:text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] h-9 min-h-0 md:h-10 md:min-h-10",
+                  "group shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border px-3 text-xs sm:text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] h-9 min-h-0 md:h-10 md:min-h-10",
                   showAll
-                    ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white"
-                    : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                    ? "border-primary/30 bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary font-semibold"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Layers className={cn("w-4 h-4 shrink-0 transition-colors", showAll ? "text-white" : "text-primary")} />
+                <Layers className={cn("w-4 h-4 shrink-0 transition-colors", showAll ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                 <span>{t("buyersAllProducts")}</span>
               </button>
             )}
@@ -276,8 +287,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 className={cn(
                   "shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
                   period === key
-                    ? "border-primary bg-primary text-white"
-                    : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                    ? "border-primary/30 bg-primary/15 text-primary font-semibold"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {t(`buyersPeriod_${key}` as "buyersPeriod_month")}

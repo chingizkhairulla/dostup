@@ -91,6 +91,22 @@ const ChatThread = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("support_prefill");
+      if (stored) {
+        setText(stored);
+        sessionStorage.removeItem("support_prefill");
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("prefill") === "1" && !text) {
+          setText('Здравствуйте! Вышел экран "Что-то пошло не так", после того как ');
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 

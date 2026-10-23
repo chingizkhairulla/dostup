@@ -80,7 +80,7 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
             verified: true,
           },
           ...[...sellers]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || (a.name || "").localeCompare(b.name || ""))
             .map((seller) => ({
               id: `${DIRECT_PREFIX}${seller.peer_id}`,
               title: seller.name,

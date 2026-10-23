@@ -669,29 +669,18 @@ export const AccountSettingsView = ({
               onClick={() => setShowLogoutConfirm(false)}
               aria-hidden="true"
             />
-            <div className="relative z-10 w-full max-w-md bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
-              <div className="space-y-2">
+            <div className="relative z-10 w-full max-w-sm bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+              <div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {t("confirmLogout")}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {t("confirmLogoutDescription")}
-                </p>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="rounded-xl"
-                >
-                  {t("no")}
-                </Button>
+              <div>
                 <Button
                   type="button"
                   variant="destructive"
                   onClick={handleLogout}
-                  className="rounded-xl"
+                  className="w-full rounded-xl"
                 >
                   {t("yes")}
                 </Button>

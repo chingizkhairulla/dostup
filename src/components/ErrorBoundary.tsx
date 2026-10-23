@@ -11,6 +11,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  isDebug: boolean;
 }
 
 const PREFILL = 'Здравствуйте! Вышел экран "Что-то пошло не так", после того как ';
@@ -33,25 +34,37 @@ class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    isDebug: false,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   public componentDidMount() {
-    window.addEventListener("trigger-debug-error", this.handleDebugError);
+    // Only the root boundary (no resetKeys) listens for the debug event,
+    // so the inner LocationResetBoundary won't also catch it and loop.
+    if (!this.props.resetKeys) {
+      window.addEventListener("trigger-debug-error", this.handleDebugError);
+    }
   }
 
   public componentWillUnmount() {
-    window.removeEventListener("trigger-debug-error", this.handleDebugError);
+    if (!this.props.resetKeys) {
+      window.removeEventListener("trigger-debug-error", this.handleDebugError);
+    }
   }
 
   private handleDebugError = () => {
     this.setState({
       hasError: true,
       error: new Error("[debug] Тестовый экран ошибки"),
+      isDebug: true,
     });
+  };
+
+  private handleDismissDebug = () => {
+    this.setState({ hasError: false, error: null, isDebug: false });
   };
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -82,7 +95,7 @@ class ErrorBoundary extends Component<Props, State> {
           title: "Что-то пошло не так",
           message: "Не беспокойтесь! Это временная техническая проблема.",
           tryThese: "Попробуйте:",
-          option1: "Перезагрузить страницу",
+          option1: "Перезагрузить",
           option2: "Подождать пару минут и попробовать снова",
           writeSupport: "Написать поддержке",
           reloadButton: "Перезагрузить страницу",
@@ -92,7 +105,7 @@ class ErrorBoundary extends Component<Props, State> {
           title: "Бірдеңе дұрыс болмады",
           message: "Уайымдамаңыз! Бұл уақытша техникалық мәселе.",
           tryThese: "Мынаны көріңіз:",
-          option1: "Бетті қайта жүктеу",
+          option1: "Қайта жүктеу",
           option2: "Бірнеше минут күтіп, қайта көріңіз",
           writeSupport: "Қолдауға жазу",
           reloadButton: "Бетті қайта жүктеу",
@@ -121,20 +134,20 @@ class ErrorBoundary extends Component<Props, State> {
             {/* Tips */}
             <div className="bg-muted/50 rounded-lg p-4 text-left">
               <p className="font-medium text-foreground mb-2">{t.tryThese}</p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                <li>• {t.option1}</li>
-                <li>• {t.option2}</li>
+              <ol className="space-y-1 text-sm text-muted-foreground">
+                <li>1. {t.option1}</li>
+                <li>2. {t.option2}</li>
                 <li>
-                  •{" "}
+                  3.{" "}
                   <button
                     type="button"
                     onClick={openSupportChat}
-                    className="underline underline-offset-2 hover:text-foreground transition-colors"
+                    className="text-left font-normal text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   >
                     {t.writeSupport}
                   </button>
                 </li>
-              </ul>
+              </ol>
             </div>
 
             {/* Action buttons */}
@@ -155,6 +168,15 @@ class ErrorBoundary extends Component<Props, State> {
                 {t.supportButton}
               </Button>
             </div>
+            {this.state.isDebug && (
+              <button
+                type="button"
+                onClick={this.handleDismissDebug}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
+              >
+                Закрыть тест
+              </button>
+            )}
           </div>
         </div>
       );
