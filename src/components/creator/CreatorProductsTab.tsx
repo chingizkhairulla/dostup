@@ -3251,7 +3251,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
       {/* Delete Confirmation */}
       <Dialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
-        <DialogContent className="max-w-md gap-2.5 p-5" hideCloseButton>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-md gap-2.5 p-5" hideCloseButton>
           <DialogHeader className="text-center sm:text-center items-center space-y-1">
             <DialogTitle className="text-center text-lg font-semibold">Удалить продукт?</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-foreground font-normal text-center">
@@ -3464,7 +3464,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
     {/* Pause Dialog */}
     <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
-      <DialogContent className="max-w-lg" hideCloseButton>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-lg p-5" hideCloseButton>
         <DialogHeader>
           <DialogTitle>
             {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
