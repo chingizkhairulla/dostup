@@ -212,9 +212,15 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
                 )
               }
             >
-              <div className="flex flex-col">
+              {/* Desktop order: price (bold), then date (normal) */}
+              <div className="hidden sm:flex sm:flex-col">
                 <span className="font-semibold text-foreground">{formatPriceTenge(Number(purchase.amount))}</span>
                 <span className="text-xs text-muted-foreground">{fmt(paidAt)}</span>
+              </div>
+              {/* Mobile order: date (bold), then price (normal) */}
+              <div className="flex flex-col sm:hidden">
+                <span className="font-semibold text-foreground text-sm">{fmt(paidAt)}</span>
+                <span className="text-xs text-muted-foreground font-normal">{formatPriceTenge(Number(purchase.amount))}</span>
               </div>
             </Row>
             <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
@@ -277,6 +283,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
 
       <MediaViewer
         align="center"
+        isReceipt
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}

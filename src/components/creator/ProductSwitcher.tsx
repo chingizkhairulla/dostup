@@ -42,8 +42,8 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
         className={cn(
           "group gap-2 max-w-full font-medium cursor-default",
           active
-            ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white hover:border-primary"
-            : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+            ? "border-primary/30 bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary hover:border-primary/40 font-semibold"
+            : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
           className
         )}
         title={displayTitle}
@@ -53,7 +53,7 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
             <Package
               className={cn(
                 "w-4 h-4 flex-shrink-0 transition-colors",
-                active ? "text-white" : "text-primary group-hover:text-primary"
+                active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
               )}
             />
           )}
@@ -73,8 +73,8 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
       className={cn(
         "group gap-2 max-w-full font-medium",
         active
-          ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white hover:border-primary"
-          : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+          ? "border-primary/30 bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary hover:border-primary/40 font-semibold"
+          : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
         className
       )}
       title={displayTitle}
@@ -85,7 +85,7 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
           <Package
             className={cn(
               "w-4 h-4 flex-shrink-0 transition-colors",
-              active ? "text-white" : "text-primary group-hover:text-primary"
+              active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
             )}
           />
         )}
@@ -94,7 +94,7 @@ const ProductSwitcher = ({ products, selectedId, onChange, className, placeholde
       <ChevronRight
         className={cn(
           "w-4 h-4 flex-shrink-0 transition-transform duration-200 ml-auto",
-          active ? "text-white/80" : "opacity-60 group-hover:text-primary group-hover:opacity-100",
+          active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
           open && "rotate-90"
         )}
       />

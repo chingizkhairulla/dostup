@@ -16,6 +16,7 @@ import {
   Trash2,
   Check,
   Clock,
+  Bug,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -615,7 +616,26 @@ export const AccountSettingsView = ({
           </div>
 
           {/* Fixed Logout Button at bottom of sidebar */}
-          <div className="border-t border-border pt-3 mt-2 shrink-0">
+          <div className="border-t border-border pt-3 mt-2 shrink-0 space-y-1">
+            {typeof window !== "undefined" &&
+              !window.location.hostname.includes("trydostup.online") &&
+              (window.location.hostname.includes("fix-small-fixes") ||
+                window.location.hostname.includes("vercel.app") ||
+                window.location.hostname === "localhost" ||
+                window.location.hostname === "127.0.0.1") && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    onClose?.();
+                    window.dispatchEvent(new CustomEvent("trigger-debug-error"));
+                  }}
+                  className="w-full justify-start gap-3 h-9 px-3 rounded-xl text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Bug className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                  <span className="truncate">Тест экрана ошибки</span>
+                </Button>
+              )}
             <Button
               type="button"
               variant="ghost"
@@ -649,29 +669,18 @@ export const AccountSettingsView = ({
               onClick={() => setShowLogoutConfirm(false)}
               aria-hidden="true"
             />
-            <div className="relative z-10 w-full max-w-md bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
-              <div className="space-y-2">
+            <div className="relative z-10 w-full max-w-sm bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+              <div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {t("confirmLogout")}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {t("confirmLogoutDescription")}
-                </p>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="rounded-xl"
-                >
-                  {t("no")}
-                </Button>
+              <div>
                 <Button
                   type="button"
                   variant="destructive"
                   onClick={handleLogout}
-                  className="rounded-xl"
+                  className="w-full rounded-xl"
                 >
                   {t("yes")}
                 </Button>

@@ -77,9 +77,9 @@ const ProductVisibilityDialog = ({ product, onOpenChange }: ProductVisibilityDia
 
   return (
     <Dialog open={!!product} onOpenChange={(open) => { if (!busy) onOpenChange(open); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0 [&>*]:min-w-0">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0 [&>*]:min-w-0" hideCloseButton>
         <DialogHeader>
-          <DialogTitle>{tx.title}</DialogTitle>
+          <DialogTitle>{published ? (language === "kk" ? "Жасыру" : "Скрыть") : tx.title}</DialogTitle>
           <DialogDescription className="line-clamp-2">{product?.title}</DialogDescription>
         </DialogHeader>
 

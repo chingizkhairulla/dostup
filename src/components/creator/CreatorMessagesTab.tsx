@@ -131,7 +131,7 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
             filterKeys: ["all"],
           },
           ...[...contacts]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || (a.name || "").localeCompare(b.name || ""))
             .map((c) => ({
               id: `${DIRECT_PREFIX}${c.peer_id}`,
               title: c.name,
@@ -149,6 +149,11 @@ const CreatorMessagesTab = ({ creatorName, supportDisplayName, onGoToProducts }:
 
   useEffect(() => {
     if (productsLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("chat") === "support" || params.get("prefill")) {
+      setSelectedId(SUPPORT_CHAT_ID);
+      return;
+    }
     const stillThere =
       selectedId === SUPPORT_CHAT_ID ||
       channels.some((c) => c.id === selectedId) ||

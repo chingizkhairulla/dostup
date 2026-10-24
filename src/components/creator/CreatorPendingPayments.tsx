@@ -10,6 +10,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import MediaViewer from "@/components/media/MediaViewer";
 
+import { getMockPendingPurchases, setDemoDecision } from "@/lib/mockBuyersData";
+
 export type CreatorPendingPurchase = {
   id: string;
   amount: number;
@@ -28,25 +30,37 @@ export function useCreatorPendingPurchases(creatorName: string | null) {
   return useQuery({
     queryKey: ["creator-pending-purchases", creatorName],
     queryFn: async () => {
-      const [productsRes, purchasesRes] = await Promise.all([
-        invokeApi<{ products: { id: string; title: string }[] }>("manage-products", {
-          action: "list",
-          ...creatorCreds(),
-        }),
-        invokeApi<{
-          purchases: (CreatorPendingPurchase & { user?: { id: string; name: string; phone: string } | null })[];
-        }>("manage-products", {
-          action: "list_purchases",
-          ...creatorCreds(),
-        }),
-      ]);
-      const products = productsRes.products ?? [];
-      return (purchasesRes.purchases ?? [])
+      let products: { id: string; title: string }[] = [];
+      let purchasesData: (CreatorPendingPurchase & { user?: { id: string; name: string; phone: string } | null })[] = [];
+
+      try {
+        const [productsRes, purchasesRes] = await Promise.all([
+          invokeApi<{ products: { id: string; title: string }[] }>("manage-products", {
+            action: "list",
+            ...creatorCreds(),
+          }),
+          invokeApi<{
+            purchases: (CreatorPendingPurchase & { user?: { id: string; name: string; phone: string } | null })[];
+          }>("manage-products", {
+            action: "list_purchases",
+            ...creatorCreds(),
+          }),
+        ]);
+        products = productsRes.products ?? [];
+        purchasesData = purchasesRes.purchases ?? [];
+      } catch (err) {
+        console.warn("Could not load real purchases for pending list, using demo data", err);
+      }
+
+      const realPending = purchasesData
         .filter(needsCreatorReview)
         .map((purchase) => ({
           ...purchase,
           product: products.find((p) => p.id === purchase.product_id) || purchase.product || { title: "Unknown" },
         }));
+
+      if (realPending.length > 0) return realPending;
+      return getMockPendingPurchases(products);
     },
     enabled: !!creatorName,
     refetchInterval: 8000,
@@ -104,6 +118,10 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
 
   const confirmPayment = useMutation({
     mutationFn: async (purchaseId: string) => {
+      if (purchaseId.startsWith("demo-")) {
+        setDemoDecision(purchaseId, "approved");
+        return;
+      }
       const data = await invokeApi<{ success?: boolean; error?: string }>("approve-purchase", {
         purchaseId,
         ...creatorCreds(),
@@ -120,6 +138,10 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
 
   const rejectPayment = useMutation({
     mutationFn: async (purchaseId: string) => {
+      if (purchaseId.startsWith("demo-")) {
+        setDemoDecision(purchaseId, "rejected");
+        return;
+      }
       await invokeApi("manage-products", {
         action: "update_purchase",
         ...creatorCreds(),
@@ -265,13 +287,15 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
 
       <MediaViewer
         align="center"
+        isReceipt
+        light
         items={receiptView ? [{ kind: receiptView.kind, url: receiptView.url, name: receiptView.name }] : []}
         index={receiptView ? 0 : null}
         onIndexChange={(i) => i === null && setReceiptView(null)}
         actions={
           <Button
             variant="outline"
-            className="h-10 gap-2 rounded-full border-white/20 bg-transparent px-4 text-white hover:bg-white/10 hover:text-white"
+            className="h-10 gap-2 rounded-full border-neutral-200 bg-transparent px-4 text-neutral-800 hover:bg-neutral-100"
             onClick={downloadReceipt}
           >
             <Download className="h-4 w-4" />
