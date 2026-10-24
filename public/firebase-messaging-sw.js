@@ -36,6 +36,8 @@ self.addEventListener('notificationclick', (event) => {
 
   if (data.type === 'payment') {
     targetUrl = '/creator?tab=users';
+  } else if (data.type === 'subscription_payment_reminder' || data.type === 'subscription_renewal') {
+    targetUrl = data.url || (data.productId ? `/dashboard?highlight=${encodeURIComponent(data.productId)}` : '/dashboard');
   } else if (data.type === 'booking' || data.type === 'cancellation') {
     targetUrl = '/creator';
   } else if (data.type === 'creator_cancellation' || data.type === 'reminder' || data.type === 'material_unlocked') {

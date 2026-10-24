@@ -11,7 +11,6 @@ import {
   X,
   ChevronRight,
   ArrowLeft,
-  Package,
   Loader2,
   Trash2,
   Check,
@@ -30,7 +29,6 @@ import AvatarSettings from "@/components/account/AvatarSettings";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import TimezoneSelector from "@/components/account/TimezoneSelector";
 import NotificationPreferences from "@/components/NotificationPreferences";
-import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
 import { profileHomePath, type AppProfile, type SessionPayload } from "@/lib/creatorAuth";
 import { format, parseISO } from "date-fns";
@@ -138,8 +136,8 @@ export const AccountSettingsView = ({
       id: "notifications" as SettingsSectionKey,
       label: t("notificationSettings"),
       icon: Bell,
-      description: language === "ru" ? "Напоминания об уроках и push-уведомления" : "Сабақтар туралы еске салулар және хабарландырулар",
-      keywords: ["уведомления", "напоминания", "время", "уроки", "занятия", "notifications", "reminders", "push"],
+      description: language === "ru" ? "Напоминания об уроках и оплате" : "Сабақтар мен төлем туралы еске салулар",
+      keywords: ["напоминания", "уведомления", "оплата", "уроки", "занятия", "время", "notifications", "reminders", "payment", "push"],
     },
     {
       id: "app" as SettingsSectionKey,
@@ -326,52 +324,6 @@ export const AccountSettingsView = ({
                 </CardContent>
               </Card>
 
-              {/* Buyer Purchases */}
-              {role === "buyer" && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Package className="w-5 h-5 text-primary" />
-                      {t("myPurchases")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {purchasesLoading ? (
-                      <div className="flex justify-center py-6">
-                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                      </div>
-                    ) : purchases && purchases.length > 0 ? (
-                      <div className="space-y-3">
-                        {purchases.map((purchase) => (
-                          <div
-                            key={purchase.id}
-                            className="p-4 rounded-xl bg-muted/50 border border-border"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="font-medium text-foreground">
-                                  {purchase.product?.title || "Продукт"}
-                                </h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {t("purchased")}{" "}
-                                  {format(parseISO(purchase.created_at), "d MMMM yyyy", { locale: ru })}
-                                </p>
-                              </div>
-                              <span className="text-sm font-medium text-foreground">
-                                {formatPriceTenge(Number(purchase.amount))}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-muted-foreground py-4">
-                        {t("noPurchases")}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
 
             {/* Delete Profile Section - at the bottom */}
@@ -438,7 +390,7 @@ export const AccountSettingsView = ({
 
       case "notifications":
         return userId ? (
-          <NotificationPreferences userId={userId} />
+          <NotificationPreferences userId={userId} role={role} />
         ) : (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
@@ -518,7 +470,7 @@ export const AccountSettingsView = ({
         {/* Desktop Header */}
         <div className="hidden md:flex items-center">
           <h2 className="text-base font-semibold text-foreground">
-            {t("accountSettings")}
+            {activeSectionObj.label}
           </h2>
         </div>
 
@@ -663,7 +615,7 @@ export const AccountSettingsView = ({
       {showLogoutConfirm &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 motion-safe:animate-fade-in">
+          <div className="fixed inset-0 z-[95] flex items-start sm:items-center justify-center p-4 pt-24 sm:pt-4 motion-safe:animate-fade-in">
             <div
               className="login-modal-backdrop absolute inset-0"
               onClick={() => setShowLogoutConfirm(false)}

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, parseISO, addHours, isBefore, isAfter } from "date-fns";
 import { ru, kk } from "date-fns/locale";
 import { useSimpleBookings, useSimpleMaterials } from "@/hooks/useSimplePurchases";
@@ -29,6 +29,8 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   const { language, t } = useLanguage();
   const { user } = useSimpleAuth();
   const locale = language === "kk" ? kk : ru;
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight") || searchParams.get("productId");
 
   const { accessiblePurchases, productIds, isLoading: accessLoading } = useAccessibleProducts();
   const { data: bookings = [], isLoading: bookingsLoading } = useSimpleBookings();
@@ -89,6 +91,21 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   const showProducts = myProducts.length > 0;
   const allEmpty = !showLesson && !showContinue && !showProducts;
   const popular = useCatalogPreview(allEmpty && !loading, 4);
+
+  useEffect(() => {
+    if (!highlightId || loading) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`product-card-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-4", "ring-[#FF6B00]", "ring-offset-2", "scale-[1.02]");
+        setTimeout(() => {
+          el.classList.remove("ring-4", "ring-[#FF6B00]", "ring-offset-2", "scale-[1.02]");
+        }, 3000);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [highlightId, loading, myProducts]);
 
   if (loading) {
     return (

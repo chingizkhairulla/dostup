@@ -55,7 +55,9 @@ const ProductCard = ({ product }: { product: CatalogProduct }) => {
   return (
     <Link
       to={productHref(product)}
-      className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card focus-ring motion-safe:transition-shadow motion-safe:hover:shadow-md"
+      id={`product-card-${product.id}`}
+      data-product-id={product.id}
+      className="group relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card focus-ring motion-safe:transition-shadow motion-safe:hover:shadow-md transition-all duration-300"
     >
       {isNew && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-[#FF6B00] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">

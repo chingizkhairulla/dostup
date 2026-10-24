@@ -620,6 +620,8 @@ export type Database = {
           created_at: string
           id: string
           morning_time: string
+          payment_reminder_day: boolean | null
+          payment_reminder_week: boolean | null
           reminder_24h: boolean
           reminder_2h: boolean
           reminder_morning: boolean
@@ -630,6 +632,8 @@ export type Database = {
           created_at?: string
           id?: string
           morning_time?: string
+          payment_reminder_day?: boolean | null
+          payment_reminder_week?: boolean | null
           reminder_24h?: boolean
           reminder_2h?: boolean
           reminder_morning?: boolean
@@ -640,6 +644,8 @@ export type Database = {
           created_at?: string
           id?: string
           morning_time?: string
+          payment_reminder_day?: boolean | null
+          payment_reminder_week?: boolean | null
           reminder_24h?: boolean
           reminder_2h?: boolean
           reminder_morning?: boolean

@@ -77,6 +77,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", l
             <DialogPrimitive.Close asChild>
               <button
                 type="button"
+                onClick={() => onIndexChange(null)}
                 aria-label={t("close")}
                 className="sm:hidden absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70 focus-ring"
               >

@@ -43,7 +43,11 @@ async function sendRenewalPush(
       userId: profileId,
       title,
       body,
-      data: { type: 'subscription_renewal', productId },
+      data: {
+        type: 'subscription_payment_reminder',
+        productId,
+        url: `/dashboard?highlight=${encodeURIComponent(productId)}`,
+      },
       targetRole: 'student',
     },
   })
@@ -58,30 +62,54 @@ Deno.serve(async (req) => {
   try {
     const supabase = serviceClient()
     const now = new Date()
-    const today = now.toISOString().slice(0, 10)
-    const reminderDate = new Date(now)
-    reminderDate.setDate(reminderDate.getDate() + 3)
-    const reminderDay = reminderDate.toISOString().slice(0, 10)
 
     let remindersSent = 0
     let expired = 0
 
+    // Check active subscriptions ending soon
+    const maxHorizon = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString()
     const { data: reminderCandidates, error: reminderError } = await supabase
       .from('subscriptions')
-      .select('id, product_id, buyer_profile_id, current_period_end, status')
+      .select('id, product_id, buyer_profile_id, current_period_end, status, renewal_reminder_sent_at')
       .eq('status', 'active')
-      .is('renewal_reminder_sent_at', null)
-      .gte('current_period_end', `${reminderDay}T00:00:00.000Z`)
-      .lt('current_period_end', `${reminderDay}T23:59:59.999Z`)
+      .gte('current_period_end', now.toISOString())
+      .lte('current_period_end', maxHorizon)
 
     if (reminderError) throw reminderError
 
     const baseUrl = appBaseUrl()
 
-    for (const sub of (reminderCandidates ?? []) as Pick<
-      SubscriptionRow,
-      'id' | 'product_id' | 'buyer_profile_id' | 'current_period_end'
-    >[]) {
+    for (const sub of (reminderCandidates ?? []) as Array<
+      Pick<
+        SubscriptionRow,
+        'id' | 'product_id' | 'buyer_profile_id' | 'current_period_end' | 'renewal_reminder_sent_at'
+      >
+    >) {
+      const msLeft = new Date(sub.current_period_end).getTime() - now.getTime()
+      const daysLeft = msLeft / (24 * 60 * 60 * 1000)
+
+      // Fetch user's notification preferences
+      const { data: userPref } = await supabase
+        .from('notification_preferences')
+        .select('*')
+        .eq('user_id', sub.buyer_profile_id)
+        .maybeSingle()
+
+      const wantsWeek = userPref?.payment_reminder_week ?? true
+      const wantsDay = userPref?.payment_reminder_day ?? true
+
+      // Determine if a reminder should be triggered now
+      const isWeekWindow = daysLeft <= 7.05 && daysLeft >= 6.0 && wantsWeek
+      const isDayWindow = daysLeft <= 1.05 && daysLeft >= 0.0 && wantsDay
+
+      if (!isWeekWindow && !isDayWindow) continue
+
+      // Avoid duplicate reminder for the same window on the same day
+      const lastSent = sub.renewal_reminder_sent_at ? new Date(sub.renewal_reminder_sent_at) : null
+      if (lastSent && now.getTime() - lastSent.getTime() < 18 * 60 * 60 * 1000) {
+        continue
+      }
+
       const { data: product } = await supabase
         .from('products')
         .select('id, title, slug')
@@ -91,7 +119,7 @@ Deno.serve(async (req) => {
 
       const paymentUrl = `${baseUrl}/checkout/${encodeURIComponent(product.slug || product.id)}`
       const endLabel = formatDateRu(sub.current_period_end)
-      const title = 'Скоро продление подписки'
+      const title = 'Скоро оплата!'
       const body = `${product.title}: оплатите следующий период до ${endLabel}`
 
       await sendRenewalPush(supabase, sub.buyer_profile_id, title, body, sub.product_id)

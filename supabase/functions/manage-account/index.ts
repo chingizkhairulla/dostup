@@ -36,6 +36,8 @@ Deno.serve(async (req) => {
         reminder_morning: !!prefs.reminder_morning,
         morning_time: typeof prefs.morning_time === 'string' ? prefs.morning_time : '08:00',
         reminder_2h: !!prefs.reminder_2h,
+        payment_reminder_week: prefs.payment_reminder_week !== undefined ? !!prefs.payment_reminder_week : true,
+        payment_reminder_day: prefs.payment_reminder_day !== undefined ? !!prefs.payment_reminder_day : true,
         updated_at: new Date().toISOString(),
       }
       const { data: existing } = await supabase
