@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
+import { Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid, differenceInCalendarWeeks } from "date-fns";
@@ -19,11 +18,9 @@ import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import AccountSettingsDialog, { openAccountSettings } from "@/components/account/AccountSettingsDialog";
-import { useTimezone } from "@/contexts/TimezoneContext";
-import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import ProductSwitcher from "@/components/creator/ProductSwitcher";
 import { invokeApi, sessionCreds } from "@/lib/sessionApi";
+import { splitIntoLessons } from "@/lib/timeSlots";
 
 const ReqStar = ({ className }: { className?: string }) => (
   <span className={cn("text-primary font-bold ml-1 text-sm sm:text-base inline-block -translate-y-0.5 select-none leading-none transition-colors", className)} aria-hidden="true">
@@ -42,7 +39,7 @@ interface SlotSettings {
   imageUrl: string;
   location: string;
   repeatWeekly?: boolean;
-  repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+  repeatPeriod?: "1week" | "2weeks" | "1month" | "custom" | null;
   repeatUntil?: string | null;
   conferenceType?: "google_meet" | "custom" | null;
   googleMeetLink?: string;
@@ -79,7 +76,7 @@ export interface SlotCreationWizardProps {
         imageUrl?: string;
         location?: string;
         repeatWeekly?: boolean;
-        repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+        repeatPeriod?: "1week" | "2weeks" | "1month" | "custom" | null;
         repeatUntil?: string | null;
         lessonLink?: string;
       }[]
@@ -87,7 +84,7 @@ export interface SlotCreationWizardProps {
     timeIntervals: { start: string; end: string }[];
     repeatDays: number[];
     repeatWeekly: boolean;
-    repeatPeriod: "1week" | "1month" | "2months" | "custom" | null;
+    repeatPeriod: "1week" | "2weeks" | "1month" | "custom" | null;
     repeatUntil: string | null;
     slotDuration: number;
     maxParticipants: number;
@@ -122,6 +119,28 @@ const getMinutesFromDayStart = (timeStr: string, startHour: number = 9) => {
   return diffHours * 60 + m;
 };
 
+// Center the selected item inside a scrollable picker column
+const centerSelectedIn = (container: HTMLElement | null) => {
+  if (!container) return;
+  const el = container.querySelector<HTMLElement>('[data-selected="true"]');
+  if (!el) return;
+  const cRect = container.getBoundingClientRect();
+  const eRect = el.getBoundingClientRect();
+  container.scrollTop += eRect.top - cRect.top - container.clientHeight / 2 + eRect.height / 2;
+};
+
+// Radix scroll area with a permanently visible scrollbar at a fixed position (no overlay-scrollbar jump)
+const AlwaysScrollArea = ({ className, viewportClassName, children }: { className?: string; viewportClassName?: string; children: React.ReactNode }) => (
+  <ScrollAreaPrimitive.Root type="always" className={cn("relative overflow-hidden", className)}>
+    <ScrollAreaPrimitive.Viewport className={cn("h-full w-full rounded-[inherit] overscroll-contain", viewportClassName)}>
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollAreaPrimitive.Scrollbar orientation="vertical" className="flex touch-none select-none w-1.5 p-0 my-1 mr-0.5 rounded-full bg-muted/30">
+      <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-muted-foreground/35" />
+    </ScrollAreaPrimitive.Scrollbar>
+  </ScrollAreaPrimitive.Root>
+);
+
 // Editable time popover picker: no keyboard input into numbers, only free hours from 09:00 to 01:00, no past time, minTime for end box
 function EditableTime({
   time,
@@ -132,7 +151,7 @@ function EditableTime({
   language = "ru",
 }: {
   time: string;
-  onChange: (t: string) => boolean | void;
+  onChange: (t: string, isSilent?: boolean) => boolean | void;
   availableHours?: string[];
   minTime?: string;
   isTimeInPast?: (timeStr: string) => boolean;
@@ -156,27 +175,19 @@ function EditableTime({
     setMVal(m || "00");
   }, [time, minTime]);
 
-  // Smoothly center selected items inside the container without scrolling parent dialogs
+  // Center selected hour/minute once the popover content is laid out (rAF + after open animation)
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        if (hoursContainerRef.current) {
-          const hourEl = hoursContainerRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-          if (hourEl) {
-            const container = hoursContainerRef.current;
-            container.scrollTop = hourEl.offsetTop - container.clientHeight / 2 + hourEl.clientHeight / 2;
-          }
-        }
-        if (minutesContainerRef.current) {
-          const minEl = minutesContainerRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-          if (minEl) {
-            const container = minutesContainerRef.current;
-            container.scrollTop = minEl.offsetTop - container.clientHeight / 2 + minEl.clientHeight / 2;
-          }
-        }
-      }, 50);
-      return () => clearTimeout(timer);
-    }
+    if (!isOpen) return;
+    const center = () => {
+      centerSelectedIn(hoursContainerRef.current);
+      centerSelectedIn(minutesContainerRef.current);
+    };
+    const raf = requestAnimationFrame(center);
+    const timer = setTimeout(center, 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [isOpen]);
 
   const commit = (newH: string, newM: string): boolean => {
@@ -239,7 +250,10 @@ function EditableTime({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none"
+          className={cn(
+            "inline-flex items-center justify-center h-6.5 sm:h-7 w-[58px] sm:w-[62px] bg-background/90 hover:bg-background border border-border/80 hover:border-primary/50 focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary/20 rounded-md px-1 font-mono text-[13px] sm:text-sm font-semibold text-foreground transition-colors cursor-pointer select-none",
+            isOpen && "border-primary ring-1 ring-primary/30 bg-background"
+          )}
           title={language === "ru" ? "Нажмите, чтобы выбрать время" : "Уақытты таңдау үшін басыңыз"}
         >
           <span>{hVal}</span>
@@ -254,6 +268,7 @@ function EditableTime({
         sideOffset={6}
         className="w-52 p-2.5 bg-card border border-border rounded-xl shadow-xl z-50 select-none"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <div className="grid grid-cols-2 gap-3 pb-1.5 mb-1.5 border-b border-border/50 text-[11px] font-semibold text-muted-foreground px-1">
           <span className="text-left">{language === "ru" ? "Часы" : "Сағат"}</span>
@@ -376,22 +391,18 @@ function TimeRangePickerContent({
   const curTime = activeField === "start" ? tempWorkingHours.start : tempWorkingHours.end;
   const [curH, curM] = (curTime || "09:00").split(":");
 
+  // Center selected hour/minute on mount and whenever the active field changes
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (hoursRef.current) {
-        const hourEl = hoursRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-        if (hourEl) {
-          hoursRef.current.scrollTop = hourEl.offsetTop - hoursRef.current.clientHeight / 2 + hourEl.clientHeight / 2;
-        }
-      }
-      if (minutesRef.current) {
-        const minEl = minutesRef.current.querySelector<HTMLElement>('[data-selected="true"]');
-        if (minEl) {
-          minutesRef.current.scrollTop = minEl.offsetTop - minutesRef.current.clientHeight / 2 + minEl.clientHeight / 2;
-        }
-      }
-    }, 50);
-    return () => clearTimeout(timer);
+    const center = () => {
+      centerSelectedIn(hoursRef.current);
+      centerSelectedIn(minutesRef.current);
+    };
+    const raf = requestAnimationFrame(center);
+    const timer = setTimeout(center, 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [activeField]);
 
   return (
@@ -512,7 +523,8 @@ function TimeRangePickerContent({
       <div className="pt-2 border-t border-border/50">
         <Button
           size="sm"
-          className="w-full h-8 text-xs font-semibold cursor-pointer"
+          variant="outline"
+          className="w-full h-8 text-xs font-semibold cursor-pointer bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40"
           onClick={onApply}
         >
           {t.apply}
@@ -534,27 +546,6 @@ export default function SlotCreationWizard({
   onDeleteSlots,
   isPending,
 }: SlotCreationWizardProps) {
-  const { timezone, userCity, convertSlotToUser, convertUserToSlot } = useTimezone();
-  const { user, profileType, profiles } = useSimpleAuth();
-  const [isTimezoneSettingsOpen, setIsTimezoneSettingsOpen] = useState(false);
-
-  const primaryCity =
-    userCity ||
-    (typeof window !== "undefined" ? localStorage.getItem("app_user_city") : null) ||
-    (language === "kk" && timezone.cityKk ? timezone.cityKk : timezone.city)
-      .split(",")[0]
-      .trim();
-  const gmtLabel = timezone.offsetLabel.replace("UTC", "GMT");
-
-  const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") : null;
-  const currentUserId = typeof window !== "undefined" ? localStorage.getItem("simple_user_id") || "" : "";
-  const creatorName = typeof window !== "undefined" ? localStorage.getItem("creator_name") : null;
-  const teacherData = typeof window !== "undefined" ? localStorage.getItem("teacher_data") : null;
-  const activeProfile = profiles.find((p) => p.id === activeProfileId);
-  const shownName = activeProfile?.displayName?.trim() || user?.name || creatorName || (teacherData ? "Учитель" : "—");
-  const effectiveUserId = user?.id || currentUserId || creatorName || "";
-  const effectiveRole = (profileType || (teacherData ? "teacher" : "creator")) as "buyer" | "creator" | "school" | "teacher";
-
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [showLateHours, setShowLateHours] = useState(false);
@@ -569,6 +560,7 @@ export default function SlotCreationWizard({
   const [isRangeOpen, setIsRangeOpen] = useState(false);
   const [isMobileRangeOpen, setIsMobileRangeOpen] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
+  const [isMobileConfirmClearOpen, setIsMobileConfirmClearOpen] = useState(false);
 
   // Cover cropper
   const coverCrop = useCoverCrop();
@@ -582,12 +574,16 @@ export default function SlotCreationWizard({
   const [slotSettingsMap, setSlotSettingsMap] = useState<Record<string, SlotSettings>>({});
   const [selectedSlotKeys, setSelectedSlotKeys] = useState<Set<string>>(new Set());
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  // Phone bottom panels ("Выбранное время" on step 1, "Параметры" on step 2), opened with the arrow
+  const [isMobileTimesExpanded, setIsMobileTimesExpanded] = useState(false);
+  const [isMobileParamsExpanded, setIsMobileParamsExpanded] = useState(false);
+  const [pressedToolbarBtn, setPressedToolbarBtn] = useState<"selectAll" | "unselectAll" | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Step 2: Global repetition settings (default: off)
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [repeatDays, setRepeatDays] = useState<number[]>([0, 1, 2, 3, 4]); // Mon-Fri
-  const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "1month" | "2months" | "custom" | null>("1week");
+  const [repeatPeriod, setRepeatPeriod] = useState<"1week" | "2weeks" | "1month" | "custom" | null>("1week");
   const [repeatUntil, setRepeatUntil] = useState("");
   const [isCustomRepeatDialogOpen, setIsCustomRepeatDialogOpen] = useState(false);
   const [repeatDay, setRepeatDay] = useState("");
@@ -797,6 +793,7 @@ export default function SlotCreationWizard({
       setIsRangeOpen(false);
       setIsMobileRangeOpen(false);
       setIsConfirmClearOpen(false);
+      setIsMobileConfirmClearOpen(false);
       setRepeatWeekly(false);
       setRepeatPeriod("1week");
       setRepeatUntil("");
@@ -805,6 +802,8 @@ export default function SlotCreationWizard({
       setRepeatMonth("");
       setRepeatYear("");
       setIsDetailsDialogOpen(false);
+      setIsMobileTimesExpanded(false);
+      setIsMobileParamsExpanded(false);
       coverCrop.resetCrop();
     }
   }, [open, existingSlots, realCurrentWeekStart, initialWeekStart, getInitialCellsForDates]);
@@ -817,8 +816,8 @@ export default function SlotCreationWizard({
 
   const dict = {
     ru: {
-      wizTitleStep1: "Создание, перенос и удаление",
-      wizTitleStep2: "Настройки параметров",
+      wizTitleStep1: "Создание и удаление слотов",
+      wizTitleStep2: "Настройка параметров",
       step1: "Слоты",
       step2: "Параметры",
       showLateHours: "Показать поздние часы",
@@ -833,7 +832,7 @@ export default function SlotCreationWizard({
       weekDaysFull: ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"],
       oneWeek: "1 неделя",
       oneMonth: "1 месяц",
-      twoMonths: "2 месяца",
+      twoWeeks: "2 недели",
       custom: "Свой",
       customValue: "Своё",
       everyWeek: "Повторять уроки",
@@ -846,6 +845,8 @@ export default function SlotCreationWizard({
       min: "мин",
       participants: "Количество участников",
       details: "Детали урока",
+      detailsHint: "Название, описание, обложка…",
+      noSlotsForDay: "В этот день нет слотов",
       cover: "Обложка",
       titleLabel: "Название",
       description: "Описание",
@@ -859,8 +860,8 @@ export default function SlotCreationWizard({
       yes: "Да",
       no: "Нет",
       noSlotsWarning: "Выберите хотя бы одну клетку",
-      repeatSummary: "Интервалы слотов",
-      selectAll: "Выбрать все слоты",
+      repeatSummary: "Выбранное время",
+      selectAll: "Выбрать все",
       unselectAll: "Снять выбор",
       different: "Разные",
       forProduct: "Относится к продукту",
@@ -868,7 +869,7 @@ export default function SlotCreationWizard({
       conferenceLinkPlaceholder: "Zoom, Google Meet, Яндекс Телемост…",
     },
     kk: {
-      wizTitleStep1: "Жасау, ауыстыру және жою",
+      wizTitleStep1: "Слоттарды жасау және жою",
       wizTitleStep2: "Параметрлерді баптау",
       step1: "Слоттар",
       step2: "Параметрлер",
@@ -884,7 +885,7 @@ export default function SlotCreationWizard({
       weekDaysFull: ["Дүйсенбі", "Сейсенбі", "Сәрсенбі", "Бейсенбі", "Жұма", "Сенбі", "Жексенбі"],
       oneWeek: "1 апта",
       oneMonth: "1 ай",
-      twoMonths: "2 ай",
+      twoWeeks: "2 апта",
       custom: "Өзгерту",
       customValue: "Өзім",
       everyWeek: "Сабақтарды қайталау",
@@ -898,6 +899,8 @@ export default function SlotCreationWizard({
       min: "мин",
       participants: "Қатысушылар саны",
       details: "Сабақ мәліметтері",
+      detailsHint: "Атауы, сипаттамасы, мұқабасы…",
+      noSlotsForDay: "Бұл күні слоттар жоқ",
       cover: "Мұқаба",
       titleLabel: "Атауы",
       description: "Сипаттамасы",
@@ -911,8 +914,8 @@ export default function SlotCreationWizard({
       yes: "Иә",
       no: "Жоқ",
       noSlotsWarning: "Кем дегенде бір ұяшықты таңдаңыз",
-      repeatSummary: "Слот аралықтары",
-      selectAll: "Барлық слоттарды таңдау",
+      repeatSummary: "Таңдалған уақыт",
+      selectAll: "Барлығын таңдау",
       unselectAll: "Таңдауды алып тастау",
       different: "Әртүрлі",
       conferenceLink: "Конференцияға сілтеме",
@@ -1192,6 +1195,8 @@ export default function SlotCreationWizard({
 
   // When switching to step 2: auto-select new slots!
   const handleStepChange = (newStep: 1 | 2) => {
+    // Re-entering the current step would reset the slot selection
+    if (newStep === step) return;
     if (newStep === 2) {
       if (editableDaysOnDesktop.length === 0) return;
       setRepeatDays(editableDaysOnDesktop);
@@ -1669,7 +1674,7 @@ export default function SlotCreationWizard({
         imageUrl?: string;
         location?: string;
         repeatWeekly?: boolean;
-        repeatPeriod?: "1week" | "1month" | "2months" | "custom" | null;
+        repeatPeriod?: "1week" | "2weeks" | "1month" | "custom" | null;
         repeatUntil?: string | null;
         lessonLink?: string;
       }[]
@@ -1731,7 +1736,6 @@ export default function SlotCreationWizard({
   const handleToggleLateHours = () => {
     if (showLateHours) {
       setShowLateHours(false);
-      setLateHoursOverflowVisible(false);
       setTimeout(() => {
         scrollContainerRef.current?.scrollTo({
           top: savedScrollTopRef.current,
@@ -1950,9 +1954,7 @@ export default function SlotCreationWizard({
                   "h-6 w-full transition-colors select-none",
                   m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                   isPast
-                    ? isSelected
-                      ? "bg-primary/50 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed border-t border-white/50 opacity-80"
-                      : "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
+                    ? "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
                     : isSelected
                     ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
                     : "hover:bg-primary/15 active:bg-primary/25 cursor-pointer bg-card"
@@ -1983,10 +1985,10 @@ export default function SlotCreationWizard({
     if (visibleHalfHours.length === 0) return null;
 
     return (
-      <div key={`${isLate ? "late_" : ""}${h}`} className="grid grid-cols-[100px_repeat(7,1fr)] relative">
+      <div key={`${isLate ? "late_" : ""}${h}`} className="grid grid-cols-[64px_repeat(7,1fr)] relative">
         <div className="relative border-r border-border/60 select-none">
           {!isFirstLateHour && (
-            <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+            <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
               {hourStr}:00
             </span>
           )}
@@ -2010,9 +2012,7 @@ export default function SlotCreationWizard({
                     "h-5 sm:h-6 w-full transition-colors select-none",
                     m === 0 ? "border-t border-foreground/35" : "border-t border-border/75",
                     isPast
-                      ? isSelected
-                        ? "bg-primary/50 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed border-t border-white/50 opacity-80"
-                        : "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
+                      ? "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] cursor-not-allowed opacity-80"
                       : isSelected
                       ? "bg-primary border-t border-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.85)] cursor-pointer"
                       : "hover:bg-primary/20 active:bg-primary/30 cursor-pointer"
@@ -2026,15 +2026,220 @@ export default function SlotCreationWizard({
     );
   };
 
+  // Selected intervals grouped by day, each time editable (desktop column and expanded phone panel)
+  const renderTimesByDay = () =>
+    editableDaysOnDesktop.map((dayIdx) => {
+      const dayEditableIntervals = (effectiveIntervalsByDay[dayIdx] || [])
+        .map((interval, originalIdx) => ({ interval, originalIdx }))
+        .filter(({ interval }) => !isIntervalUnderGrid(dayIdx, interval));
+
+      return (
+        <div
+          key={dayIdx}
+          className="py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-xl border border-border bg-card shadow-xs space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs sm:text-sm font-medium text-foreground">
+              {t.weekDaysFull[dayIdx]}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            {dayEditableIntervals.map(({ interval, originalIdx }) => (
+              <div
+                key={originalIdx}
+                className="text-xs font-mono gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-md border border-border/70 bg-muted/60 hover:bg-muted items-center justify-center flex w-full"
+              >
+                <EditableTime
+                  time={interval.start}
+                  availableHours={getAvailableHoursForDay(dayIdx, interval.start, originalIdx, false)}
+                  isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
+                  language={language}
+                  onChange={(newTime, isSilent) =>
+                    updateIntervalTime(dayIdx, originalIdx, newTime, interval.end, isSilent)
+                  }
+                />
+                <span className="mx-0.5 text-muted-foreground">–</span>
+                <EditableTime
+                  time={interval.end}
+                  availableHours={getAvailableHoursForDay(
+                    dayIdx,
+                    interval.end,
+                    originalIdx,
+                    true,
+                    addMinutesToTime(interval.start, 30)
+                  )}
+                  minTime={addMinutesToTime(interval.start, 30)}
+                  isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
+                  language={language}
+                  onChange={(newTime, isSilent) =>
+                    updateIntervalTime(dayIdx, originalIdx, interval.start, newTime, isSilent)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    });
+
+  // Previous / next week arrows, side by side in the time column header
+  const renderWeekArrows = () => (
+    <div className="flex items-center justify-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          changeWeek(weekOffset - 1);
+        }}
+        disabled={weekOffset === 0}
+        className="w-6 h-6 rounded-full bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary flex items-center justify-center text-foreground/80 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-card disabled:hover:text-foreground/80 disabled:hover:border-border/80"
+        title={language === "ru" ? "Предыдущая неделя" : "Алдыңғы апта"}
+        aria-label={language === "ru" ? "Предыдущая неделя" : "Алдыңғы апта"}
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          changeWeek(weekOffset + 1);
+        }}
+        className="w-6 h-6 rounded-full bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary flex items-center justify-center text-foreground/80 transition-colors cursor-pointer"
+        title={language === "ru" ? "Следующая неделя" : "Келесі апта"}
+        aria-label={language === "ru" ? "Следующая неделя" : "Келесі апта"}
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
+  // Step 2: one day's interval blocks, split into lessons with breaks (desktop columns and the phone day view)
+  const renderStep2DayBlocks = (dayIdx: number) => {
+    const intervals = (effectiveIntervalsByDay[dayIdx] || []).filter(
+      (interval) => !isIntervalUnderGrid(dayIdx, interval)
+    );
+    const startHour = displayHours[0] ?? 9;
+    const getMinutesFromStart = (timeStr: string) => {
+      const [h, m] = timeStr.split(":").map(Number);
+      let diffHours = h - startHour;
+      if (diffHours < 0) diffHours += 24;
+      return diffHours * 60 + m;
+    };
+    const pixelsPerMinute = 48 / 60;
+
+    return intervals.map((interval) => {
+      const date = weekDates[dayIdx];
+      const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
+      const key = `${dateStr}_${interval.start}_${interval.end}`;
+      const isSelected = selectedSlotKeys.has(key);
+
+      const startM = getMinutesFromStart(interval.start);
+      let endM = getMinutesFromStart(interval.end);
+      if (endM <= startM) endM += 24 * 60;
+      const durationM = Math.max(30, endM - startM);
+      const topPx = startM * pixelsPerMinute;
+      const heightPx = Math.max(24, durationM * pixelsPerMinute);
+      const isShortSlot = heightPx <= 32;
+      const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
+      const lessons = lessonDuration > 0 ? splitIntoLessons(0, durationM, lessonDuration) : [];
+
+      return (
+        <div
+          key={key}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSlotSelection(key);
+          }}
+          style={{ top: `${topPx + 1}px`, height: `${heightPx - 2}px` }}
+          className={cn(
+            "group absolute left-1 right-1 transition-all cursor-pointer select-none overflow-hidden",
+            isShortSlot ? "rounded-lg" : "rounded-xl",
+            isSelected
+              ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
+              : "bg-card text-primary z-10"
+          )}
+          title={`${interval.start} - ${interval.end}`}
+        >
+          {!isSelected && (
+            <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
+          )}
+          {lessons.map((lesson, li) => {
+            if (lesson.end >= durationM) return null;
+            const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
+            const reachesBlockEnd = nextStart >= durationM;
+            // Block top sits at topPx + 1, so y = t * pixelsPerMinute - 1 maps time t onto the grid.
+            // A break that runs into the block end is partly hidden by the 2px outline,
+            // so it is lifted by 2px to look as tall as the breaks inside the block.
+            const lineTop = lesson.end * pixelsPerMinute - 1 - (reachesBlockEnd ? 2 : 0);
+            const breakHeight = (nextStart - lesson.end) * pixelsPerMinute - 1;
+            return [
+              <div
+                key={`lesson-line-${li}`}
+                className={cn("absolute left-0 right-0 h-px pointer-events-none", isSelected ? "bg-white/70" : "bg-primary/50")}
+                style={{ top: `${lineTop}px` }}
+              />,
+              nextStart > lesson.end ? (
+                <div
+                  key={`lesson-break-${li}`}
+                  className={cn("absolute left-0 right-0 pointer-events-none", isSelected ? "bg-white/45" : "bg-muted-foreground/25")}
+                  style={reachesBlockEnd ? { top: `${lineTop}px`, bottom: 0 } : { top: `${lineTop}px`, height: `${breakHeight}px` }}
+                />
+              ) : null,
+            ];
+          })}
+          <div
+            className={cn(
+              "absolute inset-0 rounded-[inherit] border-2 pointer-events-none z-30",
+              isSelected ? "border-primary" : "border-primary/40 group-hover:border-primary/60"
+            )}
+          />
+        </div>
+      );
+    });
+  };
+
+  // Hour labels for the step 2 time column: one per hour line, including the closing line
+  const step2HourLabels = useMemo(() => {
+    const first = displayHours[0] ?? 9;
+    return Array.from({ length: displayHours.length + 1 }, (_, i) => `${String((first + i) % 24).padStart(2, "0")}:00`);
+  }, [displayHours]);
+
+  // Step switcher: two numbered circles joined by a line (light orange on step 1, orange on step 2)
+  const renderStepSwitcher = () => {
+    const circle = (n: 1 | 2) => (
+      <button
+        type="button"
+        onClick={() => handleStepChange(n)}
+        disabled={n === 2 && editableDaysOnDesktop.length === 0}
+        aria-label={n === 1 ? t.step1 : t.step2}
+        title={n === 1 ? t.step1 : t.step2}
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+          step === n
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+        )}
+      >
+        {n}
+      </button>
+    );
+    return (
+      <div className="flex items-center gap-2">
+        {circle(1)}
+        <div className={cn("h-1 w-12 rounded-full transition-colors", step === 2 ? "bg-primary" : "bg-primary/30")} />
+        {circle(2)}
+      </div>
+    );
+  };
+
   const lateMaxHeight = lateHoursArr.length * 2 * 24 + 32;
 
-  const currentDayIntervals = effectiveIntervalsByDay[mobileDayIdx] || [];
-  const totalIntervalsCount = Object.values(effectiveIntervalsByDay).flat().length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="max-w-full h-full max-h-full m-0 p-0 rounded-none sm:rounded-none flex flex-col bg-background overflow-hidden border-0 gap-0 z-50"
       >
         <VisuallyHidden>
@@ -2051,51 +2256,8 @@ export default function SlotCreationWizard({
           </div>
 
           {/* Center on desktop: 2-step switcher strictly in center */}
-          <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center pointer-events-auto">
-            <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-full border border-border/50">
-              <button
-                type="button"
-                onClick={() => handleStepChange(1)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                  step === 1
-                    ? "bg-background text-foreground shadow-sm border border-border/60"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  1
-                </span>
-                <span>{t.step1}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleStepChange(2)}
-                disabled={editableDaysOnDesktop.length === 0}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
-                  step === 2
-                    ? "bg-background text-foreground shadow-sm border border-border/60"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  2
-                </span>
-                <span>{t.step2}</span>
-              </button>
-            </div>
+          <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center justify-center">
+            {renderStepSwitcher()}
           </div>
 
           {/* Right: "Готово" button pinned strictly to the far right corner */}
@@ -2176,22 +2338,25 @@ export default function SlotCreationWizard({
                         {language === "ru" ? "Время" : "Уақыт"}
                       </span>
                     </div>
-                    <div className="py-1 px-2 text-center flex items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => setIsTimezoneSettingsOpen(true)}
-                        className="text-xs font-semibold text-foreground hover:text-primary flex items-center justify-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <span>🌍 {primaryCity} ({gmtLabel})</span>
-                        <span className="text-[9px] text-muted-foreground">▼</span>
-                      </button>
+                    <div className="py-2 px-2 text-center flex items-center justify-center">
+                      {isCurrentDayToday && (
+                        <span className="text-xs font-semibold text-primary">
+                          {language === "ru" ? "Сегодня" : "Бүгін"}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Top spacer matching bottom padding so 09:00 doesn't collide with header */}
                   <div className="grid grid-cols-[64px_1fr] select-none pointer-events-none">
                     <div className="border-r border-border/60 h-3 bg-muted/20" />
-                    <div className="h-3" />
+                    <div
+                      className={cn(
+                        "h-3",
+                        isCellInPast(mobileDayIdx, workingHours.start) &&
+                          "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
+                      )}
+                    />
                   </div>
 
                   {/* Standard working hours */}
@@ -2233,7 +2398,9 @@ export default function SlotCreationWizard({
                           "h-3 border-t",
                           !showLateHours && workingHours.end.endsWith(":30")
                             ? "border-border/75"
-                            : "border-foreground/35"
+                            : "border-foreground/35",
+                          isCellInPast(mobileDayIdx, closingHourStr) &&
+                            "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
                         )}
                       />
                     </div>
@@ -2241,54 +2408,62 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Mobile Toolbar under grid */}
-                <div className="flex items-center justify-between gap-2 mt-3 mb-2 px-0.5">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-0.5">
                   {/* Left: Time range */}
-                  <Popover
-                    open={isMobileRangeOpen}
-                    onOpenChange={(nextOpen) => {
-                      setIsMobileRangeOpen(nextOpen);
-                      if (nextOpen) {
-                        setTempWorkingHours(workingHours);
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 px-2.5 rounded-lg border-border text-foreground bg-card shadow-2xs cursor-pointer flex items-center gap-1.5 text-xs font-medium transition-colors group",
-                          "hover:bg-primary hover:text-white hover:border-primary active:bg-primary active:text-white",
-                          isMobileRangeOpen && "bg-primary text-white border-primary"
-                        )}
-                        title={t.timeRangeBtn}
-                      >
-                        <Clock className={cn("w-3.5 h-3.5 text-foreground transition-colors group-hover:text-white group-active:text-white", isMobileRangeOpen && "text-white")} />
-                        <span>{language === "ru" ? "Диапазон" : "Ауқым"}</span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      side="top"
-                      align="start"
-                      sideOffset={8}
-                      className="w-64 p-3 bg-card border border-border rounded-xl shadow-2xl z-50 select-none"
-                      onOpenAutoFocus={(e) => e.preventDefault()}
+                  <div className="flex justify-start">
+                    <Popover
+                      open={isMobileRangeOpen}
+                      onOpenChange={(nextOpen) => {
+                        setIsMobileRangeOpen(nextOpen);
+                        if (nextOpen) {
+                          setTempWorkingHours(workingHours);
+                        }
+                      }}
                     >
-                      <TimeRangePickerContent
-                        tempWorkingHours={tempWorkingHours}
-                        setTempWorkingHours={setTempWorkingHours}
-                        onApply={() => {
-                          setWorkingHours(tempWorkingHours);
-                          setIsMobileRangeOpen(false);
-                        }}
-                        t={t}
-                        language={language}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "h-8 px-2.5 rounded-lg border-border text-foreground bg-card shadow-2xs cursor-pointer flex items-center gap-1.5 text-xs font-medium transition-colors group",
+                            isMobileRangeOpen
+                              ? "bg-primary text-white border-primary hover:bg-primary hover:text-white hover:border-primary"
+                              : "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+                          )}
+                          title={t.timeRangeBtn}
+                        >
+                          <Clock
+                            className={cn(
+                              "w-3.5 h-3.5 text-foreground transition-colors group-hover:text-primary",
+                              isMobileRangeOpen && "text-white group-hover:text-white"
+                            )}
+                          />
+                          <span>{language === "ru" ? "Диапазон" : "Ауқым"}</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="top"
+                        align="start"
+                        sideOffset={8}
+                        className="w-64 p-3 bg-card border border-border rounded-xl shadow-2xl z-50 select-none"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
+                        <TimeRangePickerContent
+                          tempWorkingHours={tempWorkingHours}
+                          setTempWorkingHours={setTempWorkingHours}
+                          onApply={() => {
+                            setWorkingHours(tempWorkingHours);
+                            setIsMobileRangeOpen(false);
+                          }}
+                          t={t}
+                          language={language}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
 
                   {/* Center: Late hours toggle */}
-                  {lateHoursArr.length > 0 && (
+                  {lateHoursArr.length > 0 ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2311,61 +2486,57 @@ export default function SlotCreationWizard({
                           : "Көрсету"}
                       </span>
                     </Button>
+                  ) : (
+                    <div />
                   )}
 
                   {/* Right: Clear all with popover */}
-                  {activeDays.length > 0 && (
-                    <Popover open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
-                          title={t.clearAll}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                          <span>{language === "ru" ? "Удалить" : "Жою"}</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                        <p className="text-xs font-medium text-foreground">
-                          {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
-                        </p>
-                        <div className="flex items-center justify-center gap-2">
+                  <div className="flex justify-end">
+                    {activeDays.length > 0 && (
+                      <Popover open={isMobileConfirmClearOpen} onOpenChange={setIsMobileConfirmClearOpen}>
+                        <PopoverTrigger asChild>
                           <Button
+                            variant="ghost"
                             size="sm"
-                            variant="outline"
-                            className="h-7 px-3 text-xs"
-                            onClick={() => setIsConfirmClearOpen(false)}
+                            className="h-8 px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                            title={t.clearAll}
                           >
-                            {t.no}
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            <span>{language === "ru" ? "Удалить" : "Жою"}</span>
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-7 px-3 text-xs"
-                            onClick={async () => {
-                              const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
-                              setSelectedCells(new Set());
-                              setCustomDayIntervals({});
-                              setSlotSettingsMap({});
-                              setSelectedSlotKeys(new Set());
-                              setCellsByWeek((prev) => ({
-                                ...prev,
-                                [weekOffset]: new Set(),
-                              }));
-                              setIsConfirmClearOpen(false);
-                              if (onDeleteSlots) {
-                                await onDeleteSlots(dates);
-                              }
-                            }}
-                          >
-                            {t.yes}
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-3 shadow-lg" align="end">
+                          <div className="flex items-center gap-3">
+                          <p className="text-sm font-medium text-left text-foreground">
+                            {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
+                          </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-9 px-3 shrink-0 text-base font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={async () => {
+                                const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
+                                setSelectedCells(new Set());
+                                setCustomDayIntervals({});
+                                setSlotSettingsMap({});
+                                setSelectedSlotKeys(new Set());
+                                setCellsByWeek((prev) => ({
+                                  ...prev,
+                                  [weekOffset]: new Set(),
+                                }));
+                                setIsMobileConfirmClearOpen(false);
+                                if (onDeleteSlots) {
+                                  await onDeleteSlots(dates);
+                                }
+                              }}
+                            >
+                              {t.yes}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2375,26 +2546,10 @@ export default function SlotCreationWizard({
               <div className="flex-1 min-w-0">
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
                   {/* Grid header with days */}
-                  <div className="grid grid-cols-[100px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsTimezoneSettingsOpen(true);
-                      }}
-                      className="py-1.5 px-1.5 text-center font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 border-r border-border/60 flex flex-col items-center justify-center gap-1 transition-colors group cursor-pointer"
-                      title={
-                        language === "ru"
-                          ? "Нажмите для изменения"
-                          : "Өзгерту үшін басыңыз"
-                      }
-                    >
-                      <span className="text-[11.5px] sm:text-[12.5px] font-semibold leading-tight text-foreground flex items-center justify-center gap-1 text-center px-0.5 whitespace-nowrap">
-                        <span className="text-xs sm:text-sm">🌍</span> {primaryCity}
-                      </span>
-                      <span className="text-[10px] sm:text-[11px] font-medium leading-none text-muted-foreground group-hover:text-foreground flex items-center gap-0.5 whitespace-nowrap">
-                        ({gmtLabel}) <span className="text-[8.5px] leading-none">▼</span>
-                      </span>
-                    </button>
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <div className="border-r border-border/60 flex items-center justify-center">
+                      {renderWeekArrows()}
+                    </div>
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
@@ -2410,19 +2565,6 @@ export default function SlotCreationWizard({
                             hasSlots && "bg-primary/15"
                           )}
                         >
-                          {idx === 0 && weekOffset > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset - 1);
-                              }}
-                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Предыдущая неделя"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
@@ -2436,29 +2578,23 @@ export default function SlotCreationWizard({
                           >
                             {format(date, "d")}
                           </div>
-                          {idx === 6 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset + 1);
-                              }}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Следующая неделя"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
                   {/* Spacer */}
-                  <div className="grid grid-cols-[100px_repeat(7,1fr)] bg-muted/10">
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/10">
                     <div className="border-r border-border/60 h-2 sm:h-2.5" />
                     {Array.from({ length: 7 }).map((_, i) => (
-                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5" />
+                      <div
+                        key={i}
+                        className={cn(
+                          "border-r last:border-r-0 border-foreground/35 h-2 sm:h-2.5",
+                          isCellInPast(i, workingHours.start) &&
+                            "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
+                        )}
+                      />
                     ))}
                   </div>
 
@@ -2467,10 +2603,10 @@ export default function SlotCreationWizard({
                     {baseHours.map((h) => renderHourRow(h, false))}
 
                     {/* Stationary boundary label (e.g. 21:00) */}
-                    <div className="relative grid grid-cols-[100px_repeat(7,1fr)] select-none pointer-events-none">
+                    <div className="relative grid grid-cols-[64px_repeat(7,1fr)] select-none pointer-events-none">
                       <div className="relative border-r border-border/60 h-0">
                         {!workingHours.end.endsWith(":30") && (
-                          <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
                             {workingHours.end}
                           </span>
                         )}
@@ -2488,10 +2624,10 @@ export default function SlotCreationWizard({
                     </div>
 
                     {/* Final closing line */}
-                    <div className="grid grid-cols-[100px_repeat(7,1fr)] relative">
+                    <div className="grid grid-cols-[64px_repeat(7,1fr)] relative">
                       <div className="relative border-r border-border/60 h-3 select-none">
                         {showLateHours && lateHoursArr.length > 0 && (
-                          <span className="absolute top-0 -translate-y-1/2 right-3 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80">
                             {closingHourStr}
                           </span>
                         )}
@@ -2503,7 +2639,9 @@ export default function SlotCreationWizard({
                             "border-r last:border-r-0 border-foreground/35 border-t h-3",
                             !showLateHours && workingHours.end.endsWith(":30")
                               ? "border-t-border/75"
-                              : "border-t-foreground/35"
+                              : "border-t-foreground/35",
+                            isCellInPast(i, closingHourStr) &&
+                              "bg-muted/60 [background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(0,0,0,0.12)_5px,rgba(0,0,0,0.12)_10px)] dark:[background-image:repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.12)_5px,rgba(255,255,255,0.12)_10px)] opacity-80"
                           )}
                         />
                       ))}
@@ -2512,9 +2650,9 @@ export default function SlotCreationWizard({
                 </div>
 
                 {/* Bottom toolbar under grid */}
-                <div className="flex items-center justify-between mt-3 mb-2 px-1">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-1">
                   {/* Left: Time range */}
-                  <div className="flex justify-start shrink-0">
+                  <div className="flex justify-start">
                     <Popover
                       open={isRangeOpen}
                       onOpenChange={(nextOpen) => {
@@ -2529,11 +2667,18 @@ export default function SlotCreationWizard({
                           variant="outline"
                           size="sm"
                           className={cn(
-                            "text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border text-foreground bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm transition-colors group cursor-pointer",
-                            isRangeOpen && "bg-primary text-primary-foreground border-primary"
+                            "text-xs h-8 gap-1.5 rounded-md px-3 font-medium border-border text-foreground bg-card shadow-sm transition-colors group cursor-pointer",
+                            isRangeOpen
+                              ? "bg-primary text-primary-foreground border-primary hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                              : "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
                           )}
                         >
-                          <Clock className={cn("w-3.5 h-3.5 text-muted-foreground group-hover:text-primary-foreground transition-colors", isRangeOpen && "text-primary-foreground")} />
+                          <Clock
+                            className={cn(
+                              "w-3.5 h-3.5 text-muted-foreground transition-colors group-hover:text-primary",
+                              isRangeOpen && "text-primary-foreground group-hover:text-primary-foreground"
+                            )}
+                          />
                           <span>{t.timeRangeBtn}</span>
                         </Button>
                       </PopoverTrigger>
@@ -2558,7 +2703,7 @@ export default function SlotCreationWizard({
                   </div>
 
                   {/* Center: Toggle late hours */}
-                  {lateHoursArr.length > 0 && (
+                  {lateHoursArr.length > 0 ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2573,10 +2718,12 @@ export default function SlotCreationWizard({
                       />
                       <span>{showLateHours ? t.hideLateHours : t.showLateHours}</span>
                     </Button>
+                  ) : (
+                    <div />
                   )}
 
                   {/* Right: Clear all with popover */}
-                  <div className="min-w-[150px] flex justify-end shrink-0">
+                  <div className="flex justify-end">
                     {activeDays.length > 0 && (
                       <Popover open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
                         <PopoverTrigger asChild>
@@ -2589,23 +2736,15 @@ export default function SlotCreationWizard({
                             {t.clearAll}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3 text-center space-y-2.5 shadow-lg" align="end">
-                          <p className="text-xs font-medium text-foreground">
+                        <PopoverContent className="w-72 p-3 shadow-lg" align="end">
+                          <div className="flex items-center gap-3">
+                          <p className="text-sm sm:text-base font-medium text-left text-foreground">
                             {weekOffset === 0 ? t.confirmClearRemainingTitle : t.confirmClearAllTitle}
                           </p>
-                          <div className="flex items-center justify-center gap-2">
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="h-7 px-3 min-w-[48px] text-xs"
-                              onClick={() => setIsConfirmClearOpen(false)}
-                            >
-                              {t.no}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-7 px-3 min-w-[48px] text-xs"
+                              variant="ghost"
+                              className="h-9 px-3 shrink-0 text-base font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={async () => {
                                 const dates = weekDates.map((d) => format(d, "yyyy-MM-dd"));
                                 setSelectedCells(new Set());
@@ -2646,59 +2785,7 @@ export default function SlotCreationWizard({
                         {t.noSlotsWarning}
                       </div>
                     ) : (
-                      editableDaysOnDesktop.map((dayIdx) => {
-                        const dayEditableIntervals = (effectiveIntervalsByDay[dayIdx] || [])
-                          .map((interval, originalIdx) => ({ interval, originalIdx }))
-                          .filter(({ interval }) => !isIntervalUnderGrid(dayIdx, interval));
-
-                        return (
-                          <div
-                            key={dayIdx}
-                            className="py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-xl border border-border bg-card shadow-xs space-y-2"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs sm:text-sm font-medium text-foreground">
-                                {t.weekDaysFull[dayIdx]}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                              {dayEditableIntervals.map(({ interval, originalIdx }) => (
-                                <div
-                                  key={originalIdx}
-                                  className="text-xs font-mono gap-0.5 px-1.5 sm:px-2 py-0.5 rounded-md border border-border/70 bg-muted/60 hover:bg-muted items-center justify-center flex w-full"
-                                >
-                                  <EditableTime
-                                    time={interval.start}
-                                    availableHours={getAvailableHoursForDay(dayIdx, interval.start, originalIdx, false)}
-                                    isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
-                                    language={language}
-                                    onChange={(newTime, isSilent) =>
-                                      updateIntervalTime(dayIdx, originalIdx, newTime, interval.end, isSilent)
-                                    }
-                                  />
-                                  <span className="mx-0.5 text-muted-foreground">–</span>
-                                  <EditableTime
-                                    time={interval.end}
-                                    availableHours={getAvailableHoursForDay(
-                                      dayIdx,
-                                      interval.end,
-                                      originalIdx,
-                                      true,
-                                      addMinutesToTime(interval.start, 30)
-                                    )}
-                                    minTime={addMinutesToTime(interval.start, 30)}
-                                    isTimeInPast={(timeStr) => isCellInPast(dayIdx, timeStr)}
-                                    language={language}
-                                    onChange={(newTime, isSilent) =>
-                                      updateIntervalTime(dayIdx, originalIdx, interval.start, newTime, isSilent)
-                                    }
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })
+                      renderTimesByDay()
                     )}
                   </div>
                 </div>
@@ -2710,439 +2797,177 @@ export default function SlotCreationWizard({
           {/* STEP 2: Configure Slot Groups */}
           {step === 2 && (
             <>
-              {/* MOBILE STEP 2: Settings with sticky top slot summary */}
-              <div className="block sm:hidden p-3.5 space-y-3.5 pb-28">
-                {/* Summary of Selected Slots - Pinned at top and sticky */}
-                <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-md pt-0.5 pb-2 -mx-3.5 px-3.5 border-b border-border/40 shadow-2xs">
-                  <div className="bg-card border border-border rounded-xl p-3 shadow-xs space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <CalendarIcon className="w-4 h-4 text-primary shrink-0" />
-                        {language === "ru" ? "Настраиваемые слоты:" : "Бапталатын слоттар:"}
+              {/* MOBILE STEP 2: day grid with blocks; parameters live in the bottom panel */}
+              <div
+                className="block sm:hidden p-3 space-y-2.5"
+                style={{ paddingBottom: `${mobileBottomBarHeight + 8}px` }}
+              >
+                {/* Day Switcher Bar with < and > */}
+                <div
+                  className="flex items-center justify-between gap-2 px-2 py-2 bg-card border border-border/80 rounded-xl shadow-2xs"
+                  onTouchStart={handleHeaderTouchStart}
+                  onTouchEnd={handleHeaderTouchEnd}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handlePrevMobileDay}
+                    disabled={isPrevMobileDayDisabled}
+                    className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 disabled:opacity-30 cursor-pointer"
+                    aria-label={language === "ru" ? "Предыдущий день" : "Алдыңғы күн"}
+                  >
+                    <ChevronLeft className="w-5 h-5 text-foreground" />
+                  </Button>
+                  <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 text-center">
+                    <span className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
+                      {formattedMobileDayTitle}
+                    </span>
+                    {isCurrentDayToday && (
+                      <span className="px-1.5 py-0.2 text-[9.5px] font-semibold bg-primary/15 text-primary rounded-full shrink-0 mt-0.5">
+                        {language === "ru" ? "Сегодня" : "Бүгін"}
                       </span>
-                      {(() => {
-                        const isAllSelected =
-                          allSlotKeys.length > 0 && allSlotKeys.every((k) => selectedSlotKeys.has(k));
-                        return (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={allSlotKeys.length === 0}
-                            onClick={() => {
-                              if (isAllSelected) {
-                                setSelectedSlotKeys((prev) => {
-                                  const next = new Set(prev);
-                                  allSlotKeys.forEach((k) => next.delete(k));
-                                  return next;
-                                });
-                              } else {
-                                handleSelectAllSlots();
-                              }
-                            }}
-                            className={cn(
-                              "text-xs h-7 px-2.5 rounded-lg transition-colors border shadow-2xs font-medium cursor-pointer",
-                              isAllSelected
-                                ? "bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-white hover:border-destructive font-semibold"
-                                : "bg-card text-foreground border-border hover:bg-primary hover:text-white hover:border-primary"
-                            )}
-                          >
-                            {isAllSelected ? t.unselectAll : t.selectAll}
-                          </Button>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Slot keys as selectable vertical list - exactly 2 visible */}
-                    {allSlotKeys.length === 0 ? (
-                      <div className="h-[80px] flex items-center justify-center text-xs text-muted-foreground border border-dashed rounded-xl bg-card/50">
-                        {t.noSlotsWarning}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2 h-[80px] overflow-y-auto overscroll-contain touch-pan-y pr-2.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/55 [&::-webkit-scrollbar-track]:bg-muted/20 [&::-webkit-scrollbar-track]:rounded-full">
-                        {allSlotKeys.map((key) => {
-                          const isSelected = selectedSlotKeys.has(key);
-                          const [dStr, start, end] = key.split("_");
-                          const dateObj = parseISO(dStr);
-                          const dayName = isValid(dateObj)
-                            ? format(dateObj, "EEE, d MMM", { locale: language === "ru" ? ru : kk })
-                            : dStr;
-
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => toggleSlotSelection(key)}
-                              className={cn(
-                                "w-full h-9 px-3 rounded-xl text-sm font-medium transition-colors border shrink-0 flex items-center justify-center cursor-pointer truncate",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
-                                  : "bg-muted/60 text-muted-foreground border-border hover:border-primary/40"
-                              )}
-                              title={`${dayName}: ${start}–${end}`}
-                            >
-                              <span className="truncate">
-                                {dayName}: {start}–{end}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
                     )}
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNextMobileDay}
+                    className="h-9 w-9 shrink-0 rounded-lg hover:bg-muted active:bg-muted/80 cursor-pointer"
+                    aria-label={language === "ru" ? "Следующий день" : "Келесі күн"}
+                  >
+                    <ChevronRight className="w-5 h-5 text-foreground" />
+                  </Button>
                 </div>
 
-                {/* Settings Card: Duration, Participants, Details */}
-                <div
-                  className={cn(
-                    "bg-card border p-4 rounded-2xl shadow-sm space-y-4 transition-all",
-                    selectedSlotKeys.size > 0
-                      ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                      : "border-border/60 opacity-60 pointer-events-none"
-                  )}
-                >
-                  <div className="pb-1 border-b border-border/50">
-                    <h3 className="text-sm font-semibold text-foreground">{t.slotParams}</h3>
-                  </div>
-
-                  {/* Lesson Duration */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                      <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.lessonDuration}</span>
-                      <ReqStar />
-                    </Label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder={isDifferentDuration ? t.different : t.customValue}
-                        value={isDifferentDuration ? "" : currentPanelSettings?.customDuration || ""}
-                        className={cn(
-                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                          (isDifferentDuration || currentPanelSettings?.customDuration) &&
-                            "border-primary font-semibold text-primary"
-                        )}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "");
-                          updateSelectedSlotsField("customDuration", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("slotDuration", Number(val));
-                          }
-                        }}
-                      />
-                      {[50, 60, 90].map((dur) => {
-                        const isActive =
-                          !isDifferentDuration &&
-                          currentPanelSettings?.slotDuration === dur &&
-                          !currentPanelSettings?.customDuration;
-                        return (
-                          <Button
-                            key={dur}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              updateSelectedSlotsField("customDuration", "");
-                              updateSelectedSlotsField("slotDuration", dur);
-                            }}
-                            className={cn(
-                              "h-11 min-h-[44px] flex-1 px-1.5 text-xs transition-all rounded-lg",
-                              isActive
-                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            )}
-                          >
-                            <span className="whitespace-nowrap">
-                              {dur} {t.min}
-                            </span>
-                          </Button>
-                        );
-                      })}
+                {/* Single day grid: time column + blocks, same layout as step 1 */}
+                <div className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none">
+                  <div className="grid grid-cols-[64px_1fr] bg-muted/50 border-b border-border">
+                    <div className="py-2 text-center border-r border-border/60 flex items-center justify-center">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        {language === "ru" ? "Время" : "Уақыт"}
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Max Participants */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.participants}</span>
-                      <ReqStar />
-                    </Label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder={isDifferentParticipants ? t.different : t.customValue}
-                        value={
-                          isDifferentParticipants ? "" : currentPanelSettings?.customParticipants || ""
-                        }
-                        className={cn(
-                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
-                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                          (isDifferentParticipants || currentPanelSettings?.customParticipants) &&
-                            "border-primary font-semibold text-primary"
-                        )}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "");
-                          updateSelectedSlotsField("customParticipants", val);
-                          if (val && Number(val) > 0) {
-                            updateSelectedSlotsField("maxParticipants", Number(val));
-                          }
-                        }}
-                      />
-                      {[
-                        { value: 1, label: "1" },
-                        { value: 5, label: "5" },
-                        { value: 10, label: "10" },
-                        { value: 999999, label: "∞" },
-                      ].map((preset) => {
-                        const isActive =
-                          !isDifferentParticipants &&
-                          currentPanelSettings?.maxParticipants === preset.value &&
-                          !currentPanelSettings?.customParticipants;
-                        return (
-                          <Button
-                            key={preset.value}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              updateSelectedSlotsField("customParticipants", "");
-                              updateSelectedSlotsField("maxParticipants", preset.value);
-                            }}
-                            className={cn(
-                              "h-11 min-h-[44px] flex-1 px-1 text-xs transition-all rounded-lg",
-                              isActive
-                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            )}
-                          >
-                            <span className={preset.value === 999999 ? "text-base sm:text-lg font-bold leading-none select-none" : ""}>
-                              {preset.label}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* For Product */}
-                  {products && products.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.forProduct}</span>
-                        <ReqStar />
-                        {isDifferentProduct && (
-                          <span className="text-[11px] text-muted-foreground font-normal italic">
-                            ({t.different})
-                          </span>
-                        )}
-                      </Label>
-                      <ProductSwitcher
-                        products={products}
-                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
-                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
-                        placeholder={isDifferentProduct ? t.different : undefined}
-                        hideIcon
-                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
-                      />
-                    </div>
-                  )}
-
-                  {/* Conference Link Section */}
-                  <div className="pt-1 space-y-2">
-                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.conferenceLink}</span>
-                    </Label>
-
-                    <div className="relative flex items-center">
-                      <input
-                        type="url"
-                        placeholder={t.conferenceLinkPlaceholder}
-                        value={currentPanelSettings?.customConferenceLink || ""}
-                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                        className={cn(
-                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
-                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
-                        )}
-                      />
-                      {Boolean(currentPanelSettings?.customConferenceLink) && (
-                        <div className="absolute right-1.5 flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
-                          >
-                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateSelectedSlotsField("customConferenceLink", "");
-                              setCopiedLink(false);
-                            }}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Lesson Details Dialog Button */}
-                  <div className="pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsDetailsDialogOpen(true)}
-                      className="w-full justify-between h-11 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer"
-                    >
-                      <span className="text-xs font-semibold text-foreground">{t.details}</span>
-                      <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Repetition Card */}
-                <div
-                  className={cn(
-                    "p-4 rounded-2xl border bg-card shadow-sm space-y-3 transition-all",
-                    selectedSlotKeys.size > 0
-                      ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                      : "border-border/60 opacity-60 pointer-events-none"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <Label
-                      htmlFor="mobile-repeat-switch"
-                      className="text-xs font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
-                    >
-                      <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.everyWeek}</span>
-                      {isDifferentRepeat && (
-                        <span className="text-[11px] text-muted-foreground font-normal italic">
-                          ({t.different})
+                    <div className="py-2 px-2 text-center flex items-center justify-center">
+                      {isCurrentDayToday && (
+                        <span className="text-xs font-semibold text-primary">
+                          {language === "ru" ? "Сегодня" : "Бүгін"}
                         </span>
                       )}
-                      <ReqStar />
-                    </Label>
-                    <Switch
-                      id="mobile-repeat-switch"
-                      checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
-                      onCheckedChange={(checked) => {
-                        setRepeatWeekly(checked);
-                        updateSelectedSlotsField("repeatWeekly", checked);
-                        if (checked && !currentPanelSettings?.repeatPeriod) {
-                          updateSelectedSlotsField("repeatPeriod", "1week");
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[64px_1fr] pointer-events-none">
+                    <div className="border-r border-border/60 h-3 bg-muted/20" />
+                    <div className="h-3" />
+                  </div>
+                  <div className="grid grid-cols-[64px_1fr]">
+                    <div className="relative border-r border-border/60 bg-muted/20 select-none pointer-events-none">
+                      {step2HourLabels.map((label, i) => (
+                        <span
+                          key={label + i}
+                          className="absolute right-2 -translate-y-1/2 text-xs font-mono font-medium text-foreground/80"
+                          style={{ top: `${i * 48}px` }}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                    <div
+                      onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setSelectedSlotKeys(new Set());
                         }
                       }}
-                    />
-                  </div>
-
-                  {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
-                    <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold text-foreground">
-                          {t.repeatPeriodLabel}
-                        </Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(["1week", "1month", "2months", "custom"] as const).map((period) => {
-                            const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
-                            const isSelected = !isDifferentPeriod && activePeriod === period;
-                            return (
-                              <Button
-                                key={period}
-                                type="button"
-                                variant={isSelected ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => {
-                                  setRepeatPeriod(period);
-                                  updateSelectedSlotsField("repeatPeriod", period);
-                                  if (period === "custom") {
-                                    const currentUntil = currentPanelSettings?.repeatUntil;
-                                    if (currentUntil) {
-                                      const parts = currentUntil.split("-");
-                                      if (parts.length === 3) {
-                                        setRepeatYear(parts[0]);
-                                        setRepeatMonth(parts[1]);
-                                        setRepeatDay(parts[2]);
-                                      }
-                                      setRepeatUntil(currentUntil);
-                                    } else {
-                                      setRepeatYear("");
-                                      setRepeatMonth("");
-                                      setRepeatDay("");
-                                      setRepeatUntil("");
-                                    }
-                                    setIsCustomRepeatDialogOpen(true);
-                                  }
-                                }}
-                                className={cn(
-                                  "h-11 min-h-[44px] text-xs font-semibold rounded-lg transition-all",
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground font-semibold"
-                                    : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                )}
-                              >
-                                {period === "1week"
-                                  ? t.oneWeek
-                                  : period === "1month"
-                                  ? t.oneMonth
-                                  : period === "2months"
-                                  ? t.twoMonths
-                                  : t.custom}
-                              </Button>
-                            );
-                          })}
-                        </div>
+                      className="relative border-t border-foreground/35"
+                      style={{ height: `${displayHours.length * 48}px` }}
+                    >
+                      <div className="absolute inset-0 pointer-events-none flex flex-col">
+                        {displayHours.map((_, i) => (
+                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                        ))}
                       </div>
-
-                      {currentPanelSettings?.repeatPeriod === "custom" && (
-                        <div className="pt-0.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                              const currentUntil = currentPanelSettings?.repeatUntil;
-                              if (currentUntil) {
-                                const parts = currentUntil.split("-");
-                                if (parts.length === 3) {
-                                  setRepeatYear(parts[0]);
-                                  setRepeatMonth(parts[1]);
-                                  setRepeatDay(parts[2]);
-                                }
-                                setRepeatUntil(currentUntil);
-                              } else {
-                                setRepeatYear("");
-                                setRepeatMonth("");
-                                setRepeatDay("");
-                                setRepeatUntil("");
-                              }
-                              setIsCustomRepeatDialogOpen(true);
-                            }}
-                            className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs font-medium hover:bg-primary/10 transition-all rounded-lg cursor-pointer"
-                          >
-                            <span className="truncate font-semibold text-foreground">
-                              {currentPanelSettings?.repeatUntil
-                                ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
-                                : language === "ru"
-                                ? "Выберите дату окончания"
-                                : "Аяқталу күнін таңдаңыз"}
-                            </span>
-                            <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          </Button>
-                        </div>
-                      )}
+                      {renderStep2DayBlocks(mobileDayIdx)}
                     </div>
-                  )}
+                  </div>
+                  <div className="grid grid-cols-[64px_1fr] pointer-events-none">
+                    <div className="border-r border-border/60 h-3 bg-muted/20" />
+                    <div className="h-3" />
+                  </div>
                 </div>
 
+                {/* Toolbar: select all (left) / late hours (center) / unselect (right) for this day */}
+                {(() => {
+                  const dayPrefix = format(currentMobileDate, "yyyy-MM-dd") + "_";
+                  const daySlotKeys = allSlotKeys.filter((k) => k.startsWith(dayPrefix));
+                  const selectedCount = daySlotKeys.filter((k) => selectedSlotKeys.has(k)).length;
+                  return (
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mt-3 mb-2 px-0.5">
+                      <div className="flex justify-start">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={daySlotKeys.length === 0 || selectedCount === daySlotKeys.length}
+                          onClick={() => {
+                            setSlotSettingsMap((prev) => {
+                              let map = { ...prev };
+                              daySlotKeys.forEach((k) => {
+                                map = ensureSlotInitialized(k, map);
+                              });
+                              return map;
+                            });
+                            setSelectedSlotKeys((prev) => {
+                              const next = new Set(prev);
+                              daySlotKeys.forEach((k) => next.add(k));
+                              return next;
+                            });
+                          }}
+                          className="h-8 px-2.5 text-xs font-medium rounded-lg bg-card text-foreground border-border hover:bg-primary/10 hover:text-primary hover:border-primary/40 disabled:opacity-40"
+                        >
+                          {t.selectAll}
+                        </Button>
+                      </div>
+                      {lateHoursArr.length > 0 ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleToggleLateHours}
+                          className="text-xs font-medium text-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/40 gap-1 rounded-lg px-3 h-8 border border-border bg-card transition-colors cursor-pointer"
+                        >
+                          <ChevronDown
+                            className={cn("w-3.5 h-3.5 transition-transform duration-300", showLateHours && "rotate-180")}
+                          />
+                          <span>
+                            {showLateHours
+                              ? language === "ru" ? "Скрыть" : "Жасыру"
+                              : language === "ru" ? "Показать" : "Көрсету"}
+                          </span>
+                        </Button>
+                      ) : (
+                        <div />
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={selectedCount === 0}
+                          onClick={() => {
+                            setSelectedSlotKeys((prev) => {
+                              const next = new Set(prev);
+                              daySlotKeys.forEach((k) => next.delete(k));
+                              return next;
+                            });
+                          }}
+                          className="h-8 px-2.5 text-xs font-medium rounded-lg bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-white hover:border-destructive disabled:opacity-40"
+                        >
+                          {t.unselectAll}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* DESKTOP STEP 2: 7-day schedule grid with right sidebar */}
@@ -3160,8 +2985,11 @@ export default function SlotCreationWizard({
                   }}
                   className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none"
                 >
-                  {/* 7 Days Header (Mon-Sun) */}
-                  <div className="grid grid-cols-7 bg-muted/50 border-b border-border sticky top-0 z-10">
+                  {/* 7 Days Header (Mon-Sun) with week arrows in the time column */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/50 border-b border-border sticky top-0 z-10">
+                    <div className="border-r border-border/60 flex items-center justify-center">
+                      {renderWeekArrows()}
+                    </div>
                     {t.weekDays.map((dayName, idx) => {
                       const date = weekDates[idx];
                       const isCur = isSameDay(date, new Date());
@@ -3171,23 +2999,10 @@ export default function SlotCreationWizard({
                         <div
                           key={idx}
                           className={cn(
-                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors relative",
+                            "py-2 px-1 text-center border-r last:border-r-0 border-border/60 flex flex-col items-center justify-center transition-colors",
                             isDaySelectedInStep2 && "bg-primary/15"
                           )}
                         >
-                          {idx === 0 && weekOffset > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset - 1);
-                              }}
-                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Предыдущая неделя"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                           <span className="text-[11px] font-semibold text-muted-foreground">{dayName}</span>
                           <div
                             className={cn(
@@ -3201,63 +3016,51 @@ export default function SlotCreationWizard({
                           >
                             {format(date, "d")}
                           </div>
-                          {idx === 6 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                changeWeek(weekOffset + 1);
-                              }}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-muted border border-border/80 hover:border-primary/50 flex items-center justify-center text-foreground/80 hover:text-primary transition-all z-20 cursor-pointer shadow-xs"
-                              title="Следующая неделя"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Timeline Grid with solid blocks without square splits */}
-                  <div
-                    onClick={(e) => {
-                      if (e.target === e.currentTarget) {
-                        setSelectedSlotKeys(new Set());
-                      }
-                    }}
-                    className="relative bg-card"
-                    style={{
-                      height: `${Math.max(360, displayHours.length * 48)}px`,
-                    }}
-                  >
-                    {/* Background horizontal hour lines */}
-                    <div className="absolute inset-0 pointer-events-none flex flex-col">
-                      {displayHours.map((_, i) => (
-                        <div
-                          key={i}
-                          className="border-b last:border-b-0 border-foreground/35"
-                          style={{ height: "48px" }}
-                        />
+                  {/* Top spacer, same as step 1 */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] bg-muted/10 pointer-events-none">
+                    <div className="border-r border-border/60 h-2.5" />
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-2.5" />
+                    ))}
+                  </div>
+
+                  {/* Time column + timeline */}
+                  <div className="grid grid-cols-[64px_1fr]">
+                    <div className="relative border-r border-border/60 select-none pointer-events-none">
+                      {step2HourLabels.map((label, i) => (
+                        <span
+                          key={label + i}
+                          className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs sm:text-[13px] font-mono font-medium text-foreground/80"
+                          style={{ top: `${i * 48}px` }}
+                        >
+                          {label}
+                        </span>
                       ))}
                     </div>
+                    <div
+                      onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setSelectedSlotKeys(new Set());
+                        }
+                      }}
+                      className="relative bg-card border-t border-foreground/35"
+                      style={{ height: `${displayHours.length * 48}px` }}
+                    >
+                      {/* Background horizontal hour lines */}
+                      <div className="absolute inset-0 pointer-events-none flex flex-col">
+                        {displayHours.map((_, i) => (
+                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                        ))}
+                      </div>
 
-                    {/* 7 Day Columns */}
-                    <div className="relative grid grid-cols-7 h-full divide-x divide-foreground/35">
-                      {Array.from({ length: 7 }).map((_, dayIdx) => {
-                        const intervals = (effectiveIntervalsByDay[dayIdx] || []).filter(
-                          (interval) => !isIntervalUnderGrid(dayIdx, interval)
-                        );
-                        const startHour = displayHours[0] ?? 9;
-
-                        const getMinutesFromStart = (timeStr: string) => {
-                          const [h, m] = timeStr.split(":").map(Number);
-                          let diffHours = h - startHour;
-                          if (diffHours < 0) diffHours += 24;
-                          return diffHours * 60 + m;
-                        };
-
-                        return (
+                      {/* 7 Day Columns */}
+                      <div className="relative grid grid-cols-7 h-full">
+                        {Array.from({ length: 7 }).map((_, dayIdx) => (
                           <div
                             key={dayIdx}
                             onClick={(e) => {
@@ -3265,98 +3068,106 @@ export default function SlotCreationWizard({
                                 setSelectedSlotKeys(new Set());
                               }
                             }}
-                            className="relative h-full"
+                            className="relative h-full border-r last:border-r-0 border-foreground/35"
                           >
-                            {intervals.map((interval) => {
-                              const date = weekDates[dayIdx];
-                              const dateStr = date ? format(date, "yyyy-MM-dd") : `${dayIdx}`;
-                              const key = `${dateStr}_${interval.start}_${interval.end}`;
-                              const isSelected = selectedSlotKeys.has(key);
-
-                              const startM = getMinutesFromStart(interval.start);
-                              let endM = getMinutesFromStart(interval.end);
-                              if (endM <= startM) {
-                                endM += 24 * 60;
-                              }
-                              const durationM = Math.max(30, endM - startM);
-                              const pixelsPerMinute = 48 / 60;
-                              const topPx = startM * pixelsPerMinute;
-                              const heightPx = Math.max(24, durationM * pixelsPerMinute);
-                              const isShortSlot = heightPx <= 32;
-
-                              return (
-                                <div
-                                  key={key}
-                                  onClick={(e) => {
-                                   e.stopPropagation();
-                                   toggleSlotSelection(key);
-                                  }}
-                                  style={{
-                                    top: `${topPx + 1}px`,
-                                    height: `${heightPx - 2}px`,
-                                  }}
-                                  className={cn(
-                                    "group absolute left-1 right-1 transition-all cursor-pointer select-none flex items-center justify-center text-center overflow-hidden",
-                                    isShortSlot ? "p-0.5 rounded-lg" : "p-1.5 rounded-xl",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground border-2 border-primary shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-                                      : "bg-card text-primary border-2 border-primary/40 hover:border-primary/60 z-10"
-                                  )}
-                                  title={`${interval.start} - ${interval.end}`}
-                                >
-                                  {!isSelected && (
-                                    <div className="absolute inset-0 bg-primary/15 group-hover:bg-primary/25 transition-colors pointer-events-none" />
-                                  )}
-                                  <span className={cn(
-                                    "relative z-10 font-mono font-bold whitespace-nowrap",
-                                    isShortSlot ? "text-[11px] leading-none" : "text-xs sm:text-sm leading-tight"
-                                  )}>
-                                    {interval.start} – {interval.end}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                            {renderStep2DayBlocks(dayIdx)}
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Bottom spacer, same as step 1 */}
+                  <div className="grid grid-cols-[64px_repeat(7,1fr)] pointer-events-none">
+                    <div className="border-r border-border/60 h-3" />
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div key={i} className="border-r last:border-r-0 border-foreground/35 h-3" />
+                    ))}
                   </div>
                 </div>
 
-                {/* Single Combined Button under schedule: Select All / Unselect All */}
+                {/* Toolbar under schedule: Select All (left) / late-hours toggle (center) / Unselect All (right) */}
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-end mt-3 mb-2 px-1"
+                  className="flex items-center justify-between gap-2 mt-3 mb-2 px-1"
                 >
                   {(() => {
-                    const isAllSelected = allSlotKeys.length > 0 && allSlotKeys.every((k) => selectedSlotKeys.has(k));
+                    const selectedCount = allSlotKeys.filter((k) => selectedSlotKeys.has(k)).length;
+                    const selectAllDisabled = allSlotKeys.length === 0 || selectedCount === allSlotKeys.length;
+                    const unselectAllDisabled = selectedCount === 0;
+                    const toolbarBaseClass =
+                      "text-xs sm:text-sm h-8 px-3.5 rounded-lg font-medium disabled:opacity-40 transition-colors";
                     return (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={allSlotKeys.length === 0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isAllSelected) {
-                            setSelectedSlotKeys((prev) => {
-                              const next = new Set(prev);
-                              allSlotKeys.forEach((k) => next.delete(k));
-                              return next;
-                            });
-                          } else {
-                            handleSelectAllSlots();
-                          }
-                        }}
-                        className={cn(
-                          "text-xs sm:text-sm h-8 px-3.5 rounded-lg transition-colors shadow-2xs font-medium",
-                          isAllSelected
-                            ? "bg-card text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive font-semibold"
-                            : "bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                      <>
+                        <div className="min-w-[150px] flex items-center justify-start">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={selectAllDisabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPressedToolbarBtn("selectAll");
+                              handleSelectAllSlots();
+                            }}
+                            onMouseLeave={() => setPressedToolbarBtn(null)}
+                            className={cn(
+                              toolbarBaseClass,
+                              "bg-card text-foreground border-border",
+                              !selectAllDisabled && pressedToolbarBtn !== "selectAll"
+                                ? "hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+                                : "hover:bg-card hover:text-foreground hover:border-border"
+                            )}
+                          >
+                            {t.selectAll}
+                          </Button>
+                        </div>
+
+                        {lateHoursArr.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleToggleLateHours}
+                            className="text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 hover:border-primary/40 gap-1.5 rounded-full px-4 py-1.5 border-dashed transition-all"
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "w-3.5 h-3.5 transition-transform duration-300",
+                                showLateHours && "rotate-180"
+                              )}
+                            />
+                            <span>{showLateHours ? t.hideLateHours : t.showLateHours}</span>
+                          </Button>
                         )}
-                      >
-                        {isAllSelected ? t.unselectAll : t.selectAll}
-                      </Button>
+
+                        <div className="min-w-[150px] flex items-center justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={unselectAllDisabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPressedToolbarBtn("unselectAll");
+                              setSelectedSlotKeys((prev) => {
+                                const next = new Set(prev);
+                                allSlotKeys.forEach((k) => next.delete(k));
+                                return next;
+                              });
+                            }}
+                            onMouseLeave={() => setPressedToolbarBtn(null)}
+                            className={cn(
+                              toolbarBaseClass,
+                              "bg-card text-destructive border-destructive/40",
+                              !unselectAllDisabled && pressedToolbarBtn !== "unselectAll"
+                                ? "hover:bg-destructive hover:text-white hover:border-destructive"
+                                : "hover:bg-card hover:text-destructive hover:border-destructive/40"
+                            )}
+                          >
+                            {t.unselectAll}
+                          </Button>
+                        </div>
+                      </>
                     );
                   })()}
                 </div>
@@ -3365,37 +3176,54 @@ export default function SlotCreationWizard({
               {/* Right Column: Settings Card + Repetition Card (stationary on desktop) */}
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-72 sm:w-80 md:w-96 flex-none"
+                className="w-80 sm:w-96 md:w-[410px] flex-none"
               >
                 <div className="sticky top-4 space-y-3.5">
-                  {/* Title above Slot Parameters */}
-                  <div className="flex items-center justify-between">
-                    <p
-                      className={cn(
-                        "text-base sm:text-[17px] font-medium transition-all",
-                        selectedSlotKeys.size > 0
-                          ? "text-foreground opacity-100"
-                          : "text-muted-foreground opacity-60"
-                      )}
-                    >
-                      {t.slotParams}
-                    </p>
-                  </div>
-
-                  {/* Settings Card for selected slot groups */}
+                  <p className="text-base sm:text-[17px] font-medium text-foreground">{t.step2}</p>
+                  {/* Settings Card for selected slot groups: Product, Duration, Participants, Conference, Details, Repetition */}
                   <div
                     className={cn(
                       "bg-card border p-4 sm:p-4.5 rounded-2xl shadow-sm space-y-3.5 transition-all",
                       selectedSlotKeys.size > 0
                         ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                        : "border-border/60 opacity-60"
+                        : "border-border/60 opacity-60 pointer-events-none"
                     )}
                   >
+                    {/* For Product */}
+                    {products && products.length > 0 && (
+                      <div className="space-y-1.5 -mx-1 sm:-mx-1.5">
+                        <Label
+                          className={cn(
+                            "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
+                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                          )}
+                        >
+                          <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span>{t.forProduct}</span>
+                          <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
+                          {isDifferentProduct && (
+                            <span className="text-[11px] text-muted-foreground font-normal italic">
+                              ({t.different})
+                            </span>
+                          )}
+                        </Label>
+                        <ProductSwitcher
+                          products={products}
+                          selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
+                          onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                          disabled={selectedSlotKeys.size === 0}
+                          placeholder={isDifferentProduct ? t.different : undefined}
+                          hideIcon
+                          className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs sm:text-sm font-semibold"
+                        />
+                      </div>
+                    )}
+
                     {/* Duration with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3420,6 +3248,13 @@ export default function SlotCreationWizard({
                             updateSelectedSlotsField("customDuration", val);
                             if (val && Number(val) > 0) {
                               updateSelectedSlotsField("slotDuration", Number(val));
+                            } else if (!val) {
+                              updateSelectedSlotsField("slotDuration", 0);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
+                              updateSelectedSlotsField("slotDuration", 60);
                             }
                           }}
                         />
@@ -3455,7 +3290,7 @@ export default function SlotCreationWizard({
                     <div className="space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
@@ -3518,46 +3353,17 @@ export default function SlotCreationWizard({
                       </div>
                     </div>
 
-                    {/* For Product */}
-                    {products && products.length > 0 && (
-                      <div className="space-y-1.5 pt-1 -mx-1 sm:-mx-1.5">
-                        <Label
-                          className={cn(
-                            "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
-                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
-                          )}
-                        >
-                          <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span>{t.forProduct}</span>
-                          <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
-                          {isDifferentProduct && (
-                            <span className="text-[11px] text-muted-foreground font-normal italic">
-                              ({t.different})
-                            </span>
-                          )}
-                        </Label>
-                        <ProductSwitcher
-                          products={products}
-                          selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
-                          onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
-                          disabled={selectedSlotKeys.size === 0}
-                          placeholder={isDifferentProduct ? t.different : undefined}
-                          hideIcon
-                          className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs sm:text-sm font-semibold"
-                        />
-                      </div>
-                    )}
-
                     {/* Conference Link Section */}
                     <div className="pt-1 -mx-1 sm:-mx-1.5 space-y-2">
                       <Label
                         className={cn(
-                          "text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors",
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
                           selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                         )}
                       >
                         <Video className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.conferenceLink}</span>
+                        <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
                       </Label>
 
                       <div className="relative flex items-center">
@@ -3601,8 +3407,17 @@ export default function SlotCreationWizard({
                       </div>
                     </div>
 
-                    {/* Lesson Details Dialog Button with gray pencil */}
-                    <div className="pt-1 -mx-1 sm:-mx-1.5">
+                    {/* Lesson Details */}
+                    <div className="space-y-2 -mx-1 sm:-mx-1.5">
+                      <Label
+                        className={cn(
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
+                          selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                        )}
+                      >
+                        <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.details}</span>
+                      </Label>
                       <Button
                         type="button"
                         variant="outline"
@@ -3612,173 +3427,152 @@ export default function SlotCreationWizard({
                       >
                         <span
                           className={cn(
-                            "text-xs sm:text-sm font-semibold transition-colors",
+                            "text-xs sm:text-sm",
                             selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
                           )}
                         >
-                          {t.details}
+                          {t.detailsHint}
                         </span>
-                        <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                       </Button>
                     </div>
-                  </div>
 
-                  {/* Title above Repeat Schedule with spacious gap from settings card above */}
-                  <div className="flex items-center justify-between pt-8 sm:pt-10">
-                    <p
-                      className={cn(
-                        "text-base sm:text-[17px] font-medium whitespace-pre-line leading-snug transition-all",
-                        selectedSlotKeys.size > 0
-                          ? "text-foreground opacity-100"
-                          : "text-muted-foreground opacity-60"
-                      )}
-                    >
-                      {t.repeatScheduleTitle}
-                    </p>
-                  </div>
-
-                  {/* Separate Repetition Card under Settings Card */}
-                  <div
-                    className={cn(
-                      "p-4 sm:p-4.5 rounded-2xl border bg-card shadow-sm space-y-3 transition-all",
-                      selectedSlotKeys.size > 0
-                        ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
-                        : "border-border/60 opacity-60 pointer-events-none"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="repeat-switch"
-                        className={cn(
-                          "text-xs sm:text-sm font-semibold cursor-pointer flex items-center gap-1.5 transition-colors",
-                          selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
-                        )}
-                      >
-                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.everyWeek}</span>
-                        {isDifferentRepeat && (
-                          <span className="text-[11px] text-muted-foreground font-normal italic">
-                            ({t.different})
-                          </span>
-                        )}
-                        <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
-                      </Label>
-                      <Switch
-                        id="repeat-switch"
-                        checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
-                        onCheckedChange={(checked) => {
-                          setRepeatWeekly(checked);
-                          updateSelectedSlotsField("repeatWeekly", checked);
-                          if (checked && !currentPanelSettings?.repeatPeriod) {
-                            updateSelectedSlotsField("repeatPeriod", "1week");
-                          }
-                        }}
-                      />
-                    </div>
-
-                    {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
-                      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
-
-                        {/* Repeat period buttons */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs sm:text-sm font-semibold text-foreground">
-                              {t.repeatPeriodLabel}
-                            </Label>
-                            {isDifferentPeriod && (
-                              <span className="text-[11px] text-muted-foreground font-normal italic">
-                                ({t.different})
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(["1week", "1month", "2months", "custom"] as const).map((period) => {
-                              const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
-                              const isSelected = !isDifferentPeriod && activePeriod === period;
-                              return (
-                                <Button
-                                  key={period}
-                                  type="button"
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => {
-                                    setRepeatPeriod(period);
-                                    updateSelectedSlotsField("repeatPeriod", period);
-                                    if (period === "custom") {
-                                      const currentUntil = currentPanelSettings?.repeatUntil;
-                                      if (currentUntil) {
-                                        const parts = currentUntil.split("-");
-                                        if (parts.length === 3) {
-                                          setRepeatYear(parts[0]);
-                                          setRepeatMonth(parts[1]);
-                                          setRepeatDay(parts[2]);
-                                        }
-                                        setRepeatUntil(currentUntil);
-                                      } else {
-                                        setRepeatYear("");
-                                        setRepeatMonth("");
-                                        setRepeatDay("");
-                                        setRepeatUntil("");
-                                      }
-                                      setIsCustomRepeatDialogOpen(true);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg transition-all",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground font-semibold"
-                                      : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                  )}
-                                >
-                                  {period === "1week"
-                                    ? t.oneWeek
-                                    : period === "1month"
-                                    ? t.oneMonth
-                                    : period === "2months"
-                                    ? t.twoMonths
-                                    : t.custom}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {currentPanelSettings?.repeatPeriod === "custom" && (
-                          <div className="pt-0.5">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                const currentUntil = currentPanelSettings?.repeatUntil;
-                                if (currentUntil) {
-                                  const parts = currentUntil.split("-");
-                                  if (parts.length === 3) {
-                                    setRepeatYear(parts[0]);
-                                    setRepeatMonth(parts[1]);
-                                    setRepeatDay(parts[2]);
-                                  }
-                                  setRepeatUntil(currentUntil);
-                                } else {
-                                  setRepeatYear("");
-                                  setRepeatMonth("");
-                                  setRepeatDay("");
-                                  setRepeatUntil("");
-                                }
-                                setIsCustomRepeatDialogOpen(true);
-                              }}
-                              className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs sm:text-sm font-medium hover:bg-primary/10 transition-all rounded-lg"
-                            >
-                              <span className="truncate font-semibold text-foreground">
-                                {currentPanelSettings?.repeatUntil
-                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
-                                  : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
-                              </span>
-                              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            </Button>
-                          </div>
-                        )}
+                    {/* Repetition: separated from the settings above */}
+                    <div className="pt-3 border-t border-border/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label
+                          htmlFor="repeat-switch"
+                          className={cn(
+                            "text-sm sm:text-base font-semibold cursor-pointer flex items-center gap-1.5 transition-colors",
+                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                          )}
+                        >
+                          <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span>{t.everyWeek}</span>
+                          {isDifferentRepeat && (
+                            <span className="text-[11px] text-muted-foreground font-normal italic">
+                              ({t.different})
+                            </span>
+                          )}
+                          <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
+                        </Label>
+                        <Switch
+                          id="repeat-switch"
+                          checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
+                          onCheckedChange={(checked) => {
+                            setRepeatWeekly(checked);
+                            updateSelectedSlotsField("repeatWeekly", checked);
+                            if (checked && !currentPanelSettings?.repeatPeriod) {
+                              updateSelectedSlotsField("repeatPeriod", "1week");
+                            }
+                          }}
+                        />
                       </div>
-                    )}
+
+                      {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
+                        <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5 animate-in fade-in zoom-in-95">
+
+                          {/* Repeat period buttons */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs sm:text-sm font-semibold text-foreground">
+                                {t.repeatPeriodLabel}
+                              </Label>
+                              {isDifferentPeriod && (
+                                <span className="text-[11px] text-muted-foreground font-normal italic">
+                                  ({t.different})
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {(["1week", "2weeks", "1month", "custom"] as const).map((period) => {
+                                const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
+                                const isSelected = !isDifferentPeriod && activePeriod === period;
+                                return (
+                                  <Button
+                                    key={period}
+                                    type="button"
+                                    variant={isSelected ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => {
+                                      setRepeatPeriod(period);
+                                      updateSelectedSlotsField("repeatPeriod", period);
+                                      if (period === "custom") {
+                                        const currentUntil = currentPanelSettings?.repeatUntil;
+                                        if (currentUntil) {
+                                          const parts = currentUntil.split("-");
+                                          if (parts.length === 3) {
+                                            setRepeatYear(parts[0]);
+                                            setRepeatMonth(parts[1]);
+                                            setRepeatDay(parts[2]);
+                                          }
+                                          setRepeatUntil(currentUntil);
+                                        } else {
+                                          setRepeatYear("");
+                                          setRepeatMonth("");
+                                          setRepeatDay("");
+                                          setRepeatUntil("");
+                                        }
+                                        setIsCustomRepeatDialogOpen(true);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "h-11 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg transition-all",
+                                      isSelected
+                                        ? "bg-primary text-primary-foreground font-semibold"
+                                        : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                    )}
+                                  >
+                                    {period === "1week"
+                                      ? t.oneWeek
+                                      : period === "1month"
+                                      ? t.oneMonth
+                                      : period === "2weeks"
+                                      ? t.twoWeeks
+                                      : t.custom}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {currentPanelSettings?.repeatPeriod === "custom" && (
+                            <div className="pt-0.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  const currentUntil = currentPanelSettings?.repeatUntil;
+                                  if (currentUntil) {
+                                    const parts = currentUntil.split("-");
+                                    if (parts.length === 3) {
+                                      setRepeatYear(parts[0]);
+                                      setRepeatMonth(parts[1]);
+                                      setRepeatDay(parts[2]);
+                                    }
+                                    setRepeatUntil(currentUntil);
+                                  } else {
+                                    setRepeatYear("");
+                                    setRepeatMonth("");
+                                    setRepeatDay("");
+                                    setRepeatUntil("");
+                                  }
+                                  setIsCustomRepeatDialogOpen(true);
+                                }}
+                                className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs sm:text-sm font-medium hover:bg-primary/10 transition-all rounded-lg"
+                              >
+                                <span className="truncate font-semibold text-foreground">
+                                  {currentPanelSettings?.repeatUntil
+                                    ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                    : (language === "ru" ? "Выберите дату окончания" : "Аяқталу күнін таңдаңыз")}
+                                </span>
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3917,13 +3711,10 @@ export default function SlotCreationWizard({
 
         {/* Lesson Details Dialog - hidden while cropping to prevent overlapping */}
         <Dialog open={isDetailsDialogOpen && !coverCrop.source} onOpenChange={setIsDetailsDialogOpen}>
-          <DialogContent hideCloseButton className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border space-y-4">
-            {/* Header: Title */}
-            <div className="pb-1 border-b border-border/50">
-              <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
-                {t.details}
-              </DialogTitle>
-            </div>
+          <DialogContent hideCloseButton className="max-w-lg sm:max-w-xl w-full p-5 sm:p-6 rounded-2xl bg-card border border-border">
+            <VisuallyHidden>
+              <DialogTitle>{t.details}</DialogTitle>
+            </VisuallyHidden>
 
             <div className="space-y-3.5">
               {/* 1. Cover Area (Photos only, with cropper when selecting) */}
@@ -4045,148 +3836,503 @@ export default function SlotCreationWizard({
           </DialogContent>
         </Dialog>
 
-        {/* Separate Window for Cover Cropping in Wizard (Portal with frosted blur backdrop like avatar crop) */}
-        {Boolean(coverCrop.source) &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 motion-safe:animate-fade-in">
-              <div
-                className="login-modal-backdrop absolute inset-0"
-                onClick={() => !cropSaving && coverCrop.resetCrop()}
-                aria-hidden="true"
-              />
-              <Card className="relative z-10 w-full max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card shadow-2xl overflow-hidden p-5 sm:p-6 space-y-4">
-                <div className="pb-1 border-b border-border/50">
-                  <h3 className="text-base sm:text-lg font-semibold text-foreground">
-                    {language === "ru" ? "Настройка обложки" : "Мұқабаны баптау"}
-                  </h3>
-                </div>
+        {/* Cover cropping as a nested Radix Dialog (portal-based overlay would be blocked by the open wizard Dialog's pointer-events: none) */}
+        <Dialog
+          open={Boolean(coverCrop.source)}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !cropSaving) coverCrop.resetCrop();
+          }}
+        >
+          <DialogContent
+            hideCloseButton
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+            className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/50">
+              <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
+                {language === "ru" ? "Настройка обложки" : "Мұқабаны баптау"}
+              </DialogTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 min-h-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => {
+                  if (!cropSaving) coverCrop.resetCrop();
+                }}
+                title={language === "kk" ? "Өзгерістер сақталмайды" : "Изменения не сохранятся"}
+                aria-label="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
 
-                {/* Line around showing settings are inside cover */}
-                <div className="p-3 sm:p-4 rounded-2xl border-2 border-primary/30 bg-muted/10 space-y-3">
-                  {coverCrop.source && (
-                    <CoverCropEditor
-                      source={coverCrop.source}
-                      mediaType={coverCrop.mediaType}
-                      previewStyle={coverCrop.previewStyle}
-                      zoom={coverCrop.zoom}
-                      onZoom={coverCrop.setZoom}
-                      onPointerDown={coverCrop.onPointerDown}
-                      onPointerMove={coverCrop.onPointerMove}
-                      onPointerUp={coverCrop.onPointerUp}
-                      saving={cropSaving}
-                      onCancel={() => {
-                        coverCrop.resetCrop();
-                      }}
-                      onSave={() => void handleSaveCrop()}
-                    />
-                  )}
-                </div>
-              </Card>
-            </div>,
-            document.body
-          )}
+            {/* Line around showing settings are inside cover */}
+            <div className="p-3 sm:p-4 rounded-2xl border-2 border-primary/30 bg-muted/10 space-y-3">
+              {coverCrop.source && (
+                <CoverCropEditor
+                  source={coverCrop.source}
+                  mediaType={coverCrop.mediaType}
+                  previewStyle={coverCrop.previewStyle}
+                  zoom={coverCrop.zoom}
+                  onZoom={coverCrop.setZoom}
+                  onPointerDown={coverCrop.onPointerDown}
+                  onPointerMove={coverCrop.onPointerMove}
+                  onPointerUp={coverCrop.onPointerUp}
+                  saving={cropSaving}
+                  hideCancel
+                  onCancel={() => {
+                    coverCrop.resetCrop();
+                  }}
+                  onSave={() => void handleSaveCrop()}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
-        {/* Mobile bottom container: Step 1 Intervals Panel + Step Switcher */}
+        {/* Mobile bottom container: step panel ("Выбранное время" / "Параметры") + step switcher */}
         <div ref={mobileBottomBarRef} className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 flex-col">
           {step === 1 && (
             <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-primary" />
-                {t.repeatSummary}
-              </span>
-              {currentDayEditableIntervals.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2 h-9 overflow-y-auto overscroll-contain touch-pan-y pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-track]:bg-transparent">
-                  {currentDayEditableIntervals.map(({ interval, originalIdx }) => (
-                    <div
-                      key={originalIdx}
-                      className="flex items-center justify-center gap-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-sm px-2.5 h-9 rounded-xl w-full"
-                    >
-                      <EditableTime
-                        time={interval.start}
-                        availableHours={getAvailableHoursForDay(mobileDayIdx, interval.start, originalIdx, false)}
-                        isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                        language={language}
-                        onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, newTime, interval.end, isSilent)}
-                      />
-                      <span className="text-muted-foreground font-semibold text-sm">–</span>
-                      <EditableTime
-                        time={interval.end}
-                        availableHours={getAvailableHoursForDay(
-                          mobileDayIdx,
-                          interval.end,
-                          originalIdx,
-                          true,
-                          addMinutesToTime(interval.start, 30)
+              <button
+                type="button"
+                onClick={() => setIsMobileTimesExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                aria-expanded={isMobileTimesExpanded}
+              >
+                <span className="text-base font-semibold text-foreground flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-primary" />
+                  {t.repeatSummary}
+                </span>
+                <ChevronUp
+                  className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileTimesExpanded && "rotate-180")}
+                />
+              </button>
+              {isMobileTimesExpanded ? (
+                editableDaysOnDesktop.length > 0 ? (
+                  <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
+                    <div className="space-y-2 pb-1">{renderTimesByDay()}</div>
+                  </AlwaysScrollArea>
+                ) : (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">{t.noSlotsWarning}</div>
+                )
+              ) : currentDayEditableIntervals.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 h-9 overflow-y-auto overscroll-contain touch-pan-y pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-track]:bg-transparent">
+                    {currentDayEditableIntervals.map(({ interval, originalIdx }) => (
+                      <div
+                        key={originalIdx}
+                        className="flex items-center justify-center gap-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-sm px-2.5 h-9 rounded-xl w-full"
+                      >
+                        <EditableTime
+                          time={interval.start}
+                          availableHours={getAvailableHoursForDay(mobileDayIdx, interval.start, originalIdx, false)}
+                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
+                          language={language}
+                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, newTime, interval.end, isSilent)}
+                        />
+                        <span className="text-muted-foreground font-semibold text-sm">–</span>
+                        <EditableTime
+                          time={interval.end}
+                          availableHours={getAvailableHoursForDay(
+                            mobileDayIdx,
+                            interval.end,
+                            originalIdx,
+                            true,
+                            addMinutesToTime(interval.start, 30)
+                          )}
+                          minTime={addMinutesToTime(interval.start, 30)}
+                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
+                          language={language}
+                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, interval.start, newTime, isSilent)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">
+                    {t.noSlotsWarning}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
+              <button
+                type="button"
+                onClick={() => setIsMobileParamsExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                aria-expanded={isMobileParamsExpanded}
+              >
+                <span className="text-base font-semibold text-foreground">{t.step2}</span>
+                <ChevronUp
+                  className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileParamsExpanded && "rotate-180")}
+                />
+              </button>
+              {isMobileParamsExpanded && (
+                <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
+                  <div
+                    className={cn(
+                      "space-y-4 pt-1 pb-1 transition-opacity",
+                      selectedSlotKeys.size > 0 ? "opacity-100" : "opacity-60 pointer-events-none"
+                    )}
+                  >
+                  {/* For Product */}
+                  {products && products.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.forProduct}</span>
+                        <ReqStar />
+                        {isDifferentProduct && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
                         )}
-                        minTime={addMinutesToTime(interval.start, 30)}
-                        isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                        language={language}
-                        onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, interval.start, newTime, isSilent)}
+                      </Label>
+                      <ProductSwitcher
+                        products={products}
+                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
+                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                        placeholder={isDifferentProduct ? t.different : undefined}
+                        hideIcon
+                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
                       />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="h-9 flex items-center text-xs text-muted-foreground">
-                  {t.noSlotsWarning}
-                </div>
+                  )}
+
+                  {/* Lesson Duration */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.lessonDuration}</span>
+                      <ReqStar />
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={isDifferentDuration ? t.different : t.customValue}
+                        value={isDifferentDuration ? "" : currentPanelSettings?.customDuration || ""}
+                        className={cn(
+                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
+                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                          (isDifferentDuration || currentPanelSettings?.customDuration) &&
+                            "border-primary font-semibold text-primary"
+                        )}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          updateSelectedSlotsField("customDuration", val);
+                          if (val && Number(val) > 0) {
+                            updateSelectedSlotsField("slotDuration", Number(val));
+                          } else if (!val) {
+                            updateSelectedSlotsField("slotDuration", 0);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!currentPanelSettings?.customDuration && !currentPanelSettings?.slotDuration) {
+                            updateSelectedSlotsField("slotDuration", 60);
+                          }
+                        }}
+                      />
+                      {[50, 60, 90].map((dur) => {
+                        const isActive =
+                          !isDifferentDuration &&
+                          currentPanelSettings?.slotDuration === dur &&
+                          !currentPanelSettings?.customDuration;
+                        return (
+                          <Button
+                            key={dur}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              updateSelectedSlotsField("customDuration", "");
+                              updateSelectedSlotsField("slotDuration", dur);
+                            }}
+                            className={cn(
+                              "h-11 min-h-[44px] flex-1 px-1.5 text-xs transition-all rounded-lg",
+                              isActive
+                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                            )}
+                          >
+                            <span className="whitespace-nowrap">
+                              {dur} {t.min}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Max Participants */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.participants}</span>
+                      <ReqStar />
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={isDifferentParticipants ? t.different : t.customValue}
+                        value={
+                          isDifferentParticipants ? "" : currentPanelSettings?.customParticipants || ""
+                        }
+                        className={cn(
+                          "h-11 min-h-[44px] text-xs font-semibold w-20 shrink-0 text-center rounded-lg border border-input bg-background outline-none transition-colors",
+                          "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                          (isDifferentParticipants || currentPanelSettings?.customParticipants) &&
+                            "border-primary font-semibold text-primary"
+                        )}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          updateSelectedSlotsField("customParticipants", val);
+                          if (val && Number(val) > 0) {
+                            updateSelectedSlotsField("maxParticipants", Number(val));
+                          }
+                        }}
+                      />
+                      {[
+                        { value: 1, label: "1" },
+                        { value: 5, label: "5" },
+                        { value: 10, label: "10" },
+                        { value: 999999, label: "∞" },
+                      ].map((preset) => {
+                        const isActive =
+                          !isDifferentParticipants &&
+                          currentPanelSettings?.maxParticipants === preset.value &&
+                          !currentPanelSettings?.customParticipants;
+                        return (
+                          <Button
+                            key={preset.value}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              updateSelectedSlotsField("customParticipants", "");
+                              updateSelectedSlotsField("maxParticipants", preset.value);
+                            }}
+                            className={cn(
+                              "h-11 min-h-[44px] flex-1 px-1 text-xs transition-all rounded-lg",
+                              isActive
+                                ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                                : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                            )}
+                          >
+                            <span className={preset.value === 999999 ? "text-base sm:text-lg font-bold leading-none select-none" : ""}>
+                              {preset.label}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Conference Link Section */}
+                  <div className="pt-1 space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.conferenceLink}</span>
+                      <ReqStar />
+                    </Label>
+
+                    <div className="relative flex items-center">
+                      <input
+                        type="url"
+                        placeholder={t.conferenceLinkPlaceholder}
+                        value={currentPanelSettings?.customConferenceLink || ""}
+                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
+                        className={cn(
+                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
+                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
+                        )}
+                      />
+                      {Boolean(currentPanelSettings?.customConferenceLink) && (
+                        <div className="absolute right-1.5 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
+                          >
+                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateSelectedSlotsField("customConferenceLink", "");
+                              setCopiedLink(false);
+                            }}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lesson Details */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.details}</span>
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDetailsDialogOpen(true)}
+                      className="w-full justify-between h-11 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer"
+                    >
+                      <span className="text-xs text-foreground">{t.detailsHint}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    </Button>
+                  </div>
+
+                  {/* Repetition: separated from the settings above */}
+                  <div className="pt-3 border-t border-border/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="mobile-repeat-switch"
+                        className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 text-foreground"
+                      >
+                        <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.everyWeek}</span>
+                        {isDifferentRepeat && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
+                        )}
+                        <ReqStar />
+                      </Label>
+                      <Switch
+                        id="mobile-repeat-switch"
+                        checked={isDifferentRepeat ? false : Boolean(currentPanelSettings?.repeatWeekly)}
+                        onCheckedChange={(checked) => {
+                          setRepeatWeekly(checked);
+                          updateSelectedSlotsField("repeatWeekly", checked);
+                          if (checked && !currentPanelSettings?.repeatPeriod) {
+                            updateSelectedSlotsField("repeatPeriod", "1week");
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {(Boolean(currentPanelSettings?.repeatWeekly) || (isDifferentRepeat && repeatWeekly)) && (
+                      <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in zoom-in-95">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-foreground">
+                            {t.repeatPeriodLabel}
+                          </Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["1week", "2weeks", "1month", "custom"] as const).map((period) => {
+                              const activePeriod = currentPanelSettings?.repeatPeriod || "1week";
+                              const isSelected = !isDifferentPeriod && activePeriod === period;
+                              return (
+                                <Button
+                                  key={period}
+                                  type="button"
+                                  variant={isSelected ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    setRepeatPeriod(period);
+                                    updateSelectedSlotsField("repeatPeriod", period);
+                                    if (period === "custom") {
+                                      const currentUntil = currentPanelSettings?.repeatUntil;
+                                      if (currentUntil) {
+                                        const parts = currentUntil.split("-");
+                                        if (parts.length === 3) {
+                                          setRepeatYear(parts[0]);
+                                          setRepeatMonth(parts[1]);
+                                          setRepeatDay(parts[2]);
+                                        }
+                                        setRepeatUntil(currentUntil);
+                                      } else {
+                                        setRepeatYear("");
+                                        setRepeatMonth("");
+                                        setRepeatDay("");
+                                        setRepeatUntil("");
+                                      }
+                                      setIsCustomRepeatDialogOpen(true);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "h-11 min-h-[44px] text-xs font-semibold rounded-lg transition-all",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground font-semibold"
+                                      : "border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                  )}
+                                >
+                                  {period === "1week"
+                                    ? t.oneWeek
+                                    : period === "1month"
+                                    ? t.oneMonth
+                                    : period === "2weeks"
+                                    ? t.twoWeeks
+                                    : t.custom}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {currentPanelSettings?.repeatPeriod === "custom" && (
+                          <div className="pt-0.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const currentUntil = currentPanelSettings?.repeatUntil;
+                                if (currentUntil) {
+                                  const parts = currentUntil.split("-");
+                                  if (parts.length === 3) {
+                                    setRepeatYear(parts[0]);
+                                    setRepeatMonth(parts[1]);
+                                    setRepeatDay(parts[2]);
+                                  }
+                                  setRepeatUntil(currentUntil);
+                                } else {
+                                  setRepeatYear("");
+                                  setRepeatMonth("");
+                                  setRepeatDay("");
+                                  setRepeatUntil("");
+                                }
+                                setIsCustomRepeatDialogOpen(true);
+                              }}
+                              className="w-full justify-between h-11 min-h-[44px] px-3.5 border-primary/40 bg-background text-xs font-medium hover:bg-primary/10 transition-all rounded-lg cursor-pointer"
+                            >
+                              <span className="truncate font-semibold text-foreground">
+                                {currentPanelSettings?.repeatUntil
+                                  ? `${language === "ru" ? "До: " : "Дейін: "}${format(parseISO(currentPanelSettings.repeatUntil), "d MMMM yyyy", { locale: language === "ru" ? ru : kk })}`
+                                  : language === "ru"
+                                  ? "Выберите дату окончания"
+                                  : "Аяқталу күнін таңдаңыз"}
+                              </span>
+                              <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                </AlwaysScrollArea>
               )}
             </div>
           )}
 
           <div className="flex items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center gap-2 bg-muted/70 p-1.5 rounded-full border border-border/50">
-              <button
-                type="button"
-                onClick={() => handleStepChange(1)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer",
-                  step === 1 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 1 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  1
-                </span>
-                <span>{t.step1}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStepChange(2)}
-                disabled={editableDaysOnDesktop.length === 0}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all disabled:opacity-40 cursor-pointer",
-                  step === 2 ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold",
-                    step === 2 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  2
-                </span>
-                <span>{t.step2}</span>
-              </button>
-            </div>
+            {renderStepSwitcher()}
           </div>
         </div>
 
-        {/* Account Settings Dialog for Timezone Selection */}
-        <AccountSettingsDialog
-          open={isTimezoneSettingsOpen}
-          onOpenChange={setIsTimezoneSettingsOpen}
-          role={effectiveRole}
-          displayName={shownName}
-          userId={effectiveUserId}
-          initialSection="timezone"
-        />
       </DialogContent>
     </Dialog>
   );
