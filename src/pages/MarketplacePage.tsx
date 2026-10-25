@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import CatalogFilterRow from "@/components/marketplace/CatalogFilterRow";
 import CategoryMenu from "@/components/marketplace/CategoryMenu";
@@ -17,6 +17,7 @@ import { useHideScrollbar } from "@/hooks/useHideScrollbar";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
+  useAllProducts,
   useNewProducts,
   useTopRatedProducts,
   type CatalogSort,
@@ -25,19 +26,44 @@ import { categoryLabel, visibleTaxonomy } from "@/lib/catalog";
 import { profileHomePath } from "@/lib/creatorAuth";
 import { cn } from "@/lib/utils";
 
+/** Loads the next page of «Все продукты» once the end of the grid scrolls into view. */
+const LoadMoreSentinel = ({ loading, onVisible }: { loading: boolean; onVisible: () => void }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const onVisibleRef = useRef(onVisible);
+  onVisibleRef.current = onVisible;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || loading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onVisibleRef.current();
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading]);
+
+  return (
+    <div ref={ref} className="flex justify-center py-8">
+      {loading && <Loader2 className="h-6 w-6 animate-spin text-primary" />}
+    </div>
+  );
+};
+
 const MarketplacePage = () => {
   const { t, language } = useLanguage();
   useHideScrollbar();
   const { status, profileType, sessionToken } = useSimpleAuth();
   const signedIn = status === "authenticated" && Boolean(sessionToken && profileType);
 
-  if (signedIn && profileType !== "buyer") {
-    return <Navigate to={profileHomePath(profileType)} replace />;
-  }
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [categorySlug, setCategorySlug] = useState("");
-  const [subcategorySlug, setSubcategorySlug] = useState("");
+  // The chosen category lives in the address, so «Смотреть все» and «Назад» come back to it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categorySlug = searchParams.get("category") ?? "";
+  const subcategorySlug = searchParams.get("subcategory") ?? "";
   const sort: CatalogSort = "newest";
 
   useEffect(() => {
@@ -48,7 +74,9 @@ const MarketplacePage = () => {
   const taxonomy = useCatalogTaxonomy();
   const categories = visibleTaxonomy(taxonomy.data ?? []);
 
-  const isDefaultView = !categorySlug && !debouncedQuery;
+  // Without a search query the page shows the rails, narrowed to the chosen category if any.
+  const showRails = !debouncedQuery;
+  const scope = { categorySlug, subcategorySlug };
 
   const search = useCatalogSearch(
     {
@@ -57,31 +85,70 @@ const MarketplacePage = () => {
       subcategorySlug,
       sort,
     },
-    !isDefaultView,
+    !showRails,
   );
   const isMobile = useIsMobile();
-  const newProducts = useNewProducts(isDefaultView);
-  const topRatedProducts = useTopRatedProducts(isDefaultView);
+  const newProducts = useNewProducts(showRails, scope);
+  const topRatedProducts = useTopRatedProducts(showRails, scope);
+  const allProducts = useAllProducts(showRails, scope);
   // "Popular" and "Trending" rails (usePopularProducts / useTrendingProducts) come back once the
   // catalog is big enough for sales rankings to mean something — see docs/marketplace-roadmap.md.
 
   const visibleNewProducts = (newProducts.data ?? []).slice(0, isMobile ? 3 : 8);
   const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, isMobile ? 3 : 8);
+  const allProductsList = allProducts.data?.pages.flat() ?? [];
 
   const products = search.data ?? [];
-  const loading = isDefaultView
-    ? newProducts.isLoading || topRatedProducts.isLoading || taxonomy.isLoading
+  const loading = showRails
+    ? newProducts.isLoading || topRatedProducts.isLoading || allProducts.isLoading || taxonomy.isLoading
     : search.isLoading || taxonomy.isLoading;
 
-  const selectCategory = (slug: string) => {
-    setCategorySlug((current) => (current === slug ? "" : slug));
-    setSubcategorySlug("");
+  const setScope = (category: string, subcategory: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (category) next.set("category", category);
+    else next.delete("category");
+    if (subcategory) next.set("subcategory", subcategory);
+    else next.delete("subcategory");
+    setSearchParams(next, { replace: true });
   };
 
-  const selectFromMenu = (catSlug: string, subSlug: string) => {
-    setCategorySlug(catSlug);
-    setSubcategorySlug(subSlug);
+  const selectCategory = (slug: string) => setScope(categorySlug === slug ? "" : slug, "");
+  const selectFromMenu = (catSlug: string, subSlug: string) => setScope(catSlug, subSlug);
+
+  // «Смотреть все» opens the full list for the same category.
+  const scopedPath = (path: string) => {
+    const params = new URLSearchParams();
+    if (categorySlug) params.set("category", categorySlug);
+    if (subcategorySlug) params.set("subcategory", subcategorySlug);
+    const qs = params.toString();
+    return qs ? `${path}?${qs}` : path;
   };
+
+  const seeAllLink = (to: string, label: string) => (
+    <Link
+      to={scopedPath(to)}
+      aria-label={label}
+      className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
+    >
+      <span className="md:hidden">{t("seeAllMobile")}</span>
+      <span className="hidden md:inline-flex md:items-center md:gap-1">
+        {label}
+        <ArrowRight className="h-4 w-4" />
+      </span>
+    </Link>
+  );
+
+  const emptyCatalog = (
+    <div className="rounded-2xl border border-border px-6 py-16 text-center">
+      <p className="text-lg font-medium text-foreground">{t("catalogEmpty")}</p>
+      <p className="public-meta mt-2">{t("catalogEmptyHint")}</p>
+    </div>
+  );
+
+  // Sellers have their own home; checked after the hooks so they always run in the same order.
+  if (signedIn && profileType !== "buyer") {
+    return <Navigate to={profileHomePath(profileType)} replace />;
+  }
 
   const page = (
     <div className="flex min-h-screen flex-col bg-background no-scrollbar">
@@ -133,67 +200,60 @@ const MarketplacePage = () => {
               })}
             </div>
           )}
+
+          {categorySlug && (
+            <CatalogFilterRow
+              categories={categories}
+              categorySlug={categorySlug}
+              subcategorySlug={subcategorySlug}
+              onSubcategoryChange={(slug) => setScope(categorySlug, slug)}
+              className="mx-auto mt-5 max-w-4xl justify-center"
+            />
+          )}
         </section>
         </PublicContainer>
 
-        {isDefaultView ? (
+        {showRails ? (
           <section className="mt-[140px] w-full px-4 sm:px-6 pb-16 space-y-[64px] md:space-y-14">
-            {taxonomy.isLoading ? (
+            {loading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : (
               <>
-                {(newProducts.data?.length ?? 0) > 0 && (
+                {visibleNewProducts.length > 0 && (
                   <div>
                     <CatalogSectionHeader
                       title={<span className="whitespace-nowrap">🆕 {t("newProductsHeading")}</span>}
-                      action={
-                        <Link
-                          to="/new"
-                          aria-label={t("newProductsSeeAll")}
-                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
-                        >
-                          <span className="md:hidden">{t("seeAllMobile")}</span>
-                          <span className="hidden md:inline-flex md:items-center md:gap-1">
-                            {t("newProductsSeeAll")}
-                            <ArrowRight className="h-4 w-4" />
-                          </span>
-                        </Link>
-                      }
+                      action={seeAllLink("/new", t("newProductsSeeAll"))}
                     />
                     <CatalogGrid products={visibleNewProducts} />
                   </div>
                 )}
 
-                {(topRatedProducts.data?.length ?? 0) > 0 && (
+                {visibleTopRatedProducts.length > 0 && (
                   <div>
                     <CatalogSectionHeader
                       title={<span className="whitespace-nowrap">⭐ {t("topRatedHeading")}</span>}
-                      action={
-                        <Link
-                          to="/top-rated"
-                          aria-label={t("topRatedSeeAll")}
-                          className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
-                        >
-                          <span className="md:hidden">{t("seeAllMobile")}</span>
-                          <span className="hidden md:inline-flex md:items-center md:gap-1">
-                            {t("topRatedSeeAll")}
-                            <ArrowRight className="h-4 w-4" />
-                          </span>
-                        </Link>
-                      }
+                      action={seeAllLink("/top-rated", t("topRatedSeeAll"))}
                     />
                     <CatalogGrid products={visibleTopRatedProducts} />
                   </div>
                 )}
 
-                {(newProducts.data?.length ?? 0) === 0 &&
-                  (topRatedProducts.data?.length ?? 0) === 0 && (
-                  <div className="rounded-2xl border border-border px-6 py-16 text-center">
-                    <p className="text-lg font-medium text-foreground">{t("catalogEmpty")}</p>
-                    <p className="public-meta mt-2">{t("catalogEmptyHint")}</p>
+                {allProductsList.length > 0 ? (
+                  <div>
+                    <CatalogSectionHeader title={t("allCatalogProducts")} />
+                    <CatalogGrid products={allProductsList} />
+                    {allProducts.hasNextPage && (
+                      <LoadMoreSentinel
+                        loading={allProducts.isFetchingNextPage}
+                        onVisible={() => void allProducts.fetchNextPage()}
+                      />
+                    )}
                   </div>
+                ) : (
+                  emptyCatalog
                 )}
               </>
             )}
@@ -204,24 +264,12 @@ const MarketplacePage = () => {
               {t("allCatalogProducts")}
             </h2>
 
-            {categorySlug && (
-              <CatalogFilterRow
-                categories={categories}
-                categorySlug={categorySlug}
-                subcategorySlug={subcategorySlug}
-                onSubcategoryChange={setSubcategorySlug}
-              />
-            )}
-
             {loading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : products.length === 0 ? (
-              <div className="rounded-2xl border border-border px-6 py-16 text-center">
-                <p className="text-lg font-medium text-foreground">{t("catalogEmpty")}</p>
-                <p className="public-meta mt-2">{t("catalogEmptyHint")}</p>
-              </div>
+              emptyCatalog
             ) : (
               <CatalogGrid products={products} />
             )}

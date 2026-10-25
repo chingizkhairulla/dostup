@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   CATALOG_FILTER_THRESHOLD,
@@ -85,12 +85,31 @@ const HOME_RAIL_LIMIT = 8;
  */
 export const HOME_RAIL_MIN_ITEMS = 3;
 
-export function useNewProducts(enabled = true) {
-  return useCatalogSearch({ sort: "newest", onlyNew: true }, enabled, HOME_RAIL_LIMIT);
+/** The category and subcategory a homepage rail is narrowed to; empty strings mean all. */
+export type CatalogScope = Pick<CatalogFilters, "categorySlug" | "subcategorySlug">;
+
+export function useNewProducts(enabled = true, scope: CatalogScope = {}) {
+  return useCatalogSearch({ ...scope, sort: "newest", onlyNew: true }, enabled, HOME_RAIL_LIMIT);
 }
 
-export function useTopRatedProducts(enabled = true) {
-  return useCatalogSearch({ sort: "rating" }, enabled, HOME_RAIL_LIMIT);
+export function useTopRatedProducts(enabled = true, scope: CatalogScope = {}) {
+  return useCatalogSearch({ ...scope, sort: "rating" }, enabled, HOME_RAIL_LIMIT);
+}
+
+export const ALL_PRODUCTS_PAGE_SIZE = 16;
+
+/** Every published product, newest first, loaded one page at a time. */
+export function useAllProducts(enabled = true, scope: CatalogScope = {}) {
+  const filters: CatalogFilters = { ...scope, sort: "newest" };
+  return useInfiniteQuery({
+    queryKey: ["catalog-all", filters],
+    queryFn: ({ pageParam }) => searchCatalog(filters, ALL_PRODUCTS_PAGE_SIZE, pageParam),
+    initialPageParam: 0,
+    // A short page means the catalog has run out.
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length < ALL_PRODUCTS_PAGE_SIZE ? undefined : pages.length * ALL_PRODUCTS_PAGE_SIZE,
+    enabled,
+  });
 }
 
 /** Most completed purchases over the last 30 days. */
