@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Clock, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Clock, ChevronDown, ChevronUp, Settings, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format, addDays, startOfWeek, isSameDay, parseISO, isValid, differenceInCalendarWeeks } from "date-fns";
@@ -21,12 +22,6 @@ import { toast } from "sonner";
 import ProductSwitcher from "@/components/creator/ProductSwitcher";
 import { invokeApi, sessionCreds } from "@/lib/sessionApi";
 import { splitIntoLessons } from "@/lib/timeSlots";
-
-const ReqStar = ({ className }: { className?: string }) => (
-  <span className={cn("text-primary font-bold ml-1 text-sm sm:text-base inline-block -translate-y-0.5 select-none leading-none transition-colors", className)} aria-hidden="true">
-    *
-  </span>
-);
 
 interface SlotSettings {
   slotDuration?: number;
@@ -551,11 +546,11 @@ export default function SlotCreationWizard({
   const [showLateHours, setShowLateHours] = useState(false);
   const [workingHours, setWorkingHours] = useState(() => {
     const isMob = typeof window !== "undefined" && window.innerWidth < 640;
-    return { start: "09:00", end: isMob ? "17:30" : "21:00" };
+    return { start: "09:00", end: isMob ? "19:00" : "21:00" };
   });
   const [tempWorkingHours, setTempWorkingHours] = useState(() => {
     const isMob = typeof window !== "undefined" && window.innerWidth < 640;
-    return { start: "09:00", end: isMob ? "17:30" : "21:00" };
+    return { start: "09:00", end: isMob ? "19:00" : "21:00" };
   });
   const [isRangeOpen, setIsRangeOpen] = useState(false);
   const [isMobileRangeOpen, setIsMobileRangeOpen] = useState(false);
@@ -577,6 +572,7 @@ export default function SlotCreationWizard({
   // Phone bottom panels ("Выбранное время" on step 1, "Параметры" on step 2), opened with the arrow
   const [isMobileTimesExpanded, setIsMobileTimesExpanded] = useState(false);
   const [isMobileParamsExpanded, setIsMobileParamsExpanded] = useState(false);
+  const [hoveredStep, setHoveredStep] = useState<1 | 2 | null>(null);
   const [pressedToolbarBtn, setPressedToolbarBtn] = useState<"selectAll" | "unselectAll" | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -610,8 +606,8 @@ export default function SlotCreationWizard({
 
   useEffect(() => {
     if (isMobile && (workingHours.end === "21:00" || workingHours.end === "18:00") && !showLateHours) {
-      setWorkingHours({ start: "09:00", end: "17:30" });
-      setTempWorkingHours({ start: "09:00", end: "17:30" });
+      setWorkingHours({ start: "09:00", end: "19:00" });
+      setTempWorkingHours({ start: "09:00", end: "19:00" });
     }
   }, [isMobile]);
 
@@ -787,7 +783,7 @@ export default function SlotCreationWizard({
       setIsMouseDown(false);
       setShowLateHours(false);
       const isMob = (typeof window !== "undefined" && window.innerWidth < 640) || isMobile;
-      const defaultEnd = isMob ? "17:30" : "21:00";
+      const defaultEnd = isMob ? "19:00" : "21:00";
       setWorkingHours({ start: "09:00", end: defaultEnd });
       setTempWorkingHours({ start: "09:00", end: defaultEnd });
       setIsRangeOpen(false);
@@ -2082,9 +2078,11 @@ export default function SlotCreationWizard({
       );
     });
 
-  // Previous / next week arrows, side by side in the time column header
+  // "Неделя" label with previous / next week arrows side by side, in the time column header
   const renderWeekArrows = () => (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex flex-col items-center justify-center gap-1">
+      <span className="text-[11px] font-semibold text-muted-foreground">{language === "ru" ? "Неделя" : "Апта"}</span>
+      <div className="flex items-center justify-center gap-1">
       <button
         type="button"
         onClick={(e) => {
@@ -2110,6 +2108,7 @@ export default function SlotCreationWizard({
       >
         <ChevronRight className="w-3.5 h-3.5" />
       </button>
+      </div>
     </div>
   );
 
@@ -2139,7 +2138,6 @@ export default function SlotCreationWizard({
       const durationM = Math.max(30, endM - startM);
       const topPx = startM * pixelsPerMinute;
       const heightPx = Math.max(24, durationM * pixelsPerMinute);
-      const isShortSlot = heightPx <= 32;
       const lessonDuration = slotSettingsMap[key]?.slotDuration ?? 60;
       const lessons = lessonDuration > 0 ? splitIntoLessons(0, durationM, lessonDuration) : [];
 
@@ -2150,13 +2148,10 @@ export default function SlotCreationWizard({
             e.stopPropagation();
             toggleSlotSelection(key);
           }}
-          style={{ top: `${topPx + 1}px`, height: `${heightPx - 2}px` }}
+          style={{ top: `${topPx}px`, height: `${heightPx}px` }}
           className={cn(
-            "group absolute left-1 right-1 transition-all cursor-pointer select-none overflow-hidden",
-            isShortSlot ? "rounded-lg" : "rounded-xl",
-            isSelected
-              ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 z-20 scale-[1.01]"
-              : "bg-card text-primary z-10"
+            "group absolute left-0 right-0 transition-colors cursor-pointer select-none overflow-hidden",
+            isSelected ? "bg-primary text-primary-foreground z-20" : "bg-card text-primary z-10"
           )}
           title={`${interval.start} - ${interval.end}`}
         >
@@ -2167,11 +2162,11 @@ export default function SlotCreationWizard({
             if (lesson.end >= durationM) return null;
             const nextStart = li + 1 < lessons.length ? lessons[li + 1].start : durationM;
             const reachesBlockEnd = nextStart >= durationM;
-            // Block top sits at topPx + 1, so y = t * pixelsPerMinute - 1 maps time t onto the grid.
-            // A break that runs into the block end is partly hidden by the 2px outline,
-            // so it is lifted by 2px to look as tall as the breaks inside the block.
-            const lineTop = lesson.end * pixelsPerMinute - 1 - (reachesBlockEnd ? 2 : 0);
-            const breakHeight = (nextStart - lesson.end) * pixelsPerMinute - 1;
+            // The block sits exactly on the grid, so y = t * pixelsPerMinute is time t.
+            // A break that runs into the block end loses 1px to the outline, so it is lifted by 1px
+            // to look as tall as the breaks inside the block.
+            const lineTop = lesson.end * pixelsPerMinute - (reachesBlockEnd ? 1 : 0);
+            const breakHeight = (nextStart - lesson.end) * pixelsPerMinute;
             return [
               <div
                 key={`lesson-line-${li}`}
@@ -2189,7 +2184,7 @@ export default function SlotCreationWizard({
           })}
           <div
             className={cn(
-              "absolute inset-0 rounded-[inherit] border-2 pointer-events-none z-30",
+              "absolute inset-0 border pointer-events-none z-30",
               isSelected ? "border-primary" : "border-primary/40 group-hover:border-primary/60"
             )}
           />
@@ -2204,31 +2199,48 @@ export default function SlotCreationWizard({
     return Array.from({ length: displayHours.length + 1 }, (_, i) => `${String((first + i) % 24).padStart(2, "0")}:00`);
   }, [displayHours]);
 
-  // Step switcher: two numbered circles joined by a line (light orange on step 1, orange on step 2)
+  // Step switcher: two numbered circles joined by a grey line. Hovering the other step's circle
+  // turns that circle and the line light orange; each circle shows a "Шаг N" tooltip.
   const renderStepSwitcher = () => {
-    const circle = (n: 1 | 2) => (
-      <button
-        type="button"
-        onClick={() => handleStepChange(n)}
-        disabled={n === 2 && editableDaysOnDesktop.length === 0}
-        aria-label={n === 1 ? t.step1 : t.step2}
-        title={n === 1 ? t.step1 : t.step2}
-        className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
-          step === n
-            ? "bg-primary text-primary-foreground shadow-sm"
-            : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
-        )}
-      >
-        {n}
-      </button>
-    );
+    const stepLabel = (n: 1 | 2) => (language === "ru" ? `Шаг ${n}` : `${n}-қадам`);
+    const circle = (n: 1 | 2) => {
+      const isActive = step === n;
+      const isHovered = hoveredStep === n && !isActive;
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => handleStepChange(n)}
+              onMouseEnter={() => setHoveredStep(n)}
+              onMouseLeave={() => setHoveredStep(null)}
+              disabled={n === 2 && editableDaysOnDesktop.length === 0}
+              aria-label={stepLabel(n)}
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : isHovered
+                  ? "bg-primary/15 text-primary"
+                  : "bg-muted text-muted-foreground"
+              )}
+            >
+              {n}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{stepLabel(n)}</TooltipContent>
+        </Tooltip>
+      );
+    };
+    const isOtherStepHovered = hoveredStep !== null && hoveredStep !== step;
     return (
-      <div className="flex items-center gap-2">
-        {circle(1)}
-        <div className={cn("h-1 w-12 rounded-full transition-colors", step === 2 ? "bg-primary" : "bg-primary/30")} />
-        {circle(2)}
-      </div>
+      <TooltipProvider delayDuration={150}>
+        <div className="flex items-center gap-2">
+          {circle(1)}
+          <div className={cn("h-1 w-12 rounded-full transition-colors", isOtherStepHovered ? "bg-primary/30" : "bg-muted")} />
+          {circle(2)}
+        </div>
+      </TooltipProvider>
     );
   };
 
@@ -2305,11 +2317,6 @@ export default function SlotCreationWizard({
                     <span className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
                       {formattedMobileDayTitle}
                     </span>
-                    {isCurrentDayToday && (
-                      <span className="px-1.5 py-0.2 text-[9.5px] font-semibold bg-primary/15 text-primary rounded-full shrink-0 mt-0.5">
-                        {language === "ru" ? "Сегодня" : "Бүгін"}
-                      </span>
-                    )}
                   </div>
 
                   <Button
@@ -2823,11 +2830,6 @@ export default function SlotCreationWizard({
                     <span className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
                       {formattedMobileDayTitle}
                     </span>
-                    {isCurrentDayToday && (
-                      <span className="px-1.5 py-0.2 text-[9.5px] font-semibold bg-primary/15 text-primary rounded-full shrink-0 mt-0.5">
-                        {language === "ru" ? "Сегодня" : "Бүгін"}
-                      </span>
-                    )}
                   </div>
                   <Button
                     type="button"
@@ -3189,35 +3191,58 @@ export default function SlotCreationWizard({
                         : "border-border/60 opacity-60 pointer-events-none"
                     )}
                   >
-                    {/* For Product */}
-                    {products && products.length > 0 && (
-                      <div className="space-y-1.5 -mx-1 sm:-mx-1.5">
-                        <Label
-                          className={cn(
-                            "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
-                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
-                          )}
-                        >
-                          <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span>{t.forProduct}</span>
-                          <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
-                          {isDifferentProduct && (
-                            <span className="text-[11px] text-muted-foreground font-normal italic">
-                              ({t.different})
-                            </span>
-                          )}
-                        </Label>
-                        <ProductSwitcher
-                          products={products}
-                          selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
-                          onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                    {/* Conference Link Section */}
+                    <div className="pt-1 -mx-1 sm:-mx-1.5 space-y-2">
+                      <Label
+                        className={cn(
+                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
+                          selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                        )}
+                      >
+                        <Video className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.conferenceLink}</span>
+                      </Label>
+
+                      <div className="relative flex items-center">
+                        <input
+                          type="url"
                           disabled={selectedSlotKeys.size === 0}
-                          placeholder={isDifferentProduct ? t.different : undefined}
-                          hideIcon
-                          className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs sm:text-sm font-semibold"
+                          placeholder={t.conferenceLinkPlaceholder}
+                          value={currentPanelSettings?.customConferenceLink || ""}
+                          onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
+                          className={cn(
+                            "w-full h-11 sm:h-12 min-h-[44px] pl-3.5 text-xs sm:text-sm rounded-xl border border-input bg-background outline-none transition-colors",
+                            selectedSlotKeys.size === 0
+                              ? "opacity-40 cursor-not-allowed border-border"
+                              : "focus:border-primary focus:ring-2 focus:ring-primary/20",
+                            currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
+                          )}
                         />
+                        {selectedSlotKeys.size > 0 && Boolean(currentPanelSettings?.customConferenceLink) && (
+                          <div className="absolute right-1.5 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                              title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
+                            >
+                              {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateSelectedSlotsField("customConferenceLink", "");
+                                setCopiedLink(false);
+                              }}
+                              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {/* Duration with orange asterisk: field first, then buttons to the right */}
                     <div className="space-y-2">
@@ -3229,7 +3254,6 @@ export default function SlotCreationWizard({
                       >
                         <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.lessonDuration}</span>
-                        <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
                       </Label>
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <input
@@ -3296,7 +3320,6 @@ export default function SlotCreationWizard({
                       >
                         <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span>{t.participants}</span>
-                        <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
                       </Label>
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <input
@@ -3353,60 +3376,6 @@ export default function SlotCreationWizard({
                       </div>
                     </div>
 
-                    {/* Conference Link Section */}
-                    <div className="pt-1 -mx-1 sm:-mx-1.5 space-y-2">
-                      <Label
-                        className={cn(
-                          "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
-                          selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
-                        )}
-                      >
-                        <Video className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.conferenceLink}</span>
-                        <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
-                      </Label>
-
-                      <div className="relative flex items-center">
-                        <input
-                          type="url"
-                          disabled={selectedSlotKeys.size === 0}
-                          placeholder={t.conferenceLinkPlaceholder}
-                          value={currentPanelSettings?.customConferenceLink || ""}
-                          onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                          className={cn(
-                            "w-full h-11 sm:h-12 min-h-[44px] pl-3.5 text-xs sm:text-sm rounded-xl border border-input bg-background outline-none transition-colors",
-                            selectedSlotKeys.size === 0
-                              ? "opacity-40 cursor-not-allowed border-border"
-                              : "focus:border-primary focus:ring-2 focus:ring-primary/20",
-                            currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
-                          )}
-                        />
-                        {selectedSlotKeys.size > 0 && Boolean(currentPanelSettings?.customConferenceLink) && (
-                          <div className="absolute right-1.5 flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
-                              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                              title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
-                            >
-                              {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSelectedSlotsField("customConferenceLink", "");
-                                setCopiedLink(false);
-                              }}
-                              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                              title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                     {/* Lesson Details */}
                     <div className="space-y-2 -mx-1 sm:-mx-1.5">
                       <Label
@@ -3437,6 +3406,35 @@ export default function SlotCreationWizard({
                       </Button>
                     </div>
 
+                    {/* For Product */}
+                    {products && products.length > 0 && (
+                      <div className="space-y-1.5 -mx-1 sm:-mx-1.5">
+                        <Label
+                          className={cn(
+                            "text-sm sm:text-base font-semibold flex items-center gap-1.5 transition-colors",
+                            selectedSlotKeys.size > 0 ? "text-foreground" : "text-muted-foreground opacity-60"
+                          )}
+                        >
+                          <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span>{t.forProduct}</span>
+                          {isDifferentProduct && (
+                            <span className="text-[11px] text-muted-foreground font-normal italic">
+                              ({t.different})
+                            </span>
+                          )}
+                        </Label>
+                        <ProductSwitcher
+                          products={products}
+                          selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
+                          onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                          disabled={selectedSlotKeys.size === 0}
+                          placeholder={isDifferentProduct ? t.different : undefined}
+                          hideIcon
+                          className="w-full justify-between h-11 sm:h-12 min-h-[44px] px-4 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs sm:text-sm font-semibold"
+                        />
+                      </div>
+                    )}
+
                     {/* Repetition: separated from the settings above */}
                     <div className="pt-3 border-t border-border/50 space-y-3">
                       <div className="flex items-center justify-between">
@@ -3454,7 +3452,6 @@ export default function SlotCreationWizard({
                               ({t.different})
                             </span>
                           )}
-                          <ReqStar className={selectedSlotKeys.size > 0 ? "text-primary" : "text-muted-foreground/60"} />
                         </Label>
                         <Switch
                           id="repeat-switch"
@@ -3896,7 +3893,7 @@ export default function SlotCreationWizard({
         {/* Mobile bottom container: step panel ("Выбранное время" / "Параметры") + step switcher */}
         <div ref={mobileBottomBarRef} className="flex sm:hidden fixed bottom-0 left-0 right-0 z-30 flex-col">
           {step === 1 && (
-            <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
+            <div className="bg-card border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
               <button
                 type="button"
                 onClick={() => setIsMobileTimesExpanded((v) => !v)}
@@ -3911,63 +3908,29 @@ export default function SlotCreationWizard({
                   className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileTimesExpanded && "rotate-180")}
                 />
               </button>
-              {isMobileTimesExpanded ? (
-                editableDaysOnDesktop.length > 0 ? (
+              {isMobileTimesExpanded &&
+                (editableDaysOnDesktop.length > 0 ? (
                   <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
                     <div className="space-y-2 pb-1">{renderTimesByDay()}</div>
                   </AlwaysScrollArea>
                 ) : (
                   <div className="h-9 flex items-center text-xs text-muted-foreground">{t.noSlotsWarning}</div>
-                )
-              ) : currentDayEditableIntervals.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 h-9 overflow-y-auto overscroll-contain touch-pan-y pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50 [&::-webkit-scrollbar-track]:bg-transparent">
-                    {currentDayEditableIntervals.map(({ interval, originalIdx }) => (
-                      <div
-                        key={originalIdx}
-                        className="flex items-center justify-center gap-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-sm px-2.5 h-9 rounded-xl w-full"
-                      >
-                        <EditableTime
-                          time={interval.start}
-                          availableHours={getAvailableHoursForDay(mobileDayIdx, interval.start, originalIdx, false)}
-                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                          language={language}
-                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, newTime, interval.end, isSilent)}
-                        />
-                        <span className="text-muted-foreground font-semibold text-sm">–</span>
-                        <EditableTime
-                          time={interval.end}
-                          availableHours={getAvailableHoursForDay(
-                            mobileDayIdx,
-                            interval.end,
-                            originalIdx,
-                            true,
-                            addMinutesToTime(interval.start, 30)
-                          )}
-                          minTime={addMinutesToTime(interval.start, 30)}
-                          isTimeInPast={(timeStr) => isCellInPast(mobileDayIdx, timeStr)}
-                          language={language}
-                          onChange={(newTime, isSilent) => updateIntervalTime(mobileDayIdx, originalIdx, interval.start, newTime, isSilent)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-9 flex items-center text-xs text-muted-foreground">
-                    {t.noSlotsWarning}
-                  </div>
-                )}
+                ))}
             </div>
           )}
 
           {step === 2 && (
-            <div className="bg-card/95 backdrop-blur-sm border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
+            <div className="bg-card border-t border-border/80 p-3 px-4 shadow-lg space-y-2">
               <button
                 type="button"
                 onClick={() => setIsMobileParamsExpanded((v) => !v)}
                 className="w-full flex items-center justify-between gap-2 cursor-pointer"
                 aria-expanded={isMobileParamsExpanded}
               >
-                <span className="text-base font-semibold text-foreground">{t.step2}</span>
+                <span className="text-base font-semibold text-foreground flex items-center gap-1.5">
+                  <Settings className="w-4 h-4 text-primary" />
+                  {t.step2}
+                </span>
                 <ChevronUp
                   className={cn("w-5 h-5 text-muted-foreground transition-transform duration-300", isMobileParamsExpanded && "rotate-180")}
                 />
@@ -3980,36 +3943,55 @@ export default function SlotCreationWizard({
                       selectedSlotKeys.size > 0 ? "opacity-100" : "opacity-60 pointer-events-none"
                     )}
                   >
-                  {/* For Product */}
-                  {products && products.length > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <span>{t.forProduct}</span>
-                        <ReqStar />
-                        {isDifferentProduct && (
-                          <span className="text-[11px] text-muted-foreground font-normal italic">
-                            ({t.different})
-                          </span>
+                  {/* Conference Link Section */}
+                  <div className="pt-1 space-y-2">
+                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{t.conferenceLink}</span>
+                    </Label>
+
+                    <div className="relative flex items-center">
+                      <input
+                        type="url"
+                        placeholder={t.conferenceLinkPlaceholder}
+                        value={currentPanelSettings?.customConferenceLink || ""}
+                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
+                        className={cn(
+                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
+                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
                         )}
-                      </Label>
-                      <ProductSwitcher
-                        products={products}
-                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
-                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
-                        placeholder={isDifferentProduct ? t.different : undefined}
-                        hideIcon
-                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
                       />
+                      {Boolean(currentPanelSettings?.customConferenceLink) && (
+                        <div className="absolute right-1.5 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
+                          >
+                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateSelectedSlotsField("customConferenceLink", "");
+                              setCopiedLink(false);
+                            }}
+                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
 
                   {/* Lesson Duration */}
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Timer className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.lessonDuration}</span>
-                      <ReqStar />
                     </Label>
                     <div className="flex items-center gap-1.5">
                       <input
@@ -4074,7 +4056,6 @@ export default function SlotCreationWizard({
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                       <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span>{t.participants}</span>
-                      <ReqStar />
                     </Label>
                     <div className="flex items-center gap-1.5">
                       <input
@@ -4134,51 +4115,6 @@ export default function SlotCreationWizard({
                     </div>
                   </div>
 
-                  {/* Conference Link Section */}
-                  <div className="pt-1 space-y-2">
-                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <Video className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span>{t.conferenceLink}</span>
-                      <ReqStar />
-                    </Label>
-
-                    <div className="relative flex items-center">
-                      <input
-                        type="url"
-                        placeholder={t.conferenceLinkPlaceholder}
-                        value={currentPanelSettings?.customConferenceLink || ""}
-                        onChange={(e) => updateSelectedSlotsField("customConferenceLink", e.target.value)}
-                        className={cn(
-                          "w-full h-11 min-h-[44px] pl-3.5 text-xs rounded-xl border border-input bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors",
-                          currentPanelSettings?.customConferenceLink ? "pr-20" : "pr-3.5"
-                        )}
-                      />
-                      {Boolean(currentPanelSettings?.customConferenceLink) && (
-                        <div className="absolute right-1.5 flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleCopyConferenceLink(currentPanelSettings?.customConferenceLink || "")}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Копировать ссылку" : "Сілтемені көшіру"}
-                          >
-                            {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateSelectedSlotsField("customConferenceLink", "");
-                              setCopiedLink(false);
-                            }}
-                            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            title={language === "ru" ? "Удалить ссылку" : "Сілтемені жою"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Lesson Details */}
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
@@ -4196,8 +4132,31 @@ export default function SlotCreationWizard({
                     </Button>
                   </div>
 
+                  {/* For Product */}
+                  {products && products.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                        <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span>{t.forProduct}</span>
+                        {isDifferentProduct && (
+                          <span className="text-[11px] text-muted-foreground font-normal italic">
+                            ({t.different})
+                          </span>
+                        )}
+                      </Label>
+                      <ProductSwitcher
+                        products={products}
+                        selectedId={isDifferentProduct ? null : (currentPanelSettings?.productId || defaultProductId || products[0]?.id || null)}
+                        onChange={(newProdId) => updateSelectedSlotsField("productId", newProdId)}
+                        placeholder={isDifferentProduct ? t.different : undefined}
+                        hideIcon
+                        className="w-full justify-between h-11 min-h-[44px] px-3.5 border-border hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all rounded-xl shadow-xs cursor-pointer text-xs font-semibold"
+                      />
+                    </div>
+                  )}
+
                   {/* Repetition: separated from the settings above */}
-                  <div className="pt-3 border-t border-border/50 space-y-3">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label
                         htmlFor="mobile-repeat-switch"
@@ -4210,7 +4169,6 @@ export default function SlotCreationWizard({
                             ({t.different})
                           </span>
                         )}
-                        <ReqStar />
                       </Label>
                       <Switch
                         id="mobile-repeat-switch"
@@ -4328,7 +4286,7 @@ export default function SlotCreationWizard({
             </div>
           )}
 
-          <div className="flex items-center justify-center py-2.5 px-4 border-t bg-card/95 backdrop-blur-sm shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <div className="flex items-center justify-center py-2.5 px-4 border-t bg-card shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
             {renderStepSwitcher()}
           </div>
         </div>
