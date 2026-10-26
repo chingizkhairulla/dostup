@@ -15,10 +15,13 @@ const PublicFooter = ({ className }: PublicFooterProps) => {
   return (
     <footer className={cn("mt-auto border-t border-[#E3E5E8] w-full", className)}>
       <div className="w-full px-4 sm:px-6 pt-2.5 sm:pt-3 pb-3 sm:pb-4">
-        <div className="flex flex-row items-start justify-between gap-3">
+        <div className="flex flex-row items-start min-[640px]:items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5 text-[13px] text-[#6B7280]">
             <p>{t("footerCopyright")}</p>
-            <a href="mailto:chingizkhairulla@gmail.com" className={FOOTER_LINK_CLASS}>
+            <a
+              href="mailto:chingizkhairulla@gmail.com"
+              className={cn(FOOTER_LINK_CLASS, "min-[640px]:hidden")}
+            >
               {t("footerContactEmail")}
             </a>
           </div>
@@ -29,6 +32,12 @@ const PublicFooter = ({ className }: PublicFooterProps) => {
             <Link to="/privacy" className={FOOTER_LINK_CLASS}>
               {t("footerPrivacy")}
             </Link>
+            <a
+              href="mailto:chingizkhairulla@gmail.com"
+              className={cn(FOOTER_LINK_CLASS, "hidden min-[640px]:inline-block")}
+            >
+              {t("footerContactEmail")}
+            </a>
           </div>
         </div>
       </div>

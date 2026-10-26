@@ -137,16 +137,7 @@ class ErrorBoundary extends Component<Props, State> {
               <ol className="space-y-1 text-sm text-muted-foreground">
                 <li>1. {t.option1}</li>
                 <li>2. {t.option2}</li>
-                <li>
-                  3.{" "}
-                  <button
-                    type="button"
-                    onClick={openSupportChat}
-                    className="text-left font-normal text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    {t.writeSupport}
-                  </button>
-                </li>
+                <li>3. {t.writeSupport}</li>
               </ol>
             </div>
 

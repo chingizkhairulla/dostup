@@ -622,7 +622,7 @@ export const AccountSettingsView = ({
               aria-hidden="true"
             />
             <div className="relative z-10 w-full max-w-sm bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
-              <div>
+              <div className="text-center">
                 <h3 className="text-lg font-semibold text-foreground">
                   {t("confirmLogout")}
                 </h3>
