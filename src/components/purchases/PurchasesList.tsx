@@ -8,22 +8,25 @@ import { Stars } from "@/components/reviews/ReviewItem";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useProductReviews } from "@/hooks/useProductReviews";
 import { formatPriceTenge, productHref, type CatalogProduct } from "@/lib/catalog";
-import type { PurchaseRowData } from "@/lib/purchasePayment";
+import type { AccessTerm, PurchaseRowData } from "@/lib/purchasePayment";
 import type { TranslationKey } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
-// Desktop columns: product, price, access, date, payment, review. Header and rows share this
-// template; every column but the product is centred under its title.
-const DESKTOP_GRID =
-  "md:grid md:grid-cols-[minmax(0,1fr)_repeat(5,max-content)] md:items-center md:gap-x-10";
+// Desktop: one grid for the whole table. The header and every row span all six columns and
+// reuse them through subgrid, so a column is as wide as its widest value in any row and every
+// value sits right under its own title.
+const TABLE_GRID = "md:grid md:grid-cols-[minmax(0,1fr)_repeat(5,max-content)] md:gap-x-12";
+const ROW_GRID = "md:col-span-6 md:grid md:grid-cols-subgrid md:items-center";
 
 const PERIOD_KEYS: Record<string, TranslationKey> = {
-  month: "accessMonth",
-  quarter: "accessQuarter",
-  year: "accessYear",
+  "1m": "accessMonth",
+  "3m": "accessQuarter",
+  "1y": "accessYear",
 };
 
-const pillBase = "whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-ring";
+/** White by default, light orange on hover, whatever the label says. */
+const pillButton =
+  "whitespace-nowrap rounded-full border border-[#E3E5E8] bg-white px-4 py-1.5 text-sm font-medium text-[#1F2328] transition-colors hover:border-[#FF6B00]/30 hover:bg-[#FF6B00]/10 hover:text-[#FF6B00] focus-ring";
 
 interface PurchasesListProps {
   rows: Array<{ data: PurchaseRowData; product: CatalogProduct }>;
@@ -40,14 +43,15 @@ const PurchasesList = ({ rows }: PurchasesListProps) => {
   ];
 
   return (
-    <div className="w-full min-w-0">
+    <div className={cn("w-full min-w-0", TABLE_GRID)}>
       <div
         className={cn(
           "hidden border-b border-border pb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground",
-          DESKTOP_GRID,
+          ROW_GRID,
         )}
       >
         <span>{t("purchasesColProduct")}</span>
+        {/* Titles stand in the middle of their column; the values under them start at its left edge. */}
         {titles.map((key) => (
           <span key={key} className="text-center">
             {t(key)}
@@ -70,7 +74,7 @@ const PurchaseRow = ({ data, product }: { data: PurchaseRowData; product: Catalo
   const payNow = () => navigate(`/checkout/${product.id}?renew=1`);
 
   return (
-    <div className={cn("border-b border-border py-4", DESKTOP_GRID)}>
+    <div className={cn("border-b border-border py-4", ROW_GRID)}>
       <Link
         to={productHref(product)}
         className="group flex min-w-0 items-center gap-4 rounded-lg focus-ring"
@@ -101,10 +105,14 @@ const PurchaseRow = ({ data, product }: { data: PurchaseRowData; product: Catalo
           </p>
         </Cell>
         <Cell label={t("purchasesColAccess")}>
-          <p className="whitespace-nowrap text-sm text-foreground">{accessLabel(data, t, (d) => format(d, "d MMM", { locale }))}</p>
+          <p className="whitespace-nowrap text-sm text-foreground">
+            {accessLabel(data.access, t, (d) => format(d, "d MMM", { locale }))}
+          </p>
         </Cell>
         <Cell label={t("purchasesColDate")}>
-          <p className="whitespace-nowrap text-sm text-foreground">{format(data.purchasedAt, "d MMM yyyy", { locale })}</p>
+          <p className="whitespace-nowrap text-sm text-foreground">
+            {format(data.purchasedAt, "d MMM yyyy", { locale })}
+          </p>
         </Cell>
         <Cell label={t("purchasesColPayment")}>
           <PaymentCell
@@ -122,25 +130,29 @@ const PurchaseRow = ({ data, product }: { data: PurchaseRowData; product: Catalo
 };
 
 const Cell = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="flex min-w-0 flex-col items-start md:items-center md:text-center">
+  <div className="flex min-w-0 flex-col items-start">
     <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground md:hidden">{label}</p>
     {children}
   </div>
 );
 
 function accessLabel(
-  data: PurchaseRowData,
+  access: AccessTerm,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
   day: (date: Date) => string,
 ) {
-  const { payment } = data;
-  if (payment.kind === "subscription") {
-    const key = data.billingPeriod ? PERIOD_KEYS[data.billingPeriod] : undefined;
-    return key ? t(key) : "—";
+  switch (access.kind) {
+    case "period": {
+      const key = PERIOD_KEYS[access.interval];
+      return key ? t(key) : t("accessDaysShort", { days: access.days });
+    }
+    case "until":
+      return t("accessUntilDate", { date: day(access.end) });
+    case "trial":
+      return t("accessTrial");
+    default:
+      return t("accessForever");
   }
-  if (payment.kind === "trial") return t("accessTrial");
-  if (payment.kind === "access_until") return t("accessUntilDate", { date: day(payment.end) });
-  return t("accessForever");
 }
 
 const PaymentCell = ({
@@ -155,29 +167,24 @@ const PaymentCell = ({
   const { t } = useLanguage();
   const { payment } = data;
 
-  if (payment.kind === "paid" || payment.kind === "access_until") {
-    return <p className="text-sm text-muted-foreground">{t("paymentPaid")}</p>;
+  if (payment.kind === "paid") {
+    return <p className="whitespace-nowrap text-sm text-muted-foreground">{t("paymentPaid")}</p>;
   }
 
   if (payment.kind === "trial") {
-    if (!isSubscription) return <p className="text-sm text-muted-foreground">{t("paymentFree")}</p>;
+    if (!isSubscription) return <p className="whitespace-nowrap text-sm text-muted-foreground">{t("paymentFree")}</p>;
     return (
-      <button type="button" onClick={onPay} className={cn(pillBase, "bg-[#FF6B00] text-white hover:bg-[#E86000]")}>
+      <button type="button" onClick={onPay} className={pillButton}>
         {t("paymentPayNow")}
       </button>
     );
   }
 
-  // A subscription period can be paid at any time; the label says how close its end is.
-  const styles = {
-    far: { key: "paymentFar" as const, className: "border border-border text-foreground hover:bg-[#FF6B00]/10 hover:text-[#FF6B00]" },
-    soon: { key: "paymentSoon" as const, className: "bg-[#FF6B00]/10 text-[#FF6B00] hover:bg-[#FF6B00]/20" },
-    expired: { key: "paymentOverdue" as const, className: "bg-[#FF6B00] text-white hover:bg-[#E86000]" },
-  }[payment.urgency];
-
+  // The next period can be paid at any time; the label says how close the end is.
+  const key = { far: "paymentFar", soon: "paymentSoon", expired: "paymentOverdue" }[payment.urgency] as TranslationKey;
   return (
-    <button type="button" onClick={onPay} className={cn(pillBase, styles.className)}>
-      {t(styles.key)}
+    <button type="button" onClick={onPay} className={pillButton}>
+      {t(key)}
     </button>
   );
 };
@@ -199,16 +206,12 @@ const ReviewCell = ({ productId, productTitle }: { productId: string; productTit
           type="button"
           aria-label={t("reviewsUpdate")}
           onClick={() => setOpen(true)}
-          className="inline-flex rounded-full px-1 py-1 transition-colors hover:bg-muted focus-ring"
+          className="inline-flex rounded-full px-1 py-1 transition-colors hover:bg-[#FF6B00]/10 focus-ring"
         >
           <Stars rating={data.myReview.rating} />
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className={cn(pillBase, "bg-[#FF6B00]/10 text-[#FF6B00] hover:bg-[#FF6B00]/20")}
-        >
+        <button type="button" onClick={() => setOpen(true)} className={pillButton}>
           {t("reviewsLeave")}
         </button>
       )}

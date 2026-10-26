@@ -265,8 +265,10 @@ const Dashboard = () => {
         <NotificationsTab lastViewedAt={lastViewedAt} purchasedProductIds={purchasedProductIds} />
       </NotificationsDialog>
 
-      {/* Shown once for each product the buyer gets access to. */}
-      <MaterialsProtectionNotice productIds={accessibleProductIds} />
+      {/* Shown once for each product the buyer gets access to, when they open «Материалы». */}
+      {!isAccountView && buyerSection === "materials" && (
+        <MaterialsProtectionNotice productIds={accessibleProductIds} />
+      )}
     </BuyerAppShell>
   );
 };

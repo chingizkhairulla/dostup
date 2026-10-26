@@ -95,19 +95,20 @@ export async function buyerHasProductAccess(
     return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
   }
 
+  // A product paid by period has one row per paid period; any open row gives access.
   const { data } = await supabase
     .from('simple_purchases')
     .select('id, is_trial, trial_ends_at, access_expires_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('product_id', productId)
     .eq('status', 'completed')
-    .maybeSingle()
 
-  if (!data) return false
-  if (data.is_trial) {
-    return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
-  }
-  return purchaseAccessOpen(data)
+  const now = new Date()
+  return (data ?? []).some((row) =>
+    row.is_trial
+      ? !!(row.trial_ends_at && new Date(row.trial_ends_at) > now)
+      : purchaseAccessOpen(row, now),
+  )
 }
 
 /** A seller-set end date closes a one-time purchase; NULL keeps it open for good. */

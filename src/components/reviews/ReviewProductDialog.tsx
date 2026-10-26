@@ -31,10 +31,14 @@ const ReviewProductDialog = ({
 
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [closeHint, setCloseHint] = useState(false);
 
   // Each time the dialog opens, start again from the saved review.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setCloseHint(false);
+      return;
+    }
     setRating(myReview?.rating ?? 0);
     setComment(myReview?.comment ?? "");
   }, [open, myReview]);
@@ -60,19 +64,23 @@ const ReviewProductDialog = ({
         className="max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex items-start justify-between gap-3">
           <DialogTitle className="line-clamp-2 text-base font-semibold">{productTitle}</DialogTitle>
-          <Tooltip>
+          {/* Shown only while the pointer is over the cross: not on focus, not when the dialog opens. */}
+          <Tooltip open={closeHint}>
             <TooltipTrigger asChild>
               <DialogClose
+                onPointerEnter={(e) => e.pointerType === "mouse" && setCloseHint(true)}
+                onPointerLeave={() => setCloseHint(false)}
                 aria-label={t("unsavedChangesHint")}
                 className="-mr-2 -mt-2 shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-ring"
               >
                 <X className="h-4 w-4" />
               </DialogClose>
             </TooltipTrigger>
-            <TooltipContent className="hidden md:block">{t("unsavedChangesHint")}</TooltipContent>
+            <TooltipContent>{t("unsavedChangesHint")}</TooltipContent>
           </Tooltip>
         </div>
 

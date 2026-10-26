@@ -14,6 +14,9 @@ export interface SimplePurchase {
   access_expires_at?: string | null;
   is_trial?: boolean | null;
   trial_ends_at?: string | null;
+  has_access?: boolean;
+  period_days?: number | null;
+  period_interval?: string | null;
   can_choose_teacher: boolean | null;
   assigned_teacher_id: string | null;
   product: {
@@ -128,6 +131,29 @@ export const useSimplePurchases = () => {
         action: "list_my_purchases",
         ...studentCreds(),
         status: "completed",
+      });
+      return data.purchases ?? [];
+    },
+    enabled: !!user,
+  });
+};
+
+/**
+ * Purchases for the «Покупки» tab: also returns a period product whose paid time ran out
+ * (has_access false), so the buyer can pay for the next period.
+ */
+export const usePurchaseHistory = () => {
+  const { user } = useSimpleAuth();
+
+  return useQuery({
+    queryKey: ["purchase-history", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as SimplePurchase[];
+      const data = await invokeApi<{ purchases: SimplePurchase[] }>("checkout", {
+        action: "list_my_purchases",
+        ...studentCreds(),
+        status: "completed",
+        includeRenewable: true,
       });
       return data.purchases ?? [];
     },

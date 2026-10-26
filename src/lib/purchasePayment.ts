@@ -1,18 +1,25 @@
 import { differenceInCalendarDays } from "date-fns";
 
-/** A subscription that ends within this many days shows «Скоро оплата». */
+/** Access that ends within this many days shows «Скоро». */
 export const RENEW_SOON_DAYS = 7;
 
-export type SubscriptionUrgency = "far" | "soon" | "expired";
+export type RenewUrgency = "far" | "soon" | "expired";
 
+/** What the «Доступ» column says. */
+export type AccessTerm =
+  | { kind: "forever" }
+  /** Bought for a period: «7d», «14d», «1m», «3m», «1y» or «custom» with its number of days. */
+  | { kind: "period"; interval: string; days: number }
+  /** An end date with no period behind it (set by the seller). */
+  | { kind: "until"; end: Date }
+  | { kind: "trial" };
+
+/** What the «Оплата» column says. */
 export type PaymentState =
-  /** One-time purchase with no end. */
   | { kind: "paid" }
-  /** One-time purchase the seller gave an end date. */
-  | { kind: "access_until"; end: Date }
   | { kind: "trial"; end: Date }
-  /** Paid period of a subscription; it can be paid ahead at any time. */
-  | { kind: "subscription"; end: Date; urgency: SubscriptionUrgency; daysLeft: number };
+  /** A paid period that can be paid again at any time; the urgency names the button. */
+  | { kind: "renew"; end: Date; urgency: RenewUrgency };
 
 export interface PurchaseLike {
   product_id: string;
@@ -21,6 +28,10 @@ export interface PurchaseLike {
   is_trial?: boolean | null;
   trial_ends_at?: string | null;
   access_expires_at?: string | null;
+  /** False for a period product whose paid time ran out (listed so it can be paid again). */
+  has_access?: boolean;
+  period_days?: number | null;
+  period_interval?: string | null;
 }
 
 export interface SubscriptionLike {
@@ -38,25 +49,26 @@ export interface PurchaseRowData {
   /** First time the buyer paid for (or started a trial of) the product. */
   purchasedAt: Date;
   amount: number;
-  /** Set for subscriptions: month, quarter or year. */
-  billingPeriod: string | null;
+  access: AccessTerm;
   payment: PaymentState;
 }
 
-export function subscriptionPayment(
-  sub: Pick<SubscriptionLike, "current_period_end" | "has_access">,
-  now = new Date(),
-): PaymentState {
-  const end = new Date(sub.current_period_end);
-  const daysLeft = Math.max(0, differenceInCalendarDays(end, now));
-  if (!sub.has_access || end <= now) return { kind: "subscription", end, urgency: "expired", daysLeft: 0 };
-  return { kind: "subscription", end, urgency: daysLeft <= RENEW_SOON_DAYS ? "soon" : "far", daysLeft };
+const SUBSCRIPTION_PERIODS: Record<string, { interval: string; days: number }> = {
+  month: { interval: "1m", days: 30 },
+  quarter: { interval: "3m", days: 90 },
+  year: { interval: "1y", days: 365 },
+};
+
+export function renewPayment(end: Date, hasAccess: boolean, now = new Date()): PaymentState {
+  if (!hasAccess || end <= now) return { kind: "renew", end, urgency: "expired" };
+  const daysLeft = differenceInCalendarDays(end, now);
+  return { kind: "renew", end, urgency: daysLeft <= RENEW_SOON_DAYS ? "soon" : "far" };
 }
 
 /**
- * One row per product the buyer bought. A subscription adds a purchase row for every paid
- * period, so the rows are grouped by product, and the subscription decides the payment state.
- * Subscriptions that ran out stay in the list so the buyer can pay for the next period.
+ * One row per product the buyer bought. Subscriptions and period products add a purchase row
+ * for every paid period, so the rows are grouped by product and the newest one decides.
+ * Access that ran out stays in the list so the buyer can pay for the next period.
  */
 export function buildPurchaseRows(
   purchases: PurchaseLike[],
@@ -85,28 +97,36 @@ export function buildPurchaseRows(
     );
 
     if (sub) {
+      const period = SUBSCRIPTION_PERIODS[sub.billing_period];
       return {
         productId,
         purchasedAt,
         amount: Number(sub.price) || Number(latest?.amount) || 0,
-        billingPeriod: sub.billing_period,
-        payment: subscriptionPayment(sub, now),
+        access: period ? { kind: "period", ...period } : { kind: "forever" },
+        payment: renewPayment(new Date(sub.current_period_end), sub.has_access, now),
       };
     }
 
-    let payment: PaymentState = { kind: "paid" };
+    const base = { productId, purchasedAt, amount: Number(latest?.amount) || 0 };
+
     if (latest?.is_trial && latest.trial_ends_at) {
-      payment = { kind: "trial", end: new Date(latest.trial_ends_at) };
-    } else if (latest?.access_expires_at) {
-      payment = { kind: "access_until", end: new Date(latest.access_expires_at) };
+      return { ...base, access: { kind: "trial" }, payment: { kind: "trial", end: new Date(latest.trial_ends_at) } };
     }
 
-    return {
-      productId,
-      purchasedAt,
-      amount: Number(latest?.amount) || 0,
-      billingPeriod: null,
-      payment,
-    };
+    // A period product: the newest paid row carries the end of everything paid so far.
+    if (latest?.period_days) {
+      const end = latest.access_expires_at ? new Date(latest.access_expires_at) : now;
+      return {
+        ...base,
+        access: { kind: "period", interval: latest.period_interval || "custom", days: latest.period_days },
+        payment: renewPayment(end, latest.has_access !== false, now),
+      };
+    }
+
+    if (latest?.access_expires_at) {
+      return { ...base, access: { kind: "until", end: new Date(latest.access_expires_at) }, payment: { kind: "paid" } };
+    }
+
+    return { ...base, access: { kind: "forever" }, payment: { kind: "paid" } };
   });
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildPurchaseRows, subscriptionPayment } from "./purchasePayment.ts";
+import { buildPurchaseRows, renewPayment } from "./purchasePayment.ts";
 
 const now = new Date("2026-10-16T12:00:00Z");
 const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
@@ -14,14 +14,12 @@ const sub = (end: string, hasAccess = true) => ({
   billing_period: "month",
 });
 
-test("subscription urgency: far, soon within a week, expired", () => {
-  assert.equal(subscriptionPayment(sub(inDays(20)), now).kind, "subscription");
-  const far = subscriptionPayment(sub(inDays(20)), now);
-  const soon = subscriptionPayment(sub(inDays(5)), now);
-  const ended = subscriptionPayment(sub(inDays(-1), false), now);
-  assert.equal(far.kind === "subscription" && far.urgency, "far");
-  assert.equal(soon.kind === "subscription" && soon.urgency, "soon");
-  assert.equal(ended.kind === "subscription" && ended.urgency, "expired");
+const urgency = (state: ReturnType<typeof renewPayment>) => (state.kind === "renew" ? state.urgency : null);
+
+test("renew urgency: far, soon within a week, expired", () => {
+  assert.equal(urgency(renewPayment(new Date(inDays(20)), true, now)), "far");
+  assert.equal(urgency(renewPayment(new Date(inDays(5)), true, now)), "soon");
+  assert.equal(urgency(renewPayment(new Date(inDays(-1)), false, now)), "expired");
 });
 
 test("renewals collapse into one row dated by the first payment", () => {
@@ -35,11 +33,11 @@ test("renewals collapse into one row dated by the first payment", () => {
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].purchasedAt.toISOString(), inDays(-60));
-  assert.equal(rows[0].billingPeriod, "month");
-  assert.equal(rows[0].payment.kind === "subscription" && rows[0].payment.urgency, "soon");
+  assert.deepEqual(rows[0].access, { kind: "period", interval: "1m", days: 30 });
+  assert.equal(rows[0].payment.kind === "renew" && rows[0].payment.urgency, "soon");
 });
 
-test("one-time purchases: lifetime, seller end date, trial", () => {
+test("one-time purchases: forever, seller end date, trial", () => {
   const rows = buildPurchaseRows(
     [
       { product_id: "a", created_at: inDays(-5), amount: 15000 },
@@ -49,14 +47,41 @@ test("one-time purchases: lifetime, seller end date, trial", () => {
     [],
     now,
   );
-  const kind = (id: string) => rows.find((r) => r.productId === id)?.payment.kind;
-  assert.equal(kind("a"), "paid");
-  assert.equal(kind("b"), "access_until");
-  assert.equal(kind("c"), "trial");
+  const row = (id: string) => rows.find((r) => r.productId === id)!;
+  assert.equal(row("a").access.kind, "forever");
+  assert.equal(row("a").payment.kind, "paid");
+  assert.equal(row("b").access.kind, "until");
+  assert.equal(row("b").payment.kind, "paid");
+  assert.equal(row("c").access.kind, "trial");
+  assert.equal(row("c").payment.kind, "trial");
+});
+
+test("a period product shows its days and can be paid again, the newest row decides", () => {
+  const rows = buildPurchaseRows(
+    [
+      { product_id: "p", created_at: inDays(-50), amount: 4000, period_days: 45, period_interval: "custom", access_expires_at: inDays(-5) },
+      { product_id: "p", created_at: inDays(-6), amount: 4000, period_days: 45, period_interval: "custom", access_expires_at: inDays(40) },
+    ],
+    [],
+    now,
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].purchasedAt.toISOString(), inDays(-50));
+  assert.deepEqual(rows[0].access, { kind: "period", interval: "custom", days: 45 });
+  assert.equal(rows[0].payment.kind === "renew" && rows[0].payment.urgency, "far");
+});
+
+test("a period product whose time ran out is overdue", () => {
+  const rows = buildPurchaseRows(
+    [{ product_id: "p", created_at: inDays(-20), amount: 4000, period_days: 14, period_interval: "14d", access_expires_at: inDays(-6), has_access: false }],
+    [],
+    now,
+  );
+  assert.equal(rows[0].payment.kind === "renew" && rows[0].payment.urgency, "expired");
 });
 
 test("an expired subscription with no purchase rows still gets a row", () => {
   const rows = buildPurchaseRows([], [sub(inDays(-3), false)], now);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].payment.kind === "subscription" && rows[0].payment.urgency, "expired");
+  assert.equal(rows[0].payment.kind === "renew" && rows[0].payment.urgency, "expired");
 });

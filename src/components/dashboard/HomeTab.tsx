@@ -5,7 +5,7 @@ import { ru, kk } from "date-fns/locale";
 import {
   useSimpleBookings,
   useSimpleMaterials,
-  useSimplePurchases,
+  usePurchaseHistory,
   useSimpleSubscriptions,
 } from "@/hooks/useSimplePurchases";
 import { useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
@@ -32,7 +32,7 @@ const HomeTab = () => {
   const { user } = useSimpleAuth();
   const locale = language === "kk" ? kk : ru;
 
-  const { data: purchases = [], isLoading: purchasesLoading } = useSimplePurchases();
+  const { data: purchases = [], isLoading: purchasesLoading } = usePurchaseHistory();
   const { data: subscriptions = [], isLoading: subscriptionsLoading } = useSimpleSubscriptions();
   const { data: bookings = [], isLoading: bookingsLoading } = useSimpleBookings();
   const { data: materials = [] } = useSimpleMaterials();

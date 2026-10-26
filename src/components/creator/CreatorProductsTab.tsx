@@ -2587,28 +2587,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const { t, language } = useLanguage();
   const isMobile = useIsMobile();
   const { data: products = [], isLoading } = useCreatorProducts(creatorName);
-  const { data: subsData } = useQuery({
-    queryKey: ["creator-subscriptions", creatorName],
-    queryFn: async () => {
-      return invokeApi<{
-        subscriptions: Array<{
-          id: string;
-          product_id: string;
-          buyer_name: string;
-          status: string;
-          current_period_end: string;
-          product_title: string;
-        }>;
-        counts: Record<string, number>;
-      }>("manage-products", {
-        action: "list_subscriptions",
-        ...creatorCreds(),
-      });
-    },
-    enabled: !!creatorName,
-  });
-  const subscriberCounts = subsData?.counts ?? {};
-  const subscriptionRows = subsData?.subscriptions ?? [];
   const { data: taxonomyRaw = [] } = useCatalogTaxonomy();
   const taxonomyCategories = useMemo(() => {
     const allowedSlugs = ["online-lessons", "materials", "subscriptions", "events"];
@@ -3154,40 +3132,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
   return (
     <div className="space-y-6">
-      {subscriptionRows.length > 0 && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <h3 className="font-semibold text-foreground">{t("activeSubscribers")}</h3>
-            <div className="space-y-2">
-              {subscriptionRows
-                .filter(
-                  (row) =>
-                    row.status !== "past_due" && new Date(row.current_period_end) > new Date(),
-                )
-                .map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-2 text-sm border-b border-border pb-2 last:border-0 last:pb-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{row.buyer_name}</p>
-                      <p className="text-muted-foreground truncate">{row.product_title}</p>
-                    </div>
-                    <p className="text-muted-foreground whitespace-nowrap">
-                      {t("nextRenewal")}:{" "}
-                      {new Intl.DateTimeFormat(language === "kk" ? "kk-KZ" : "ru-RU", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      }).format(new Date(row.current_period_end))}
-                    </p>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{t("products")}</h2>
         <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) { resetForm(); setIsCroppingMedia(false); } }}>
@@ -3327,11 +3271,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                       <span className={`inline-flex items-center gap-1 bg-muted text-muted-foreground px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
                         <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
                         {language === "ru" ? "Приватный" : "Жабық"}
-                      </span>
-                    )}
-                    {product.billing_period && (
-                      <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
-                        {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
                       </span>
                     )}
                     {product.has_schedule && (

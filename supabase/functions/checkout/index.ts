@@ -6,6 +6,7 @@ import {
   unauthorized,
 } from '../_shared/session.ts'
 import { latestSubmissionForPurchase } from '../_shared/purchase.ts'
+import { accessPeriodFor, PERIOD_PRODUCT_COLUMNS, type PeriodProduct } from '../_shared/accessPeriod.ts'
 import {
   isSubscriptionProduct,
   purchaseAccessOpen,
@@ -90,27 +91,77 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_my_purchases') {
+      const status = body.status || 'completed'
       const { data, error } = await supabase
         .from('simple_purchases')
         .select('id, product_id, status, amount, created_at, confirmed_at, can_choose_teacher, assigned_teacher_id, access_expires_at, is_trial, trial_ends_at')
         .eq('buyer_profile_id', user.userId)
-        .eq('status', body.status || 'completed')
+        .eq('status', status)
       if (error) return json({ error: error.message }, 500)
-      // Access the seller ended is no longer "mine" on the buyer's side.
-      const rows = (body.status || 'completed') === 'completed'
-        ? (data ?? []).filter((p: { access_expires_at?: string | null }) => purchaseAccessOpen(p))
-        : data ?? []
-      if (!rows.length) return json({ purchases: [] })
-      const productIds = rows.map((p: { product_id: string }) => p.product_id)
+      type Row = { id: string; product_id: string; amount: number; created_at: string; access_expires_at?: string | null }
+      const all = (data ?? []) as Row[]
+      if (!all.length) return json({ purchases: [] })
+
+      const productIds = [...new Set(all.map((p) => p.product_id))]
       const { data: products } = await supabase
         .from('products')
-        .select('id, title, headline, telegram_link, group_link_label')
+        .select(`id, title, headline, telegram_link, group_link_label, category_id, ${PERIOD_PRODUCT_COLUMNS}`)
         .in('id', productIds)
+      const { data: subCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', 'subscriptions')
+        .maybeSingle()
+      type ProductRow = PeriodProduct & {
+        id: string
+        title: string
+        headline: string | null
+        telegram_link: string | null
+        group_link_label: string | null
+        category_id: string | null
+      }
+      const productById = new Map(((products ?? []) as ProductRow[]).map((p) => [p.id, p]))
+      const periodOf = (row: Row) => {
+        const product = productById.get(row.product_id)
+        if (!product || product.category_id === subCategory?.id) return null
+        return accessPeriodFor(product, row.amount)
+      }
+
+      // Access the seller ended is no longer "mine" on the buyer's side.
+      const open = status === 'completed' ? all.filter((p) => purchaseAccessOpen(p)) : all
+      const rows: Array<Row & { has_access: boolean }> = open.map((p) => ({ ...p, has_access: true }))
+
+      // «Покупки» also lists a period product whose paid time ran out, so it can be paid again.
+      if (status === 'completed' && body.includeRenewable === true) {
+        const openProducts = new Set(open.map((p) => p.product_id))
+        const latestExpired = new Map<string, Row>()
+        for (const p of all) {
+          if (openProducts.has(p.product_id) || !periodOf(p)) continue
+          const prev = latestExpired.get(p.product_id)
+          if (!prev || new Date(p.created_at) > new Date(prev.created_at)) latestExpired.set(p.product_id, p)
+        }
+        for (const p of latestExpired.values()) rows.push({ ...p, has_access: false })
+      }
+
       return json({
-        purchases: rows.map((purchase: { product_id: string }) => ({
-          ...purchase,
-          product: products?.find((p: { id: string }) => p.id === purchase.product_id) || null,
-        })),
+        purchases: rows.map((purchase) => {
+          const product = productById.get(purchase.product_id)
+          const period = status === 'completed' ? periodOf(purchase) : null
+          return {
+            ...purchase,
+            period_days: period?.days ?? null,
+            period_interval: period?.interval ?? null,
+            product: product
+              ? {
+                  id: product.id,
+                  title: product.title,
+                  headline: product.headline,
+                  telegram_link: product.telegram_link,
+                  group_link_label: product.group_link_label,
+                }
+              : null,
+          }
+        }),
       })
     }
 
@@ -207,13 +258,28 @@ Deno.serve(async (req) => {
           .maybeSingle()
         if (pending) return json({ purchase: pending })
       } else {
-        const { data: existing } = await supabase
+        const { data: latest } = await supabase
           .from('simple_purchases')
-          .select('id, status')
+          .select('id, status, amount')
           .eq('buyer_profile_id', user.userId)
           .eq('product_id', productId)
-          .maybeSingle()
-        if (existing) return json({ purchase: existing })
+          .order('created_at', { ascending: false })
+          .limit(1)
+        const existing = latest?.[0]
+        if (existing) {
+          // Paying the next period of a period product starts a new purchase; anything else
+          // returns the purchase the buyer already has.
+          let renewing = false
+          if (body.renew === true && existing.status === 'completed') {
+            const { data: periodProduct } = await supabase
+              .from('products')
+              .select(PERIOD_PRODUCT_COLUMNS)
+              .eq('id', productId)
+              .maybeSingle()
+            renewing = Boolean(periodProduct && accessPeriodFor(periodProduct as PeriodProduct, existing.amount))
+          }
+          if (!renewing) return json({ purchase: { id: existing.id, status: existing.status } })
+        }
       }
 
       const insertData: Record<string, unknown> = {

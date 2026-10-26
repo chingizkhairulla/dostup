@@ -4,6 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { ratingDistribution, topReviews, useProductReviews } from "@/hooks/useProductReviews";
 import AllReviewsDialog, { type RatingFilter } from "@/components/reviews/AllReviewsDialog";
 import ReviewItem, { Stars } from "@/components/reviews/ReviewItem";
+import { cn } from "@/lib/utils";
 
 export default function ProductReviewsSection({ productId }: { productId: string }) {
   const { t } = useLanguage();
@@ -20,7 +21,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
 
   const reviews = data?.reviews;
   const distribution = useMemo(() => ratingDistribution(reviews ?? []), [reviews]);
-  const top = useMemo(() => topReviews(reviews ?? [], 2), [reviews]);
+  const top = useMemo(() => topReviews(reviews ?? [], 4), [reviews]);
 
   if (!data) return null;
 
@@ -64,11 +65,12 @@ export default function ProductReviewsSection({ productId }: { productId: string
                     type="button"
                     aria-label={`${star} ★: ${count}`}
                     onClick={() => openDialog(star as RatingFilter)}
-                    className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted focus-ring"
+                    className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted focus-ring"
                   >
                     <span className="w-3 text-sm tabular-nums text-muted-foreground">{star}</span>
                     <Star className="h-3.5 w-3.5 shrink-0 fill-[#FFB020] text-[#FFB020]" />
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    {/* On hover the row turns the track's grey, so the track goes lighter to stay visible. */}
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted transition-colors group-hover:bg-background">
                       <div className="h-full rounded-full bg-[#FFB020]" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="w-20 whitespace-nowrap text-right text-sm tabular-nums text-muted-foreground">
@@ -80,9 +82,14 @@ export default function ProductReviewsSection({ productId }: { productId: string
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {top.map((review) => (
-              <div key={review.id} className="rounded-2xl border border-border bg-card p-4">
+          <h3 className="mb-4 mt-8 text-base font-semibold text-foreground">{t("reviewsTop")}</h3>
+          {/* Four on a computer, the first two on a phone. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {top.map((review, index) => (
+              <div
+                key={review.id}
+                className={cn("rounded-2xl border border-border bg-card p-4", index >= 2 && "hidden md:block")}
+              >
                 <ReviewItem review={review} clamp />
               </div>
             ))}

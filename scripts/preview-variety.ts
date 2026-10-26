@@ -48,6 +48,7 @@ const P = {
   sql: "33333333-3333-3333-3333-333333333346",
   ielts: "33333333-3333-3333-3333-333333333351",
   speakClub: "33333333-3333-3333-3333-333333333352",
+  marathon: "33333333-3333-3333-3333-333333333347",
 };
 const WEB_COURSE = "33333333-3333-3333-3333-333333333331";
 const ENGLISH_LESSON = "33333333-3333-3333-3333-333333333332";
@@ -81,6 +82,8 @@ type ProductSeed = {
   subcategory: string;
   billing?: "month" | "quarter" | "year";
   trialDays?: number;
+  /** «Период оплаты» outside «Подписки»: an interval like «14d» or «custom» with its number of days. */
+  period?: { interval: string; days: number };
   lessonFormat?: string;
 };
 
@@ -88,7 +91,8 @@ const productSeeds: ProductSeed[] = [
   { id: P.webClub, seller: SELLER, title: "Клуб веб-разработчиков", headline: "Еженедельные разборы кода и закрытый чат", price: 7000, slug: "test-web-club", category: CAT.subscriptions, subcategory: SUB.subOnline, billing: "month" },
   { id: P.mentoring, seller: SELLER, title: "Менторство: первая работа в IT", headline: "Созвон раз в неделю, резюме и подготовка к собеседованиям", price: 30000, slug: "test-it-mentoring", category: CAT.subscriptions, subcategory: SUB.subOnline, billing: "quarter" },
   { id: P.dailyEnglish, seller: SELLER, title: "Английский каждый день", headline: "10 минут практики в день с проверкой", price: 5000, slug: "test-daily-english", category: CAT.subscriptions, subcategory: SUB.subOnline, billing: "month" },
-  { id: P.resume, seller: SELLER, title: "Шаблоны резюме и портфолио", headline: "12 шаблонов для Figma и Google Docs", price: 3000, slug: "test-resume-templates", category: CAT.materials, subcategory: SUB.files },
+  { id: P.resume, seller: SELLER, title: "Шаблоны резюме и портфолио", headline: "12 шаблонов для Figma и Google Docs", price: 3000, slug: "test-resume-templates", category: CAT.materials, subcategory: SUB.files, period: { interval: "custom", days: 60 } },
+  { id: P.marathon, seller: SELLER, title: "Марафон английского: 14 дней", headline: "Каждый день задание и разбор от преподавателя", price: 4000, slug: "test-english-marathon", category: CAT.materials, subcategory: SUB.videoCourses, period: { interval: "14d", days: 14 } },
   { id: P.python, seller: SELLER, title: "Python для начинающих", headline: "От переменных до первого бота за 6 недель", price: 18000, slug: "test-python-basics", category: CAT.materials, subcategory: SUB.videoCourses, trialDays: 7 },
   { id: P.sql, seller: SELLER, title: "SQL с нуля", headline: "Запросы, джойны и аналитика на реальных данных", price: 12000, slug: "test-sql-basics", category: CAT.materials, subcategory: SUB.videoCourses },
   { id: P.ielts, seller: SELLER2, title: "IELTS Speaking: интенсив", headline: "8 занятий в мини-группе с носителем", price: 25000, slug: "test-ielts-speaking", category: CAT.lessons, subcategory: SUB.group, lessonFormat: "group" },
@@ -112,8 +116,9 @@ const products = productSeeds.map((p, i) => ({
   subcategory_id: p.subcategory,
   lesson_format: p.lessonFormat ?? null,
   billing_period: p.billing ?? null,
-  payment_type: p.billing ? "recurring" : "one_time",
-  recurring_interval: p.billing ?? null,
+  payment_type: p.billing || p.period ? "recurring" : "one_time",
+  recurring_interval: p.billing ?? p.period?.interval ?? null,
+  access_duration_days: p.period?.days ?? null,
   // Kaspi transfer by phone, so the checkout page offers a way to pay and upload a receipt.
   kaspi_phone: "+7 700 000 00 00",
   has_free_trial: Boolean(p.trialDays),
@@ -142,7 +147,9 @@ const purchaseSeeds: PurchaseSeed[] = [
   { product: P.webClub, buyer: B.alikhan, amount: 7000, boughtDaysAgo: 66 },
   { product: P.mentoring, buyer: B.alikhan, amount: 30000, boughtDaysAgo: 87 },
   { product: P.dailyEnglish, buyer: B.alikhan, amount: 5000, boughtDaysAgo: 32 },
-  { product: P.resume, buyer: B.alikhan, amount: 3000, boughtDaysAgo: 10, accessEndsInDays: 20 },
+  // Period products: 60 days paid 10 days ago (Далеко), 14 days that ran out (Просрочено).
+  { product: P.resume, buyer: B.alikhan, amount: 3000, boughtDaysAgo: 10, accessEndsInDays: 50 },
+  { product: P.marathon, buyer: B.alikhan, amount: 4000, boughtDaysAgo: 20, accessEndsInDays: -6 },
   { product: P.python, buyer: B.alikhan, amount: 0, boughtDaysAgo: 2, trialEndsInDays: 5 },
   { product: P.ielts, buyer: B.alikhan, amount: 25000, boughtDaysAgo: 14 },
   { product: P.speakClub, buyer: B.alikhan, amount: 60000, boughtDaysAgo: 120 },
