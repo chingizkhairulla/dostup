@@ -53,14 +53,14 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", l
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onIndexChange(null)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/45 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed z-[60] flex flex-col overflow-hidden shadow-2xl outline-none",
+            "fixed z-[70] flex flex-col overflow-hidden shadow-2xl outline-none",
             light ? "bg-white" : "bg-neutral-950",
             isReceipt
-              ? "inset-0 rounded-none w-full h-full sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[440px] sm:max-w-[90vw] sm:max-h-[82vh] sm:rounded-2xl"
+              ? "inset-0 rounded-none w-full h-full sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[500px] sm:max-w-[92vw] sm:max-h-[88vh] sm:rounded-2xl"
               : align === "left"
                 ? "left-0 top-0 bottom-0 w-[calc(100%-2.5rem)] sm:w-[480px] sm:max-w-[45vw] rounded-r-2xl rounded-l-none"
                 : "left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-8 sm:right-8 sm:top-8 sm:bottom-8 lg:left-16 lg:right-16 rounded-2xl",

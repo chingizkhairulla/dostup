@@ -77,12 +77,12 @@ export function getMockPaidPurchases(products: MockProduct[]) {
   const list: any[] = [];
   prods.forEach((prod, pIdx) => {
     list.push(
-      // 1. Временный доступ заканчивается через 2 дня (срочный - Скоро)
+      // 1. Временный доступ на 35 дней, заканчивается через 2 дня (срочный - Скоро)
       {
         id: `demo-paid-${pIdx}-1`,
         status: "completed",
         amount: 15000,
-        created_at: new Date(now - 2 * dayMs).toISOString(),
+        created_at: new Date(now - 33 * dayMs).toISOString(),
         product_id: prod.id,
         product: prod,
         simple_user_id: `demo-user-${pIdx}-1`,
@@ -99,17 +99,17 @@ export function getMockPaidPurchases(products: MockProduct[]) {
             verification_status: "confirmed",
             detected_amount: 15000,
             receipt_mime_type: "image/jpeg",
-            created_at: new Date(now - 2 * dayMs).toISOString(),
+            created_at: new Date(now - 33 * dayMs).toISOString(),
           },
         ],
         subscription: null,
       },
-      // 2. Временный доступ заканчивается через 15 дней (Далеко)
+      // 2. Временный доступ на 3 месяца, заканчивается через 75 дней (Далеко)
       {
         id: `demo-paid-${pIdx}-2`,
         status: "completed",
         amount: 12000,
-        created_at: new Date(now - 4 * dayMs).toISOString(),
+        created_at: new Date(now - 15 * dayMs).toISOString(),
         product_id: prod.id,
         product: prod,
         simple_user_id: `demo-user-${pIdx}-2`,
@@ -119,26 +119,26 @@ export function getMockPaidPurchases(products: MockProduct[]) {
         can_choose_teacher: null,
         is_trial: false,
         trial_ends_at: null,
-        access_expires_at: new Date(now + 15 * dayMs).toISOString(),
+        access_expires_at: new Date(now + 75 * dayMs).toISOString(),
         receipts: [
           {
             id: `demo-receipt-${pIdx}-2`,
             verification_status: "confirmed",
             detected_amount: 12000,
             receipt_mime_type: "image/jpeg",
-            created_at: new Date(now - 4 * dayMs).toISOString(),
+            created_at: new Date(now - 15 * dayMs).toISOString(),
           },
         ],
         subscription: null,
       },
-      // 3. Подписка со следующим списанием через 7 дней
+      // 3. Подписка на 1 месяц со следующим списанием через 7 дней
       {
         id: `demo-paid-${pIdx}-3`,
         status: "completed",
         amount: 8000,
         created_at: new Date(now - 6 * dayMs).toISOString(),
         product_id: prod.id,
-        product: prod,
+        product: { ...prod, billing_period: "month" },
         simple_user_id: `demo-user-${pIdx}-3`,
         simple_user: { id: `demo-user-${pIdx}-3`, name: "Тимур Ахметов", phone: "+7 708 333 44 55" },
         user: { id: `demo-user-${pIdx}-3`, name: "Тимур Ахметов", phone: "+7 708 333 44 55" },
@@ -163,7 +163,7 @@ export function getMockPaidPurchases(products: MockProduct[]) {
           cancel_at_period_end: false,
         },
       },
-      // 4. Срок доступа истёк
+      // 4. Срок доступа истёк (Закрыт)
       {
         id: `demo-paid-${pIdx}-4`,
         status: "completed",
@@ -190,7 +190,7 @@ export function getMockPaidPurchases(products: MockProduct[]) {
         ],
         subscription: null,
       },
-      // 5. Бессрочный доступ (навсегда)
+      // 5. Бессрочный доступ (Навсегда)
       {
         id: `demo-paid-${pIdx}-5`,
         status: "completed",

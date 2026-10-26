@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { kk, ru } from "date-fns/locale";
-import { CalendarClock, ChevronDown, Download, FileText, Loader2, Package, Receipt, Users, Wallet, X } from "lucide-react";
+import { CalendarClock, ChevronDown, Download, FileText, Loader2, Package, Receipt, Timer, Users, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -21,7 +21,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge } from "@/lib/catalog";
 import { fetchCreatorReceiptBlob } from "@/lib/sessionApi";
 import { cn } from "@/lib/utils";
-import { accessEnd, accessUrgency, URGENCY_CLASSES, type AccessSource } from "./buyerAccess";
+import { accessEnd, accessUrgency, getGrantedAccessPeriod, URGENCY_CLASSES, type AccessSource } from "./buyerAccess";
 
 export interface BuyerReceipt {
   id: string;
@@ -38,7 +38,7 @@ export interface BuyerPurchase extends AccessSource {
   assigned_teacher_id: string | null;
   can_choose_teacher: boolean | null;
   simple_user: { id: string; name: string; phone: string };
-  product: { title: string };
+  product: { title: string; billing_period?: string | null };
   receipts: BuyerReceipt[];
 }
 
@@ -89,11 +89,9 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
     if (receiptView) URL.revokeObjectURL(receiptView.url);
   }, [receiptView]);
 
-  const paidAt = useMemo(() => (purchase ? new Date(purchase.created_at) : new Date()), [purchase]);
   if (!purchase) return null;
 
   const end = accessEnd(purchase);
-  const isSubscription = !!purchase.subscription;
   const { urgency } = accessUrgency(purchase);
   const fmt = (d: Date) => format(d, "d MMMM yyyy", { locale });
 
@@ -154,6 +152,7 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
             <Row icon={Package} label={t("buyerProduct")}>
               {purchase.product.title}
             </Row>
+
             {/* Receipts open right under the payment they belong to. */}
             <Row
               icon={Wallet}
@@ -212,33 +211,35 @@ const BuyerDetailsDialog = ({ purchase, onOpenChange, onSetAccess, teachers, tea
                 )
               }
             >
-              {/* Desktop order: price (bold), then date (normal) */}
-              <div className="hidden sm:flex sm:flex-col">
-                <span className="font-semibold text-foreground">{formatPriceTenge(Number(purchase.amount))}</span>
-                <span className="text-xs text-muted-foreground">{fmt(paidAt)}</span>
-              </div>
-              {/* Mobile order: date (bold), then price (normal) */}
-              <div className="flex flex-col sm:hidden">
-                <span className="font-semibold text-foreground text-sm">{fmt(paidAt)}</span>
-                <span className="text-xs text-muted-foreground font-normal">{formatPriceTenge(Number(purchase.amount))}</span>
-              </div>
+              <span className="font-semibold text-foreground">{formatPriceTenge(Number(purchase.amount))}</span>
             </Row>
-            <Row icon={CalendarClock} label={isSubscription ? t("buyerNextPayment") : t("buyerAccessUntil")}>
-              {/* "Forever" and "closed" are said once; a date gets its countdown badge. */}
+
+            {/* Row "Доступ на:" */}
+            <Row icon={Timer} label={t("buyerAccessDuration")}>
+              <span className="font-semibold text-foreground">{getGrantedAccessPeriod(purchase, language)}</span>
+            </Row>
+
+            {/* Row "Следующая оплата" */}
+            <Row
+              icon={CalendarClock}
+              label={t("buyerNextPayment")}
+              aside={
+                urgency === "forever" || (!end && urgency !== "closed") ? null : (
+                  <UrgencyBadge purchase={purchase} />
+                )
+              }
+            >
               {urgency === "closed" ? (
                 t("buyerAccessClosed")
               ) : urgency === "forever" || !end ? (
                 t("buyerAccessForever")
               ) : (
-                <span className="flex flex-wrap items-center gap-2">
-                  <span>{fmt(end)}</span>
-                  <UrgencyBadge purchase={purchase} />
-                </span>
+                <span>{fmt(end)}</span>
               )}
             </Row>
           </dl>
 
-          {urgency === "closed" ? (
+          {urgency === "closed" || urgency === "expired" ? (
             <Button className="h-10 w-full" disabled={saving} onClick={() => void setAccess("forever")}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {t("buyerOpenAccess")}

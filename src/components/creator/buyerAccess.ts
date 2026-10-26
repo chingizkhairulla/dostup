@@ -64,3 +64,54 @@ export const URGENCY_CLASSES: Record<AccessUrgency, string> = {
   expired: "bg-red-500/10 text-red-600/80 dark:text-red-400/80",
   closed: "bg-muted text-muted-foreground",
 };
+
+export function formatAccessDuration(days: number, language: string = "ru"): string {
+  if (days <= 0) return language === "ru" ? "Закрыт" : "Жабық";
+  if (days >= 28 && days <= 31) return language === "ru" ? "1 месяц" : "1 ай";
+  if (days >= 58 && days <= 62) return language === "ru" ? "2 месяца" : "2 ай";
+  if (days >= 88 && days <= 93) return language === "ru" ? "3 месяца" : "3 ай";
+  if (days >= 178 && days <= 185) return language === "ru" ? "6 месяцев" : "6 ай";
+  if (days >= 360 && days <= 366) return language === "ru" ? "1 год" : "1 жыл";
+
+  if (language === "ru") {
+    const mod10 = days % 10;
+    const mod100 = days % 100;
+    let word = "дней";
+    if (mod10 === 1 && mod100 !== 11) word = "день";
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = "дня";
+    return `${days} ${word}`;
+  } else {
+    return `${days} күн`;
+  }
+}
+
+export function getGrantedAccessPeriod(purchase: AccessSource, language: string = "ru"): string {
+  if (purchase.status === "revoked") {
+    return language === "ru" ? "Закрыт" : "Жабық";
+  }
+  const { urgency } = accessUrgency(purchase);
+  if (urgency === "closed" || urgency === "expired") {
+    return language === "ru" ? "Закрыт" : "Жабық";
+  }
+  if (urgency === "forever" || !accessEnd(purchase)) {
+    return language === "ru" ? "Навсегда" : "Мерзімсіз";
+  }
+
+  const prod = (purchase as any).product;
+  const billingPeriod = prod?.billing_period;
+  if (billingPeriod === "month") return language === "ru" ? "1 месяц" : "1 ай";
+  if (billingPeriod === "quarter") return language === "ru" ? "3 месяца" : "3 ай";
+  if (billingPeriod === "year") return language === "ru" ? "1 год" : "1 жыл";
+
+  const end = accessEnd(purchase);
+  if (end) {
+    const start = new Date(purchase.created_at);
+    let totalDays = differenceInCalendarDays(end, start);
+    const daysLeft = differenceInCalendarDays(end, new Date());
+    if (totalDays <= 0 && daysLeft > 0) totalDays = daysLeft;
+    if (totalDays > 0) {
+      return formatAccessDuration(totalDays, language);
+    }
+  }
+  return language === "ru" ? "Навсегда" : "Мерзімсіз";
+}
