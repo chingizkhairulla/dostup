@@ -16,7 +16,6 @@ import AccountTab from "@/components/dashboard/AccountTab";
 import MaterialsTab from "@/components/dashboard/MaterialsTab";
 import ScheduleTab from "@/components/dashboard/ScheduleTab";
 import MaterialsProtectionNotice from "@/components/materials/MaterialsProtectionNotice";
-import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
 import { useRealtimeStudentNotifications } from "@/hooks/useRealtimeStudentNotifications";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { setAppBadge, clearAppBadge } from "@/lib/appBadge";
@@ -71,8 +70,6 @@ const Dashboard = () => {
     },
     enabled: !!user?.id,
   });
-
-  const { productIds: accessibleProductIds } = useAccessibleProducts();
 
   const { data: cancellations = [] } = useQuery({
     queryKey: ["student-cancellations-count", user?.id],
@@ -267,7 +264,7 @@ const Dashboard = () => {
 
       {/* Shown once for each product the buyer gets access to, when they open «Материалы». */}
       {!isAccountView && buyerSection === "materials" && (
-        <MaterialsProtectionNotice productIds={accessibleProductIds} />
+        <MaterialsProtectionNotice buyerId={user.id} />
       )}
     </BuyerAppShell>
   );

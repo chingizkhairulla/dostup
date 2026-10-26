@@ -18,6 +18,7 @@ import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } fro
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
+import PaymentMethodFields from "./PaymentMethodFields";
 import {
   Dialog,
   DialogContent,
@@ -56,14 +57,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-  KASPI_METHOD_ORDER,
-  KASPI_METHOD_LABELS,
-  BANK_OPTIONS,
   DEFAULT_BANK,
-  formatCardNumber,
-  cardDigits,
   isValidCardNumber,
-  isPaymentBank,
+  filledPaymentMethods,
+  serializeKaspiFields,
   type KaspiMethod,
   type PaymentBank,
 } from "@/lib/paymentMethods";
@@ -71,85 +68,15 @@ import { useCoverCrop, type CoverCropResult } from "@/hooks/useCoverCrop";
 import CoverCropEditor from "./CoverCropEditor";
 import ProductVideoPlayer, { videoBlobCache } from "@/components/media/ProductVideoPlayer";
 
-export interface PricingOptionFormItem {
-  id: string;
-  paymentType: "one_time" | "recurring";
-  price: string;
-  recurringInterval: string;
-  recurringCustomDays: number;
-  hasFreeTrial: boolean;
-  trialPreset: "3" | "7" | "30" | "custom";
-  trialCustomDays: number;
-  kaspiMethods: KaspiMethod[];
-  kaspiLink: string;
-  kaspiPhone: string;
-  kaspiCard: string;
-  bank: PaymentBank;
-  bankName: string;
-}
-
-export interface DefaultKaspiSettings {
-  methods?: KaspiMethod[];
-  link?: string;
-  phone?: string;
-  card?: string;
-  bank?: PaymentBank;
-  bankName?: string;
-}
-
-export const createDefaultPricingOption = (
-  id?: string,
-  defaultKaspi?: DefaultKaspiSettings
-): PricingOptionFormItem => ({
-  id: id || Math.random().toString(36).slice(2, 10),
-  paymentType: "recurring",
-  price: "49000",
-  recurringInterval: "1m",
-  recurringCustomDays: 30,
-  hasFreeTrial: false,
-  trialPreset: "7",
-  trialCustomDays: 7,
-  kaspiMethods: defaultKaspi?.methods?.length ? [...defaultKaspi.methods] : ["link"],
-  kaspiLink: defaultKaspi?.link || "",
-  kaspiPhone: defaultKaspi?.phone || "",
-  kaspiCard: defaultKaspi?.card || "",
-  bank: defaultKaspi?.bank || DEFAULT_BANK,
-  bankName: defaultKaspi?.bankName || "",
-});
-
-/** Преобразует сохранённый вариант тарифа (JSON из pricing_options / поля продукта) в настройки формы. */
-export const kaspiSettingsFromStored = (
-  po: { kaspi_link?: string | null; kaspi_phone?: string | null; kaspi_card?: string | null; bank?: string | null; bank_name?: string | null } | null | undefined,
-  fallback?: { kaspi_link?: string | null; kaspi_phone?: string | null; kaspi_card?: string | null; bank?: string | null; bank_name?: string | null } | null,
-): Required<DefaultKaspiSettings> => {
-  const src = po && (po.kaspi_link || po.kaspi_phone || po.kaspi_card) ? po : (fallback || po || {});
-  const methods: KaspiMethod[] = [];
-  if (src.kaspi_link) methods.push("link");
-  if (src.kaspi_phone) methods.push("phone");
-  if (src.kaspi_card) methods.push("card");
-  return {
-    methods: methods.length ? methods : ["link"],
-    link: src.kaspi_link || "",
-    phone: src.kaspi_phone || "",
-    card: cardDigits(src.kaspi_card),
-    bank: isPaymentBank(src.bank) ? src.bank : DEFAULT_BANK,
-    bankName: src.bank_name || "",
-  };
-};
-
-/** Поля способа оплаты для сохранения в pricing_options. */
-export const serializeKaspiFields = (opt: PricingOptionFormItem) => {
-  const m = new Set(opt.kaspiMethods);
-  // Банк выбирается только вместе с картой; перевод по номеру без карты — Kaspi по умолчанию.
-  const usesCard = m.has("card");
-  return {
-    kaspi_link: m.has("link") ? (opt.kaspiLink.trim() || null) : null,
-    kaspi_phone: m.has("phone") ? (opt.kaspiPhone.trim() || null) : null,
-    kaspi_card: usesCard ? (cardDigits(opt.kaspiCard) || null) : null,
-    bank: usesCard ? opt.bank : m.has("phone") ? DEFAULT_BANK : null,
-    bank_name: usesCard && opt.bank === "other" ? (opt.bankName.trim() || null) : null,
-  };
-};
+export { createDefaultPricingOption, kaspiSettingsFromStored } from "@/lib/paymentEditor";
+export type { PricingOptionFormItem, DefaultKaspiSettings } from "@/lib/paymentEditor";
+import {
+  buildPaymentDetailsUpdate,
+  createDefaultPricingOption,
+  kaspiSettingsFromStored,
+  serializePricingOption,
+  type PricingOptionFormItem,
+} from "@/lib/paymentEditor";
 
 export function getPricingOptionSummary(opt: PricingOptionFormItem) {
   const priceNum = Number(opt.price) || 0;
@@ -1105,6 +1032,7 @@ const ProductForm = ({
       card: last?.kaspiCard || formData.kaspiCard,
       bank: last?.bank || formData.bank,
       bankName: last?.bankName || formData.bankName,
+      lastMethod: last?.lastPaymentMethod || "phone",
     });
     setFormData((prev) => ({
       ...prev,
@@ -1127,7 +1055,7 @@ const ProductForm = ({
         hasFreeTrial: fallback[0]?.hasFreeTrial || false,
         trialPreset: fallback[0]?.trialPreset || "7",
         trialCustomDays: fallback[0]?.trialCustomDays || 7,
-        kaspiMethods: fallback[0]?.kaspiMethods?.length ? fallback[0].kaspiMethods : ["link"],
+        kaspiMethods: fallback[0]?.kaspiMethods?.length ? fallback[0].kaspiMethods : ["phone"],
         kaspiLink: fallback[0]?.kaspiLink || "",
         kaspiPhone: fallback[0]?.kaspiPhone || "",
         kaspiCard: fallback[0]?.kaspiCard || "",
@@ -1227,9 +1155,9 @@ const ProductForm = ({
       if (opt.paymentType === "recurring" && !opt.recurringInterval) {
         return { id: `recurring-interval-${opt.id}`, optId: opt.id };
       }
-      const methods = new Set(opt.kaspiMethods);
+      const methods = new Set(filledPaymentMethods(opt));
       if (methods.size === 0) {
-        return { id: `price-${opt.id}`, optId: opt.id, message: "Выберите хотя бы один способ оплаты" };
+        return { id: `kaspi-${opt.paymentMethod}-${opt.id}`, optId: opt.id, message: "Укажите хотя бы один способ оплаты" };
       }
       if (methods.has("link") && !opt.kaspiLink?.trim()) {
         return { id: `kaspi-link-${opt.id}`, optId: opt.id };
@@ -1243,7 +1171,7 @@ const ProductForm = ({
       if (methods.has("card") && !isValidCardNumber(opt.kaspiCard)) {
         return { id: `kaspi-card-${opt.id}`, optId: opt.id, message: "Номер карты должен содержать 16 цифр" };
       }
-      if (methods.has("card") && opt.bank === "other" && !opt.bankName.trim()) {
+      if ((methods.has("phone") || methods.has("card")) && opt.bank === "other" && !opt.bankName.trim()) {
         return { id: `bank-name-${opt.id}`, optId: opt.id };
       }
     }
@@ -1267,7 +1195,12 @@ const ProductForm = ({
       if (categoryIssue) setCategoryOpen(true);
       if (paymentIssue) {
         setPaymentOpen(true);
-        if (paymentIssue.optId) setExpandedOptionId(paymentIssue.optId);
+        if (paymentIssue.optId) {
+          setExpandedOptionId(paymentIssue.optId);
+          const fieldMethod = paymentIssue.id.startsWith("kaspi-link-") ? "link"
+            : paymentIssue.id.startsWith("kaspi-card-") ? "card" : "phone";
+          updateOption(paymentIssue.optId, { paymentMethod: fieldMethod });
+        }
       }
       const firstId = detailsIssue ?? categoryIssue ?? paymentIssue!.id;
       if (!detailsIssue && !categoryIssue && paymentIssue?.message) {
@@ -2391,125 +2324,12 @@ const ProductForm = ({
                             )}
                           </div>
 
-                          {/* Способы оплаты для этого варианта: можно включить несколько */}
-                          <div className="space-y-3 pt-2 border-t border-border/60">
-                            <div className="space-y-1">
-                              <Label className="text-sm sm:text-base font-medium text-foreground flex items-center">
-                                Способ оплаты <ReqStar />
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                Можно выбрать несколько — покупатель увидит все.
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {KASPI_METHOD_ORDER.map((method) => {
-                                const active = opt.kaspiMethods.includes(method);
-                                return (
-                                  <Button
-                                    key={method}
-                                    type="button"
-                                    size="sm"
-                                    variant={active ? "default" : "toggle"}
-                                    aria-pressed={active}
-                                    onClick={() => {
-                                      const next = active
-                                        ? opt.kaspiMethods.filter((m) => m !== method)
-                                        : [...opt.kaspiMethods, method];
-                                      updateOption(opt.id, { kaspiMethods: next });
-                                    }}
-                                    className="text-xs sm:text-sm h-9 px-1"
-                                  >
-                                    {KASPI_METHOD_LABELS[method]}
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                            {opt.kaspiMethods.includes("link") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-link-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Ссылка на оплату
-                                </Label>
-                                <Input
-                                  id={`kaspi-link-${opt.id}`}
-                                  type="url"
-                                  placeholder={t("kaspiLinkPlaceholder")}
-                                  className="h-11 text-base"
-                                  value={opt.kaspiLink}
-                                  onChange={(e) => updateOption(opt.id, { kaspiLink: e.target.value })}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("phone") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-phone-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Номер телефона
-                                </Label>
-                                <Input
-                                  id={`kaspi-phone-${opt.id}`}
-                                  type="tel"
-                                  placeholder="+7 776 475 00-99"
-                                  className="h-11 text-base"
-                                  value={opt.kaspiPhone}
-                                  onChange={(e) => {
-                                    const formatted = formatPhone(e.target.value);
-                                    updateOption(opt.id, { kaspiPhone: formatted });
-                                  }}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("card") && (
-                              <div className="space-y-1">
-                                <Label htmlFor={`kaspi-card-${opt.id}`} className="text-xs text-muted-foreground">
-                                  Номер карты
-                                </Label>
-                                <Input
-                                  id={`kaspi-card-${opt.id}`}
-                                  type="text"
-                                  inputMode="numeric"
-                                  autoComplete="off"
-                                  placeholder="0000 0000 0000 0000"
-                                  maxLength={19}
-                                  className="h-11 text-base tracking-wider"
-                                  value={formatCardNumber(opt.kaspiCard)}
-                                  onChange={(e) => updateOption(opt.id, { kaspiCard: cardDigits(e.target.value) })}
-                                />
-                              </div>
-                            )}
-                            {opt.kaspiMethods.includes("card") && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-muted-foreground">Банк для перевода</Label>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  {BANK_OPTIONS.map((b) => (
-                                    <Button
-                                      key={b.value}
-                                      type="button"
-                                      size="sm"
-                                      variant={opt.bank === b.value ? "default" : "toggle"}
-                                      aria-pressed={opt.bank === b.value}
-                                      onClick={() => updateOption(opt.id, { bank: b.value })}
-                                      className="text-xs sm:text-sm h-9 px-1 gap-1.5"
-                                    >
-                                      {b.logo && (
-                                        <img src={b.logo} alt="" className="h-4 w-4 shrink-0 rounded-sm object-contain" />
-                                      )}
-                                      {b.label}
-                                    </Button>
-                                  ))}
-                                </div>
-                                {opt.bank === "other" && (
-                                  <Input
-                                    id={`bank-name-${opt.id}`}
-                                    type="text"
-                                    placeholder="Название банка"
-                                    className="h-11 text-base"
-                                    value={opt.bankName}
-                                    onChange={(e) => updateOption(opt.id, { bankName: e.target.value })}
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-
+                          <PaymentMethodFields
+                            value={opt}
+                            onChange={(updates) => updateOption(opt.id, updates)}
+                            formatPhone={formatPhone}
+                            linkPlaceholder={t("kaspiLinkPlaceholder")}
+                          />
                           {/* Footer внутри карточки варианта */}
                           <div className="flex items-center justify-between pt-2 border-t border-border/50">
                             {(formData.pricingOptions || []).length > 1 ? (
@@ -2611,6 +2431,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const [isCreating, setIsCreating] = useState(false);
   const [isCroppingMedia, setIsCroppingMedia] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const initialPaymentOptions = useRef<PricingOptionFormItem[]>([]);
+  const newProductDraft = useRef<FormData | null>(null);
+  const closingEdit = useRef(false);
+  const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
   const [visibilityProductId, setVisibilityProductId] = useState<string | null>(null);
@@ -2642,7 +2466,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     media: [],
     faq: [{ question: "", answer: "" }],
     isPaid: true,
-    kaspiMethods: ["link"],
+    kaspiMethods: ["phone"],
     kaspiPhone: "",
     kaspiCard: "",
     bank: DEFAULT_BANK,
@@ -2677,7 +2501,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       media: [],
       faq: [{ question: "", answer: "" }],
       isPaid: true,
-      kaspiMethods: ["link"],
+      kaspiMethods: ["phone"],
       kaspiPhone: "",
       kaspiCard: "",
       bank: DEFAULT_BANK,
@@ -2743,46 +2567,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
     }
 
-    const serializedOptions = formData.isPaid
-      ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
-                ? "quarter"
-                : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            ...serializeKaspiFields(opt),
-          };
-        })
-      : [];
+    const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
       const created = await createProduct.mutateAsync({
@@ -2854,6 +2639,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       toast.success("Продукт создан!", {
         description: "Добавьте материалы и расписание, а затем поделитесь ссылкой или выставьте продукт.",
       });
+      newProductDraft.current = null;
       setIsCreating(false);
       resetForm();
     } catch (error: any) {
@@ -2890,6 +2676,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
           trialPreset: tPreset,
           trialCustomDays: po.trial_days || 7,
           kaspiMethods: kaspi.methods,
+          paymentMethod: kaspi.lastMethod,
+          lastPaymentMethod: kaspi.lastMethod,
           kaspiLink: kaspi.link,
           kaspiPhone: kaspi.phone,
           kaspiCard: kaspi.card,
@@ -2924,6 +2712,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
           const kaspi = kaspiSettingsFromStored(product);
           return {
             kaspiMethods: kaspi.methods,
+            paymentMethod: kaspi.lastMethod,
+            lastPaymentMethod: kaspi.lastMethod,
             kaspiLink: kaspi.link,
             kaspiPhone: kaspi.phone,
             kaspiCard: kaspi.card,
@@ -2935,6 +2725,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     }
 
     const firstOpt = loadedOptions[0];
+    initialPaymentOptions.current = loadedOptions;
 
     let loadedMedia: ProductMediaItem[] = [];
     if (Array.isArray(product.media) && product.media.length > 0) {
@@ -2989,6 +2780,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (closingEdit.current || updateProduct.isPending) return;
 
     const taxonomyError = validateTaxonomyFields(formData, taxonomyCategories);
     if (!editingProduct || !formData.title || taxonomyError) {
@@ -3034,46 +2826,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
     }
 
-    const serializedOptions = formData.isPaid
-      ? options.map(opt => {
-          let accessDays: number | null = null;
-          let bp: string | null = null;
-          if (opt.paymentType === "recurring") {
-            bp =
-              opt.recurringInterval === "1m"
-                ? "month"
-                : opt.recurringInterval === "3m"
-                ? "quarter"
-                : opt.recurringInterval === "1y"
-                ? "year"
-                : opt.recurringInterval;
-            if (opt.recurringInterval === "7d") accessDays = 7;
-            else if (opt.recurringInterval === "14d") accessDays = 14;
-            else if (opt.recurringInterval === "1m") accessDays = 30;
-            else if (opt.recurringInterval === "3m") accessDays = 90;
-            else if (opt.recurringInterval === "1y") accessDays = 365;
-            else if (opt.recurringInterval === "custom") accessDays = opt.recurringCustomDays || 30;
-          }
-          let tDays: number | null = null;
-          if (opt.hasFreeTrial) {
-            if (opt.trialPreset === "3") tDays = 3;
-            else if (opt.trialPreset === "7") tDays = 7;
-            else if (opt.trialPreset === "30") tDays = 30;
-            else if (opt.trialPreset === "custom") tDays = opt.trialCustomDays || 7;
-          }
-          return {
-            id: opt.id,
-            payment_type: opt.paymentType,
-            price: Number(opt.price) || 0,
-            recurring_interval: opt.paymentType === "recurring" ? opt.recurringInterval : null,
-            access_duration_days: accessDays,
-            billing_period: bp,
-            has_free_trial: opt.hasFreeTrial,
-            trial_days: tDays,
-            ...serializeKaspiFields(opt),
-          };
-        })
-      : [];
+    const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
       await updateProduct.mutateAsync({
@@ -3108,6 +2861,26 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     }
   };
 
+  const handleCloseEdit = async () => {
+    if (!editingProduct || closingEdit.current || updateProduct.isPending) return;
+    closingEdit.current = true;
+    try {
+      const updates = buildPaymentDetailsUpdate(editingProduct, initialPaymentOptions.current, formData.pricingOptions);
+      if (updates) {
+        setSavingPaymentDetails(true);
+        await updateProduct.mutateAsync({ id: editingProduct.id, ...updates });
+      }
+      setEditingProduct(null);
+      resetForm();
+      setIsCroppingMedia(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось сохранить реквизиты. Попробуйте ещё раз.");
+    } finally {
+      closingEdit.current = false;
+      setSavingPaymentDetails(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deletingProduct) return;
 
@@ -3134,7 +2907,16 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{t("products")}</h2>
-        <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) { resetForm(); setIsCroppingMedia(false); } }}>
+        <Dialog open={isCreating} onOpenChange={(open) => {
+          if (open) {
+            if (newProductDraft.current) setFormData(newProductDraft.current);
+            else resetForm();
+          } else {
+            newProductDraft.current = formData;
+            setIsCroppingMedia(false);
+          }
+          setIsCreating(open);
+        }}>
           <DialogTrigger asChild>
             <Button variant="default" size="sm">
               <Plus className="w-4 h-4 mr-2" />
@@ -3168,7 +2950,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       </div>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) { setEditingProduct(null); resetForm(); setIsCroppingMedia(false); } }}>
+      <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) void handleCloseEdit(); }}>
         <DialogContent
           className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
@@ -3178,17 +2960,19 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
           <DialogHeader>
             <DialogTitle>{isCroppingMedia ? "Настройка обложки" : `${t("edit")} продукт`}</DialogTitle>
           </DialogHeader>
-          <ProductForm 
-            onSubmit={handleUpdate} 
-            isEdit 
-            formData={formData}
-            setFormData={setFormData}
-            isPending={updateProduct.isPending}
-            t={t}
-            taxonomyCategories={taxonomyCategories}
-            editingProductId={editingProduct?.id || null}
-            onCroppingChange={setIsCroppingMedia}
-          />
+          <fieldset disabled={savingPaymentDetails} className="contents">
+            <ProductForm
+              onSubmit={handleUpdate}
+              isEdit
+              formData={formData}
+              setFormData={setFormData}
+              isPending={updateProduct.isPending || savingPaymentDetails}
+              t={t}
+              taxonomyCategories={taxonomyCategories}
+              editingProductId={editingProduct?.id || null}
+              onCroppingChange={setIsCroppingMedia}
+            />
+          </fieldset>
         </DialogContent>
       </Dialog>
 

@@ -4,42 +4,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-// Products whose protection warning the buyer has already confirmed.
-const STORAGE_KEY = "materials_warning_products";
-
-const readSeen = (): string[] => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-};
+const storageKey = (buyerId: string) => `materials_warning_seen_${buyerId}`;
 
 interface MaterialsProtectionNoticeProps {
-  /** Products the buyer currently has access to. */
-  productIds: string[];
+  buyerId: string;
 }
 
-/** Warns a buyer about content protection once for every product they get access to. */
-const MaterialsProtectionNotice = ({ productIds }: MaterialsProtectionNoticeProps) => {
+/** Warns each buyer once, when they first open the Materials section. */
+const MaterialsProtectionNotice = ({ buyerId }: MaterialsProtectionNoticeProps) => {
   const { language } = useLanguage();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (productIds.length === 0) return;
-    const seen = new Set(readSeen());
-    if (productIds.some((id) => !seen.has(id))) setOpen(true);
-  }, [productIds]);
+    try {
+      const key = storageKey(buyerId);
+      const shouldShow = localStorage.getItem(key) !== "1";
+      if (shouldShow) localStorage.setItem(key, "1");
+      setOpen(shouldShow);
+    } catch {
+      setOpen(true);
+    }
+  }, [buyerId]);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (next) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...new Set([...readSeen(), ...productIds])]));
-    } catch {
-      // Storage unavailable: the warning shows again next time, which is acceptable.
-    }
   };
 
   const isKk = language === "kk";
