@@ -166,9 +166,6 @@ export function ProfileAccountRows({
             <p className="truncate text-[12px] leading-tight text-[#6B7280]">{role}</p>
           </div>
         )}
-        {expanded && active && (
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B00]" aria-hidden />
-        )}
       </button>
     );
 

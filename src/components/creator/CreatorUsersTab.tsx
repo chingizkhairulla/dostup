@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ChevronRight, Layers, Loader2, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers, Loader2, Search } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge } from "@/lib/catalog";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
@@ -9,11 +9,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import CreatorPendingPayments from "./CreatorPendingPayments";
 import ProductSwitcher from "./ProductSwitcher";
-import BuyerDetailsDialog, { UrgencyBadge, type BuyerPurchase } from "./BuyerDetailsDialog";
-import { BUYER_PERIODS, periodStart, type BuyerPeriod } from "./buyerAccess";
+import BuyerDetailsDialog, { type BuyerPurchase } from "./BuyerDetailsDialog";
+import { BUYER_PERIODS, periodStart, accessUrgency, getGrantedAccessPeriod, type BuyerPeriod } from "./buyerAccess";
 import { useCreatorProducts } from "@/hooks/useProducts";
 import { useSelectedCreatorProduct } from "@/hooks/useSelectedCreatorProduct";
 import { cn } from "@/lib/utils";
+import { getMockPaidPurchases } from "@/lib/mockBuyersData";
 
 type PurchaseWithUser = BuyerPurchase & {
   latest_submission?: {
@@ -40,6 +41,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [allProducts, setAllProducts] = useState(false);
   const [period, setPeriod] = useState<BuyerPeriod>("month");
+  const [activeOpen, setActiveOpen] = useState(true);
+  const [inactiveOpen, setInactiveOpen] = useState(true);
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: creatorProducts = [] } = useCreatorProducts();
@@ -81,15 +84,25 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
       const products = productsRes.products ?? [];
       const purchasesData = purchasesRes.purchases ?? [];
-      if (!purchasesData.length) return [];
 
-      return purchasesData.map(purchase => ({
-        ...purchase,
-        simple_user: purchase.user || { id: "", name: "Unknown", phone: "" },
-        product: products.find(p => p.id === purchase.product_id) || { title: "Unknown" },
-        receipts: purchase.receipts ?? [],
-        subscription: purchase.subscription ?? null,
-      })) as PurchaseWithUser[];
+      const realPaid = purchasesData
+        .filter((p) => p.status === "completed" || p.status === "revoked")
+        .map(purchase => ({
+          ...purchase,
+          simple_user: purchase.user || { id: "", name: "Unknown", phone: "" },
+          product: products.find(p => p.id === purchase.product_id) || { title: "Unknown" },
+          receipts: purchase.receipts ?? [],
+          subscription: purchase.subscription ?? null,
+        })) as PurchaseWithUser[];
+
+      const mockPaid = getMockPaidPurchases(products) as unknown as PurchaseWithUser[];
+
+      if (realPaid.length > 0) {
+        const hasTempAccess = realPaid.some((p) => p.access_expires_at || p.trial_ends_at || p.subscription);
+        if (hasTempAccess) return realPaid;
+        return [...realPaid, ...mockPaid];
+      }
+      return mockPaid;
     },
     enabled: !!creatorName,
   });
@@ -216,6 +229,20 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     });
   }, [purchases, period, searchQuery, showAll, selectedProductId]);
 
+  const { activePurchases, inactivePurchases } = useMemo(() => {
+    const active: PurchaseWithUser[] = [];
+    const inactive: PurchaseWithUser[] = [];
+    for (const p of filtered) {
+      const { urgency } = accessUrgency(p);
+      if (p.status === "revoked" || urgency === "closed" || urgency === "expired") {
+        inactive.push(p);
+      } else {
+        active.push(p);
+      }
+    }
+    return { activePurchases: active, inactivePurchases: inactive };
+  }, [filtered]);
+
   const opened = purchases.find((p) => p.id === openId) ?? null;
 
   if (isLoading) {
@@ -225,6 +252,55 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
       </div>
     );
   }
+
+  const renderBuyerCard = (purchase: PurchaseWithUser, index: number) => {
+    const grantedPeriod = getGrantedAccessPeriod(purchase, language);
+    return (
+      <Card
+        key={purchase.id}
+        role="button"
+        tabIndex={0}
+        className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/40 focus-ring"
+        style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+        onClick={() => setOpenId(purchase.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpenId(purchase.id);
+          }
+        }}
+      >
+        <CardContent className="p-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-sm font-bold text-success">
+                {purchase.simple_user.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-foreground truncate">{purchase.simple_user.name}</h4>
+              <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
+                {showAll && (
+                  <>
+                    <span className="truncate">{purchase.product.title}</span>
+                    <span className="shrink-0">&nbsp;·&nbsp;</span>
+                  </>
+                )}
+                <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
+              </p>
+            </div>
+            {/* Granted access period shown next to the arrow */}
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {grantedPeriod}
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -252,13 +328,13 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 onClick={() => setAllProducts((v) => !v)}
                 aria-pressed={showAll}
                 className={cn(
-                  "shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border px-3 text-xs sm:text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] h-9 min-h-0 md:h-10 md:min-h-10",
+                  "group shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border px-3 text-xs sm:text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00] h-9 min-h-0 md:h-10 md:min-h-10",
                   showAll
-                    ? "border-primary bg-primary text-white hover:bg-primary/90 hover:text-white"
-                    : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                    ? "border-primary/30 bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary font-semibold"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Layers className={cn("w-4 h-4 shrink-0 transition-colors", showAll ? "text-white" : "text-primary")} />
+                <Layers className={cn("w-4 h-4 shrink-0 transition-colors", showAll ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                 <span>{t("buyersAllProducts")}</span>
               </button>
             )}
@@ -276,8 +352,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
                 className={cn(
                   "shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
                   period === key
-                    ? "border-primary bg-primary text-white"
-                    : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+                    ? "border-primary/30 bg-primary/15 text-primary font-semibold"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {t(`buyersPeriod_${key}` as "buyersPeriod_month")}
@@ -299,65 +375,62 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
       <CreatorPendingPayments creatorName={creatorName} />
 
+      {/* List "Активные" */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setActiveOpen((v) => !v)}
+          className="flex items-center justify-between w-full py-1 text-left transition-colors"
+        >
           <h3 className="text-base font-semibold text-foreground">{t("paidUsers")}</h3>
-          <span className="text-sm text-muted-foreground">{filtered.length} {t("total")}</span>
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="text-center py-12">
-            <Search className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-muted-foreground">{t("noPaidUsers")}</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {period === "all" ? t("usersWillAppear") : t("buyersTryLongerPeriod")}
-            </p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{activePurchases.length} {t("total")}</span>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", !activeOpen && "-rotate-90")} />
           </div>
-        )}
+        </button>
 
-        {filtered.map((purchase, index) => (
-          <Card
-            key={purchase.id}
-            role="button"
-            tabIndex={0}
-            className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/40 focus-ring"
-            style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-            onClick={() => setOpenId(purchase.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setOpenId(purchase.id);
-              }
-            }}
-          >
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-success">
-                    {purchase.simple_user.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-foreground truncate">{purchase.simple_user.name}</h4>
-                  <p className="mt-0.5 flex min-w-0 text-xs text-muted-foreground">
-                    {showAll && (
-                      <>
-                        <span className="truncate">{purchase.product.title}</span>
-                        <span className="shrink-0">&nbsp;·&nbsp;</span>
-                      </>
-                    )}
-                    <span className="shrink-0 text-success">{formatPriceTenge(Number(purchase.amount))}</span>
-                  </p>
-                </div>
-                {/* Access status sits in the middle of the card's height, next to the arrow. */}
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <UrgencyBadge purchase={purchase} />
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
+        {activeOpen && (
+          <>
+            {activePurchases.length === 0 ? (
+              <div className="text-center py-10">
+                <Search className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
+                <p className="text-muted-foreground">{t("noPaidUsers")}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {period === "all" ? t("usersWillAppear") : t("buyersTryLongerPeriod")}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            ) : (
+              activePurchases.map((purchase, index) => renderBuyerCard(purchase, index))
+            )}
+          </>
+        )}
+      </div>
+
+      {/* List "Неактивные" */}
+      <div className="space-y-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setInactiveOpen((v) => !v)}
+          className="flex items-center justify-between w-full py-1 text-left transition-colors"
+        >
+          <h3 className="text-base font-semibold text-foreground">{t("inactiveUsers")}</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{inactivePurchases.length} {t("total")}</span>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", !inactiveOpen && "-rotate-90")} />
+          </div>
+        </button>
+
+        {inactiveOpen && (
+          <>
+            {inactivePurchases.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">{t("noInactiveUsers")}</p>
+              </div>
+            ) : (
+              inactivePurchases.map((purchase, index) => renderBuyerCard(purchase, index))
+            )}
+          </>
+        )}
       </div>
 
       <BuyerDetailsDialog

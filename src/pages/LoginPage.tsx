@@ -140,7 +140,7 @@ const LoginPage = () => {
       spinner
     );
 
-  return <LoginModal onClose={handleModalBack}>{body}</LoginModal>;
+  return <LoginModal onClose={handleModalBack} hideBack={screen === "entry"}>{body}</LoginModal>;
 };
 
 export default LoginPage;

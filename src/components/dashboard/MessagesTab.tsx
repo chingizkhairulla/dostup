@@ -80,7 +80,7 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
             verified: true,
           },
           ...[...sellers]
-            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
+            .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || (a.name || "").localeCompare(b.name || ""))
             .map((seller) => ({
               id: `${DIRECT_PREFIX}${seller.peer_id}`,
               title: seller.name,
@@ -95,9 +95,14 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
     [channels, supportUnread, t, sellers],
   );
 
-  // Open the freshest channel by default, or the support thread when nothing was bought.
+  // Open the freshest channel by default, or the support thread when nothing was bought or when prefill/support chat requested.
   useEffect(() => {
     if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("chat") === "support" || params.get("prefill")) {
+      setSelectedId(SUPPORT_CHAT_ID);
+      return;
+    }
     const stillThere =
       selectedId === SUPPORT_CHAT_ID ||
       channels.some((c) => c.id === selectedId) ||

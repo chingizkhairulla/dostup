@@ -46,8 +46,8 @@ interface Props {
   bodyRef?: React.RefObject<HTMLDivElement>;
 }
 
-const initialsFrom = (name: string) =>
-  name
+const initialsFrom = (name?: string | null) =>
+  (name || "")
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -103,7 +103,7 @@ const MessengerLayout = ({
     const list = activeFilter ? all.filter((item) => item.filterKeys?.includes(activeFilter.key)) : all;
     const q = query.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((item) => item.title.toLowerCase().includes(q));
+    return list.filter((item) => (item.title || "").toLowerCase().includes(q));
   }, [active, activeFilter, query]);
 
   useEffect(() => {

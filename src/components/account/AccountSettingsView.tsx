@@ -11,11 +11,11 @@ import {
   X,
   ChevronRight,
   ArrowLeft,
-  Package,
   Loader2,
   Trash2,
   Check,
   Clock,
+  Bug,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,6 @@ import AvatarSettings from "@/components/account/AvatarSettings";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import TimezoneSelector from "@/components/account/TimezoneSelector";
 import NotificationPreferences from "@/components/NotificationPreferences";
-import { formatPriceTenge } from "@/lib/catalog";
 import { invokeApi } from "@/lib/sessionApi";
 import { profileHomePath, type AppProfile, type SessionPayload } from "@/lib/creatorAuth";
 import { format, parseISO } from "date-fns";
@@ -137,8 +136,8 @@ export const AccountSettingsView = ({
       id: "notifications" as SettingsSectionKey,
       label: t("notificationSettings"),
       icon: Bell,
-      description: language === "ru" ? "Напоминания об уроках и push-уведомления" : "Сабақтар туралы еске салулар және хабарландырулар",
-      keywords: ["уведомления", "напоминания", "время", "уроки", "занятия", "notifications", "reminders", "push"],
+      description: language === "ru" ? "Напоминания об уроках и оплате" : "Сабақтар мен төлем туралы еске салулар",
+      keywords: ["напоминания", "уведомления", "оплата", "уроки", "занятия", "время", "notifications", "reminders", "payment", "push"],
     },
     {
       id: "app" as SettingsSectionKey,
@@ -325,52 +324,6 @@ export const AccountSettingsView = ({
                 </CardContent>
               </Card>
 
-              {/* Buyer Purchases */}
-              {role === "buyer" && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Package className="w-5 h-5 text-primary" />
-                      {t("myPurchases")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {purchasesLoading ? (
-                      <div className="flex justify-center py-6">
-                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                      </div>
-                    ) : purchases && purchases.length > 0 ? (
-                      <div className="space-y-3">
-                        {purchases.map((purchase) => (
-                          <div
-                            key={purchase.id}
-                            className="p-4 rounded-xl bg-muted/50 border border-border"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="font-medium text-foreground">
-                                  {purchase.product?.title || "Продукт"}
-                                </h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {t("purchased")}{" "}
-                                  {format(parseISO(purchase.created_at), "d MMMM yyyy", { locale: ru })}
-                                </p>
-                              </div>
-                              <span className="text-sm font-medium text-foreground">
-                                {formatPriceTenge(Number(purchase.amount))}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-muted-foreground py-4">
-                        {t("noPurchases")}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
 
             {/* Delete Profile Section - at the bottom */}
@@ -437,7 +390,7 @@ export const AccountSettingsView = ({
 
       case "notifications":
         return userId ? (
-          <NotificationPreferences userId={userId} />
+          <NotificationPreferences userId={userId} role={role} />
         ) : (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
@@ -517,7 +470,7 @@ export const AccountSettingsView = ({
         {/* Desktop Header */}
         <div className="hidden md:flex items-center">
           <h2 className="text-base font-semibold text-foreground">
-            {t("accountSettings")}
+            {activeSectionObj.label}
           </h2>
         </div>
 
@@ -615,7 +568,26 @@ export const AccountSettingsView = ({
           </div>
 
           {/* Fixed Logout Button at bottom of sidebar */}
-          <div className="border-t border-border pt-3 mt-2 shrink-0">
+          <div className="border-t border-border pt-3 mt-2 shrink-0 space-y-1">
+            {typeof window !== "undefined" &&
+              !window.location.hostname.includes("trydostup.online") &&
+              (window.location.hostname.includes("fix-small-fixes") ||
+                window.location.hostname.includes("vercel.app") ||
+                window.location.hostname === "localhost" ||
+                window.location.hostname === "127.0.0.1") && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    onClose?.();
+                    window.dispatchEvent(new CustomEvent("trigger-debug-error"));
+                  }}
+                  className="w-full justify-start gap-3 h-9 px-3 rounded-xl text-xs font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Bug className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                  <span className="truncate">Тест экрана ошибки</span>
+                </Button>
+              )}
             <Button
               type="button"
               variant="ghost"
@@ -643,35 +615,24 @@ export const AccountSettingsView = ({
       {showLogoutConfirm &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 motion-safe:animate-fade-in">
+          <div className="fixed inset-0 z-[95] flex items-start sm:items-center justify-center p-4 pt-24 sm:pt-4 motion-safe:animate-fade-in">
             <div
               className="login-modal-backdrop absolute inset-0"
               onClick={() => setShowLogoutConfirm(false)}
               aria-hidden="true"
             />
-            <div className="relative z-10 w-full max-w-md bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
-              <div className="space-y-2">
+            <div className="relative z-10 w-full max-w-sm bg-background border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+              <div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {t("confirmLogout")}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {t("confirmLogoutDescription")}
-                </p>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="rounded-xl"
-                >
-                  {t("no")}
-                </Button>
+              <div>
                 <Button
                   type="button"
                   variant="destructive"
                   onClick={handleLogout}
-                  className="rounded-xl"
+                  className="w-full rounded-xl"
                 >
                   {t("yes")}
                 </Button>
