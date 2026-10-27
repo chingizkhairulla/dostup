@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import CoverCropEditor from "@/components/creator/CoverCropEditor";
 import { useCoverCrop } from "@/hooks/useCoverCrop";
 import { uploadProductMedia } from "@/lib/productMediaUpload";
-import { Plus, Pencil, Trash2, MapPin, Loader2, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin, Loader2, Check, X } from "lucide-react";
 
 export interface SlotDetailsData {
   id: string;
@@ -382,47 +380,62 @@ export const SlotDetailsDialog = ({
         </DialogContent>
       </Dialog>
 
-      {/* Separate Window for Cover Cropping & Settings (Portal with frosted blur backdrop like avatar crop) */}
-      {Boolean(coverCrop.source) &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 motion-safe:animate-fade-in">
-            <div
-              className="login-modal-backdrop absolute inset-0"
-              onClick={() => !cropSaving && coverCrop.resetCrop()}
-              aria-hidden="true"
-            />
-            <Card className="relative z-10 w-full max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card shadow-2xl overflow-hidden p-5 sm:p-6 space-y-4">
-              <div className="pb-1 border-b border-border/50">
-                <h3 className="text-base sm:text-lg font-semibold text-foreground">
-                  {t.coverSettings}
-                </h3>
-              </div>
+      {/* Cover cropping as a nested Radix Dialog (portal-based overlay would be blocked by the open dialog's pointer-events: none) */}
+      <Dialog
+        open={Boolean(coverCrop.source)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !cropSaving) coverCrop.resetCrop();
+        }}
+      >
+        <DialogContent
+          hideCloseButton
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[calc(100%-1.5rem)] max-w-lg sm:max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4"
+        >
+          <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/50">
+            <DialogTitle className="text-base sm:text-lg font-semibold text-foreground">
+              {t.coverSettings}
+            </DialogTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 min-h-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={() => {
+                if (!cropSaving) coverCrop.resetCrop();
+              }}
+              title={language === "kk" ? "Өзгерістер сақталмайды" : "Изменения не сохранятся"}
+              aria-label="Закрыть"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
 
-              {/* Border around showing settings are inside cover */}
-              <div className="p-3 sm:p-4 rounded-2xl border-2 border-primary/30 bg-muted/10 space-y-3">
-                {coverCrop.source && (
-                  <CoverCropEditor
-                    source={coverCrop.source}
-                    mediaType={coverCrop.mediaType}
-                    previewStyle={coverCrop.previewStyle}
-                    zoom={coverCrop.zoom}
-                    onZoom={coverCrop.setZoom}
-                    onPointerDown={coverCrop.onPointerDown}
-                    onPointerMove={coverCrop.onPointerMove}
-                    onPointerUp={coverCrop.onPointerUp}
-                    saving={cropSaving}
-                    onCancel={() => {
-                      coverCrop.resetCrop();
-                    }}
-                    onSave={() => void handleSaveCrop()}
-                  />
-                )}
-              </div>
-            </Card>
-          </div>,
-          document.body
-        )}
+          {/* Border around showing settings are inside cover */}
+          <div className="p-3 sm:p-4 rounded-2xl border-2 border-primary/30 bg-muted/10 space-y-3">
+            {coverCrop.source && (
+              <CoverCropEditor
+                source={coverCrop.source}
+                mediaType={coverCrop.mediaType}
+                previewStyle={coverCrop.previewStyle}
+                zoom={coverCrop.zoom}
+                onZoom={coverCrop.setZoom}
+                onPointerDown={coverCrop.onPointerDown}
+                onPointerMove={coverCrop.onPointerMove}
+                onPointerUp={coverCrop.onPointerUp}
+                saving={cropSaving}
+                hideCancel
+                onCancel={() => {
+                  coverCrop.resetCrop();
+                }}
+                onSave={() => void handleSaveCrop()}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
