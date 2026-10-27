@@ -10,7 +10,7 @@ import {
   type LessonFormat,
 } from "@/lib/catalog";
 
-export type CatalogSort = "newest" | "price_asc" | "price_desc" | "rating" | "popular" | "trending";
+export type CatalogSort = "newest" | "oldest" | "price_asc" | "price_desc" | "rating" | "popular" | "trending";
 
 export type CatalogFilters = {
   q?: string;
@@ -96,18 +96,24 @@ export function useTopRatedProducts(enabled = true, scope: CatalogScope = {}) {
   return useCatalogSearch({ ...scope, sort: "rating" }, enabled, HOME_RAIL_LIMIT);
 }
 
-export const ALL_PRODUCTS_PAGE_SIZE = 16;
+type CatalogPage = { offset: number; limit: number };
 
-/** Every published product, newest first, loaded one page at a time. */
-export function useAllProducts(enabled = true, scope: CatalogScope = {}) {
-  const filters: CatalogFilters = { ...scope, sort: "newest" };
+/**
+ * A list that shows `firstPage` products and then `nextPage` more on each «Показать ещё».
+ * A page shorter than asked for means the catalog has run out.
+ */
+export function usePagedCatalog(
+  filters: CatalogFilters,
+  enabled: boolean,
+  firstPage: number,
+  nextPage: number,
+) {
   return useInfiniteQuery({
-    queryKey: ["catalog-all", filters],
-    queryFn: ({ pageParam }) => searchCatalog(filters, ALL_PRODUCTS_PAGE_SIZE, pageParam),
-    initialPageParam: 0,
-    // A short page means the catalog has run out.
-    getNextPageParam: (lastPage, pages) =>
-      lastPage.length < ALL_PRODUCTS_PAGE_SIZE ? undefined : pages.length * ALL_PRODUCTS_PAGE_SIZE,
+    queryKey: ["catalog-paged", filters, firstPage, nextPage],
+    queryFn: ({ pageParam }) => searchCatalog(filters, pageParam.limit, pageParam.offset),
+    initialPageParam: { offset: 0, limit: firstPage } as CatalogPage,
+    getNextPageParam: (lastPage, _pages, lastParam) =>
+      lastPage.length < lastParam.limit ? undefined : { offset: lastParam.offset + lastParam.limit, limit: nextPage },
     enabled,
   });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import CatalogFilterRow from "@/components/marketplace/CatalogFilterRow";
@@ -17,40 +17,14 @@ import { useHideScrollbar } from "@/hooks/useHideScrollbar";
 import {
   useCatalogSearch,
   useCatalogTaxonomy,
-  useAllProducts,
   useNewProducts,
   useTopRatedProducts,
+  usePagedCatalog,
   type CatalogSort,
 } from "@/hooks/useCatalogSearch";
 import { categoryLabel, visibleTaxonomy } from "@/lib/catalog";
 import { profileHomePath } from "@/lib/creatorAuth";
 import { cn } from "@/lib/utils";
-
-/** Loads the next page of «Все продукты» once the end of the grid scrolls into view. */
-const LoadMoreSentinel = ({ loading, onVisible }: { loading: boolean; onVisible: () => void }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const onVisibleRef = useRef(onVisible);
-  onVisibleRef.current = onVisible;
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || loading) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) onVisibleRef.current();
-      },
-      { rootMargin: "400px 0px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [loading]);
-
-  return (
-    <div ref={ref} className="flex justify-center py-8">
-      {loading && <Loader2 className="h-6 w-6 animate-spin text-primary" />}
-    </div>
-  );
-};
 
 const MarketplacePage = () => {
   const { t, language } = useLanguage();
@@ -74,9 +48,10 @@ const MarketplacePage = () => {
   const taxonomy = useCatalogTaxonomy();
   const categories = visibleTaxonomy(taxonomy.data ?? []);
 
-  // Without a search query the page shows the rails, narrowed to the chosen category if any.
-  const showRails = !debouncedQuery;
-  const scope = { categorySlug, subcategorySlug };
+  // Three views: the rails (nothing chosen), one list for a chosen category, search results.
+  const isSearch = Boolean(debouncedQuery);
+  const isCategory = !isSearch && Boolean(categorySlug);
+  const showRails = !isSearch && !isCategory;
 
   const search = useCatalogSearch(
     {
@@ -85,23 +60,36 @@ const MarketplacePage = () => {
       subcategorySlug,
       sort,
     },
-    !showRails,
+    isSearch,
   );
   const isMobile = useIsMobile();
-  const newProducts = useNewProducts(showRails, scope);
-  const topRatedProducts = useTopRatedProducts(showRails, scope);
-  const allProducts = useAllProducts(showRails, scope);
+  const railSize = isMobile ? 3 : 8;
+  const pageSize = isMobile ? 8 : 16;
+  const newProducts = useNewProducts(showRails);
+  const topRatedProducts = useTopRatedProducts(showRails);
+  // «Все продукты»: from the first published product to the latest, a rail's worth at first.
+  const allProducts = usePagedCatalog({ sort: "oldest" }, showRails, railSize, pageSize);
+  // A chosen category: newest first, with no rail titles.
+  const categoryProducts = usePagedCatalog(
+    { categorySlug, subcategorySlug, sort: "newest" },
+    isCategory,
+    pageSize,
+    pageSize,
+  );
   // "Popular" and "Trending" rails (usePopularProducts / useTrendingProducts) come back once the
   // catalog is big enough for sales rankings to mean something — see docs/marketplace-roadmap.md.
 
-  const visibleNewProducts = (newProducts.data ?? []).slice(0, isMobile ? 3 : 8);
-  const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, isMobile ? 3 : 8);
+  const visibleNewProducts = (newProducts.data ?? []).slice(0, railSize);
+  const visibleTopRatedProducts = (topRatedProducts.data ?? []).slice(0, railSize);
   const allProductsList = allProducts.data?.pages.flat() ?? [];
+  const categoryProductsList = categoryProducts.data?.pages.flat() ?? [];
 
   const products = search.data ?? [];
   const loading = showRails
     ? newProducts.isLoading || topRatedProducts.isLoading || allProducts.isLoading || taxonomy.isLoading
-    : search.isLoading || taxonomy.isLoading;
+    : isCategory
+      ? categoryProducts.isLoading || taxonomy.isLoading
+      : search.isLoading || taxonomy.isLoading;
 
   const setScope = (category: string, subcategory: string) => {
     const next = new URLSearchParams(searchParams);
@@ -115,18 +103,9 @@ const MarketplacePage = () => {
   const selectCategory = (slug: string) => setScope(categorySlug === slug ? "" : slug, "");
   const selectFromMenu = (catSlug: string, subSlug: string) => setScope(catSlug, subSlug);
 
-  // «Смотреть все» opens the full list for the same category.
-  const scopedPath = (path: string) => {
-    const params = new URLSearchParams();
-    if (categorySlug) params.set("category", categorySlug);
-    if (subcategorySlug) params.set("subcategory", subcategorySlug);
-    const qs = params.toString();
-    return qs ? `${path}?${qs}` : path;
-  };
-
   const seeAllLink = (to: string, label: string) => (
     <Link
-      to={scopedPath(to)}
+      to={to}
       aria-label={label}
       className="inline-flex shrink-0 items-center justify-end min-h-[44px] min-w-[44px] rounded-md text-sm font-semibold text-primary transition-colors hover:text-[#E86000] focus-ring"
     >
@@ -137,6 +116,21 @@ const MarketplacePage = () => {
       </span>
     </Link>
   );
+
+  const showMore = (list: typeof allProducts) =>
+    list.hasNextPage ? (
+      <div className="mt-8 flex justify-center">
+        <button
+          type="button"
+          disabled={list.isFetchingNextPage}
+          onClick={() => void list.fetchNextPage()}
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-[#E3E5E8] bg-white px-6 text-[15px] font-medium text-[#1F2328] transition-colors hover:border-[#FF6B00]/30 hover:bg-[#FF6B00]/10 active:bg-[#FF6B00] active:text-white focus-ring disabled:opacity-60"
+        >
+          {list.isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />}
+          {t("showMore")}
+        </button>
+      </div>
+    ) : null;
 
   const emptyCatalog = (
     <div className="rounded-2xl border border-border px-6 py-16 text-center">
@@ -201,15 +195,6 @@ const MarketplacePage = () => {
             </div>
           )}
 
-          {categorySlug && (
-            <CatalogFilterRow
-              categories={categories}
-              categorySlug={categorySlug}
-              subcategorySlug={subcategorySlug}
-              onSubcategoryChange={(slug) => setScope(categorySlug, slug)}
-              className="mx-auto mt-5 max-w-4xl justify-center"
-            />
-          )}
         </section>
         </PublicContainer>
 
@@ -245,12 +230,7 @@ const MarketplacePage = () => {
                   <div>
                     <CatalogSectionHeader title={t("allCatalogProducts")} />
                     <CatalogGrid products={allProductsList} />
-                    {allProducts.hasNextPage && (
-                      <LoadMoreSentinel
-                        loading={allProducts.isFetchingNextPage}
-                        onVisible={() => void allProducts.fetchNextPage()}
-                      />
-                    )}
+                    {showMore(allProducts)}
                   </div>
                 ) : (
                   emptyCatalog
@@ -260,14 +240,34 @@ const MarketplacePage = () => {
           </section>
         ) : (
           <section className="mt-[140px] w-full px-6 pb-16">
-            <h2 className="mb-6 text-[26px] font-bold tracking-tight text-[#1F2328]">
-              {t("allCatalogProducts")}
-            </h2>
+            {categorySlug ? (
+              // The subcategories take the place of the title above the list.
+              <CatalogFilterRow
+                categories={categories}
+                categorySlug={categorySlug}
+                subcategorySlug={subcategorySlug}
+                onSubcategoryChange={(slug) => setScope(categorySlug, slug)}
+                className="mb-6"
+              />
+            ) : (
+              <h2 className="mb-6 text-[26px] font-bold tracking-tight text-[#1F2328]">
+                {t("allCatalogProducts")}
+              </h2>
+            )}
 
             {loading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
+            ) : isCategory ? (
+              categoryProductsList.length === 0 ? (
+                emptyCatalog
+              ) : (
+                <>
+                  <CatalogGrid products={categoryProductsList} />
+                  {showMore(categoryProducts)}
+                </>
+              )
             ) : products.length === 0 ? (
               emptyCatalog
             ) : (

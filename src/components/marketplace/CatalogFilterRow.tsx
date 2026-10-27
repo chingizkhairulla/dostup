@@ -15,8 +15,9 @@ type CatalogFilterRowProps = {
 const activeClass = "bg-[#FF6B00]/10 text-[#1F2328]";
 
 /**
- * «Все подкатегории» on its own, then the subcategories joined into one segmented control,
- * like the week / month switch in the schedule.
+ * «Все подкатегории» on its own, then the subcategories joined into one segmented control
+ * like the week / month switch in the schedule: a grey track with the chosen one in white.
+ * Pressing the chosen button again keeps it chosen, the same as «Все подкатегории».
  */
 const CatalogFilterRow = ({
   categories,
@@ -48,7 +49,7 @@ const CatalogFilterRow = ({
 
       <div
         role="group"
-        className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-full border border-[#E3E5E8] bg-white p-0.5 no-scrollbar"
+        className="inline-flex h-9 max-w-full items-center gap-0.5 overflow-x-auto rounded-full border border-[#E3E5E8] bg-[#F1F2F4] p-0.5 no-scrollbar"
       >
         {category.subcategories.map((subcategory) => {
           const active = subcategorySlug === subcategory.slug;
@@ -57,10 +58,12 @@ const CatalogFilterRow = ({
               key={subcategory.slug}
               type="button"
               aria-pressed={active}
-              onClick={() => onSubcategoryChange(active ? "" : subcategory.slug)}
+              onClick={() => onSubcategoryChange(subcategory.slug)}
               className={cn(
                 "inline-flex h-full shrink-0 items-center whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors focus-ring",
-                active ? activeClass : "text-[#1F2328] hover:bg-[#FF6B00]/5",
+                active
+                  ? "bg-white text-[#1F2328] shadow-sm"
+                  : "text-[#6B7280] hover:text-[#1F2328]",
               )}
             >
               {subcategoryLabel(subcategory, language)}
