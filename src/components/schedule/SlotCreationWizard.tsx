@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, ChevronDown, ChevronUp, Settings, ChevronLeft, ChevronRight, Trash2, Check, MapPin, Plus, X, Pencil, Calendar as CalendarIcon, Timer, Users, Package, Video, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -849,8 +848,8 @@ export default function SlotCreationWizard({
       location: "Местоположение",
       ready: "Готово",
       clearAll: "Удалить все слоты",
-      confirmClearRemainingTitle: "Точно удалить оставшиеся слоты на неделю?",
-      confirmClearAllTitle: "Точно удалить все слоты на неделю?",
+      confirmClearRemainingTitle: "Удалить оставшиеся слоты на неделю?",
+      confirmClearAllTitle: "Удалить все слоты на неделю?",
       cancel: "Отмена",
       confirm: "Удалить",
       yes: "Да",
@@ -2112,6 +2111,21 @@ export default function SlotCreationWizard({
     </div>
   );
 
+  // Where the mouse/finger went down in step 2: a press that ends elsewhere is a drag, not a click,
+  // and must not select, unselect or clear blocks.
+  const step2PointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const handleStep2PointerDown = (e: React.PointerEvent) => {
+    step2PointerDownRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const isStep2Drag = (e: React.MouseEvent) => {
+    const start = step2PointerDownRef.current;
+    return Boolean(start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4);
+  };
+  const clearStep2SelectionOnClick = (e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget || isStep2Drag(e)) return;
+    setSelectedSlotKeys(new Set());
+  };
+
   // Step 2: one day's interval blocks, split into lessons with breaks (desktop columns and the phone day view)
   const renderStep2DayBlocks = (dayIdx: number) => {
     const intervals = (effectiveIntervalsByDay[dayIdx] || []).filter(
@@ -2146,6 +2160,7 @@ export default function SlotCreationWizard({
           key={key}
           onClick={(e) => {
             e.stopPropagation();
+            if (isStep2Drag(e)) return;
             toggleSlotSelection(key);
           }}
           style={{ top: `${topPx}px`, height: `${heightPx}px` }}
@@ -2200,15 +2215,13 @@ export default function SlotCreationWizard({
   }, [displayHours]);
 
   // Step switcher: two numbered circles joined by a grey line. Hovering the other step's circle
-  // turns that circle and the line light orange; each circle shows a "Шаг N" tooltip.
+  // turns that circle and the line light orange.
   const renderStepSwitcher = () => {
     const stepLabel = (n: 1 | 2) => (language === "ru" ? `Шаг ${n}` : `${n}-қадам`);
     const circle = (n: 1 | 2) => {
       const isActive = step === n;
       const isHovered = hoveredStep === n && !isActive;
       return (
-        <Tooltip>
-          <TooltipTrigger asChild>
             <button
               type="button"
               onClick={() => handleStepChange(n)}
@@ -2227,20 +2240,15 @@ export default function SlotCreationWizard({
             >
               {n}
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{stepLabel(n)}</TooltipContent>
-        </Tooltip>
       );
     };
     const isOtherStepHovered = hoveredStep !== null && hoveredStep !== step;
     return (
-      <TooltipProvider delayDuration={150}>
         <div className="flex items-center gap-2">
           {circle(1)}
           <div className={cn("h-1 w-12 rounded-full transition-colors", isOtherStepHovered ? "bg-primary/30" : "bg-muted")} />
           {circle(2)}
         </div>
-      </TooltipProvider>
     );
   };
 
@@ -2808,6 +2816,7 @@ export default function SlotCreationWizard({
               <div
                 className="block sm:hidden p-3 space-y-2.5"
                 style={{ paddingBottom: `${mobileBottomBarHeight + 8}px` }}
+                onPointerDownCapture={handleStep2PointerDown}
               >
                 {/* Day Switcher Bar with < and > */}
                 <div
@@ -2876,17 +2885,15 @@ export default function SlotCreationWizard({
                       ))}
                     </div>
                     <div
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          setSelectedSlotKeys(new Set());
-                        }
-                      }}
+                      onClick={clearStep2SelectionOnClick}
                       className="relative border-t border-foreground/35"
                       style={{ height: `${displayHours.length * 48}px` }}
                     >
                       <div className="absolute inset-0 pointer-events-none flex flex-col">
                         {displayHours.map((_, i) => (
-                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                          <div key={i} className="relative border-b border-foreground/35" style={{ height: "48px" }}>
+                            <div className="absolute left-0 right-0 top-6 border-t border-border/75" />
+                          </div>
                         ))}
                       </div>
                       {renderStep2DayBlocks(mobileDayIdx)}
@@ -2974,17 +2981,16 @@ export default function SlotCreationWizard({
 
               {/* DESKTOP STEP 2: 7-day schedule grid with right sidebar */}
               <div
-                onClick={() => setSelectedSlotKeys(new Set())}
+                onPointerDownCapture={handleStep2PointerDown}
+                onClick={(e) => {
+                  if (!isStep2Drag(e)) setSelectedSlotKeys(new Set());
+                }}
                 className="hidden sm:flex gap-5 p-2 sm:p-4 min-w-[750px]"
               >
               {/* Left: Schedule Grid with continuous interval blocks */}
               <div className="flex-1 min-w-0">
                 <div
-                  onClick={(e) => {
-                    if (e.target === e.currentTarget) {
-                      setSelectedSlotKeys(new Set());
-                    }
-                  }}
+                  onClick={clearStep2SelectionOnClick}
                   className="border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card select-none"
                 >
                   {/* 7 Days Header (Mon-Sun) with week arrows in the time column */}
@@ -3045,18 +3051,16 @@ export default function SlotCreationWizard({
                       ))}
                     </div>
                     <div
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          setSelectedSlotKeys(new Set());
-                        }
-                      }}
+                      onClick={clearStep2SelectionOnClick}
                       className="relative bg-card border-t border-foreground/35"
                       style={{ height: `${displayHours.length * 48}px` }}
                     >
                       {/* Background horizontal hour lines */}
                       <div className="absolute inset-0 pointer-events-none flex flex-col">
                         {displayHours.map((_, i) => (
-                          <div key={i} className="border-b border-foreground/35" style={{ height: "48px" }} />
+                          <div key={i} className="relative border-b border-foreground/35" style={{ height: "48px" }}>
+                            <div className="absolute left-0 right-0 top-6 border-t border-border/75" />
+                          </div>
                         ))}
                       </div>
 
@@ -3065,11 +3069,7 @@ export default function SlotCreationWizard({
                         {Array.from({ length: 7 }).map((_, dayIdx) => (
                           <div
                             key={dayIdx}
-                            onClick={(e) => {
-                              if (e.target === e.currentTarget) {
-                                setSelectedSlotKeys(new Set());
-                              }
-                            }}
+                            onClick={clearStep2SelectionOnClick}
                             className="relative h-full border-r last:border-r-0 border-foreground/35"
                           >
                             {renderStep2DayBlocks(dayIdx)}
@@ -3436,7 +3436,7 @@ export default function SlotCreationWizard({
                     )}
 
                     {/* Repetition: separated from the settings above */}
-                    <div className="pt-3 border-t border-border/50 space-y-3">
+                    <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <Label
                           htmlFor="repeat-switch"
@@ -3939,8 +3939,10 @@ export default function SlotCreationWizard({
                 <AlwaysScrollArea viewportClassName="max-h-[calc(100dvh-200px)] pr-3">
                   <div
                     className={cn(
-                      "space-y-4 pt-1 pb-1 transition-opacity",
-                      selectedSlotKeys.size > 0 ? "opacity-100" : "opacity-60 pointer-events-none"
+                      "space-y-4 p-4 m-px mb-1 rounded-2xl border bg-card shadow-sm transition-all",
+                      selectedSlotKeys.size > 0
+                        ? "border-primary/40 ring-1 ring-primary/20 opacity-100"
+                        : "border-border/60 opacity-60 pointer-events-none"
                     )}
                   >
                   {/* Conference Link Section */}
