@@ -7,6 +7,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { categoryLabel, subcategoryLabel, type CatalogCategory } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 
+// Stretches over the whole right end of the search bar, so the full grey area is clickable,
+// not only the words.
+const TRIGGER_CLASS =
+  "flex shrink-0 self-stretch items-center gap-1.5 whitespace-nowrap rounded-r-[10px] px-5 text-[15px] font-medium text-[#1F2328] focus-ring hover:bg-[#EDEEF0] motion-safe:transition-colors";
+
 type CategoryMenuProps = {
   categories: CatalogCategory[];
   onSelect: (categorySlug: string, subcategorySlug: string) => void;
@@ -47,7 +52,7 @@ const CategoryMenu = ({ categories, onSelect }: CategoryMenuProps) => {
       type="button"
       aria-expanded={open}
       aria-haspopup="true"
-      className="flex h-full shrink-0 items-center gap-1.5 whitespace-nowrap px-4 text-[15px] font-medium text-[#1F2328] focus-ring rounded-r-[10px] hover:bg-[#EDEEF0] motion-safe:transition-colors"
+      className={TRIGGER_CLASS}
     >
       {t("allCategories")}
       <ChevronDown
@@ -66,7 +71,7 @@ const CategoryMenu = ({ categories, onSelect }: CategoryMenuProps) => {
           aria-expanded={open}
           aria-haspopup="true"
           onClick={() => setOpen(true)}
-          className="flex h-full shrink-0 items-center gap-1.5 whitespace-nowrap px-4 text-[15px] font-medium text-[#1F2328] focus-ring rounded-r-[10px] hover:bg-[#EDEEF0] motion-safe:transition-colors"
+          className={TRIGGER_CLASS}
         >
           {t("allCategories")}
           <ChevronDown className="h-4 w-4 text-[#6B7280]" aria-hidden />
@@ -160,7 +165,7 @@ const CategoryMenu = ({ categories, onSelect }: CategoryMenuProps) => {
           sideOffset={8}
           className="w-[min(520px,calc(100vw-48px))] rounded-xl border-[#E3E5E8] p-0 shadow-lg"
         >
-          <div className="flex min-h-[280px]">
+          <div className="flex">
             <ul className="w-1/2 border-r border-[#E3E5E8] py-2" role="listbox" aria-label={t("allCategories")}>
               {categories.map((category) => {
                 const active = activeCategory.slug === category.slug;
@@ -184,20 +189,35 @@ const CategoryMenu = ({ categories, onSelect }: CategoryMenuProps) => {
                 );
               })}
             </ul>
-            <ul className="w-1/2 py-2" role="listbox">
-              {activeCategory.subcategories.map((subcategory) => (
-                <li key={subcategory.slug}>
-                  <button
-                    type="button"
-                    role="option"
-                    className="flex w-full px-4 py-2.5 text-left text-[15px] text-[#1F2328] hover:bg-[#FAFBFC] focus-ring"
-                    onClick={() => handleSelect(activeCategory.slug, subcategory.slug)}
+            {/* Every subcategory list sits in the same grid cell, so the window is as tall as the
+                longest list and does not jump while the pointer moves between categories. */}
+            <div className="grid w-1/2">
+              {categories.map((category) => {
+                const active = category.slug === activeCategory.slug;
+                return (
+                  <ul
+                    key={category.slug}
+                    role="listbox"
+                    aria-hidden={!active}
+                    className={cn("col-start-1 row-start-1 py-2", !active && "invisible")}
                   >
-                    {subcategoryLabel(subcategory, language)}
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    {category.subcategories.map((subcategory) => (
+                      <li key={subcategory.slug}>
+                        <button
+                          type="button"
+                          role="option"
+                          tabIndex={active ? 0 : -1}
+                          className="flex w-full px-4 py-2.5 text-left text-[15px] text-[#1F2328] hover:bg-[#FAFBFC] focus-ring"
+                          onClick={() => handleSelect(category.slug, subcategory.slug)}
+                        >
+                          {subcategoryLabel(subcategory, language)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })}
+            </div>
           </div>
         </PopoverContent>
       </Popover>

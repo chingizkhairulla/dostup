@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   CATALOG_FILTER_THRESHOLD,
@@ -10,7 +10,7 @@ import {
   type LessonFormat,
 } from "@/lib/catalog";
 
-export type CatalogSort = "newest" | "price_asc" | "price_desc" | "rating" | "popular" | "trending";
+export type CatalogSort = "newest" | "oldest" | "price_asc" | "price_desc" | "rating" | "popular" | "trending";
 
 export type CatalogFilters = {
   q?: string;
@@ -85,12 +85,37 @@ const HOME_RAIL_LIMIT = 8;
  */
 export const HOME_RAIL_MIN_ITEMS = 3;
 
-export function useNewProducts(enabled = true) {
-  return useCatalogSearch({ sort: "newest", onlyNew: true }, enabled, HOME_RAIL_LIMIT);
+/** The category and subcategory a homepage rail is narrowed to; empty strings mean all. */
+export type CatalogScope = Pick<CatalogFilters, "categorySlug" | "subcategorySlug">;
+
+export function useNewProducts(enabled = true, scope: CatalogScope = {}) {
+  return useCatalogSearch({ ...scope, sort: "newest", onlyNew: true }, enabled, HOME_RAIL_LIMIT);
 }
 
-export function useTopRatedProducts(enabled = true) {
-  return useCatalogSearch({ sort: "rating" }, enabled, HOME_RAIL_LIMIT);
+export function useTopRatedProducts(enabled = true, scope: CatalogScope = {}) {
+  return useCatalogSearch({ ...scope, sort: "rating" }, enabled, HOME_RAIL_LIMIT);
+}
+
+type CatalogPage = { offset: number; limit: number };
+
+/**
+ * A list that shows `firstPage` products and then `nextPage` more on each «Показать ещё».
+ * A page shorter than asked for means the catalog has run out.
+ */
+export function usePagedCatalog(
+  filters: CatalogFilters,
+  enabled: boolean,
+  firstPage: number,
+  nextPage: number,
+) {
+  return useInfiniteQuery({
+    queryKey: ["catalog-paged", filters, firstPage, nextPage],
+    queryFn: ({ pageParam }) => searchCatalog(filters, pageParam.limit, pageParam.offset),
+    initialPageParam: { offset: 0, limit: firstPage } as CatalogPage,
+    getNextPageParam: (lastPage, _pages, lastParam) =>
+      lastPage.length < lastParam.limit ? undefined : { offset: lastParam.offset + lastParam.limit, limit: nextPage },
+    enabled,
+  });
 }
 
 /** Most completed purchases over the last 30 days. */

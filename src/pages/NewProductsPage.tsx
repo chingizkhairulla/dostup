@@ -47,8 +47,13 @@ const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
         : "newest");
 
   const isTopRated = effectiveSort === "rating";
+  // Opened from a homepage rail with a category chosen: keep showing that category.
+  const scope = {
+    categorySlug: searchParams.get("category") ?? "",
+    subcategorySlug: searchParams.get("subcategory") ?? "",
+  };
   const search = useCatalogSearch(
-    isTopRated ? { sort: "rating" } : { sort: "newest", onlyNew: true }
+    isTopRated ? { ...scope, sort: "rating" } : { ...scope, sort: "newest", onlyNew: true }
   );
   const products = search.data ?? [];
 
@@ -79,7 +84,7 @@ const NewProductsPage = ({ sort: propSort }: NewProductsPageProps) => {
             titleClassName="text-[20px] md:text-[26px] font-bold tracking-tight text-[#1F2328] leading-snug"
             action={
               <Link
-                to="/"
+                to={`/${location.search}`}
                 onClick={(e) => {
                   if (window.history.state && window.history.state.idx > 0) {
                     e.preventDefault();
