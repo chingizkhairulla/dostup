@@ -260,6 +260,13 @@ const reviewSeeds: ReviewSeed[] = [
   { product: P.ielts, buyer: B.madina, rating: 5, comment: "Подняла Speaking с 6.0 до 7.0.", daysAgo: 6 },
   { product: P.ielts, buyer: B.dinara, rating: 4, comment: null, daysAgo: 3 },
   { product: P.speakClub, buyer: B.aigerim, rating: 5, comment: "Хожу полгода, перестала бояться говорить.", daysAgo: 30 },
+  // Three or more reviews averaging 4.5+, so these four make the «Высокий рейтинг» rail.
+  { product: P.ielts, buyer: B.timur, rating: 5, comment: "Носитель языка, много практики, рекомендую.", daysAgo: 2 },
+  { product: P.python, buyer: B.assel, rating: 5, comment: "Сделала своего первого бота на третьей неделе.", daysAgo: 5 },
+  { product: P.speakClub, buyer: B.timur, rating: 5, comment: "Лучший способ не забросить английский.", daysAgo: 12 },
+  { product: P.speakClub, buyer: B.nurlan, rating: 5, comment: null, daysAgo: 7 },
+  { product: P.mentoring, buyer: B.dinara, rating: 5, comment: "Помогли переписать резюме, стало больше откликов.", daysAgo: 8 },
+  { product: P.mentoring, buyer: B.sanzhar, rating: 4, comment: "Полезно, но созвоны иногда переносили.", daysAgo: 3 },
 ];
 const reviews = reviewSeeds.map((r, i) => ({
   id: `bbbbbbbb-0000-0000-0000-0000000000${String(i + 1).padStart(2, "0")}`,
