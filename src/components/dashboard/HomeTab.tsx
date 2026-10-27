@@ -2,57 +2,66 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, addHours, isBefore, isAfter } from "date-fns";
 import { ru, kk } from "date-fns/locale";
-import { useSimpleBookings, useSimpleMaterials } from "@/hooks/useSimplePurchases";
-import { useAccessibleProducts } from "@/hooks/useAccessibleProducts";
-import { useCatalogPreview, useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
+import {
+  useSimpleBookings,
+  useSimpleMaterials,
+  usePurchaseHistory,
+  useSimpleSubscriptions,
+} from "@/hooks/useSimplePurchases";
+import { useCatalogProductsByIds } from "@/hooks/useCatalogSearch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import CatalogGrid from "@/components/marketplace/CatalogGrid";
+import PurchasesList from "@/components/purchases/PurchasesList";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { readLastOpenedMaterial, readRecentProductIds } from "@/lib/buyerActivity";
+import { buildPurchaseRows } from "@/lib/purchasePayment";
 import {
   Calendar,
   ExternalLink,
   GraduationCap,
   Loader2,
   Play,
+  ShoppingBag,
 } from "lucide-react";
 
-interface HomeTabProps {
-  onBrowseCourses?: () => void;
-}
-
-const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
+const HomeTab = () => {
   const navigate = useNavigate();
   const { language, t } = useLanguage();
   const { user } = useSimpleAuth();
   const locale = language === "kk" ? kk : ru;
 
-  const { accessiblePurchases, productIds, isLoading: accessLoading } = useAccessibleProducts();
+  const { data: purchases = [], isLoading: purchasesLoading } = usePurchaseHistory();
+  const { data: subscriptions = [], isLoading: subscriptionsLoading } = useSimpleSubscriptions();
   const { data: bookings = [], isLoading: bookingsLoading } = useSimpleBookings();
   const { data: materials = [] } = useSimpleMaterials();
 
-  const recentIds = user ? readRecentProductIds(user.id) : [];
-  const catalog = useCatalogProductsByIds(productIds);
+  const recentIds = useMemo(() => (user ? readRecentProductIds(user.id) : []), [user]);
+  const purchaseRows = useMemo(
+    () => buildPurchaseRows(purchases, subscriptions),
+    [purchases, subscriptions],
+  );
+  const catalog = useCatalogProductsByIds(purchaseRows.map((row) => row.productId));
 
-  const myProducts = useMemo(() => {
+  const productRows = useMemo(() => {
     const byId = new Map((catalog.data ?? []).map((product) => [product.id, product]));
-    const ordered = [...accessiblePurchases].sort((a, b) => {
-      const aIdx = recentIds.indexOf(a.product_id);
-      const bIdx = recentIds.indexOf(b.product_id);
-      if (aIdx !== -1 || bIdx !== -1) {
-        if (aIdx === -1) return 1;
-        if (bIdx === -1) return -1;
-        return aIdx - bIdx;
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-    return ordered
-      .map((purchase) => byId.get(purchase.product_id))
-      .filter((product): product is NonNullable<typeof product> => Boolean(product));
-  }, [accessiblePurchases, catalog.data, recentIds]);
+    return purchaseRows
+      .flatMap((data) => {
+        const product = byId.get(data.productId);
+        return product ? [{ data, product }] : [];
+      })
+      .sort((a, b) => {
+        const aIdx = recentIds.indexOf(a.data.productId);
+        const bIdx = recentIds.indexOf(b.data.productId);
+        if (aIdx !== -1 || bIdx !== -1) {
+          if (aIdx === -1) return 1;
+          if (bIdx === -1) return -1;
+          return aIdx - bIdx;
+        }
+        return b.data.purchasedAt.getTime() - a.data.purchasedAt.getTime();
+      });
+  }, [purchaseRows, catalog.data, recentIds]);
 
   const nextLesson = useMemo(() => {
     const now = new Date();
@@ -83,12 +92,15 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
     return Math.round(((index + 1) / inProduct.length) * 100);
   }, [lastMaterial, materials]);
 
-  const loading = accessLoading || bookingsLoading || (productIds.length > 0 && catalog.isLoading);
+  const loading =
+    purchasesLoading ||
+    subscriptionsLoading ||
+    bookingsLoading ||
+    (purchaseRows.length > 0 && catalog.isLoading);
   const showLesson = Boolean(nextLesson);
   const showContinue = Boolean(lastMaterial);
-  const showProducts = myProducts.length > 0;
+  const showProducts = productRows.length > 0;
   const allEmpty = !showLesson && !showContinue && !showProducts;
-  const popular = useCatalogPreview(allEmpty && !loading, 4);
 
   if (loading) {
     return (
@@ -99,32 +111,13 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
   }
 
   if (allEmpty) {
-    const suggested = popular.data ?? [];
     return (
-      <div className="py-4">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <p className="text-muted-foreground">
-            {language === "ru"
-              ? "Пока ничего не куплено — начните с каталога"
-              : "Әзірге ештеңе сатып алынбады — каталогтан бастаңыз"}
-          </p>
-          {onBrowseCourses && (
-            <Button onClick={onBrowseCourses}>{t("browseCourses")}</Button>
-          )}
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-foreground">{t("myProducts")}</h2>
+        <div className="py-12 text-center">
+          <ShoppingBag className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
+          <p className="text-muted-foreground">{t("purchasesEmpty")}</p>
         </div>
-
-        {(popular.isLoading || suggested.length > 0) && (
-          <section className="mt-12">
-            <h2 className="mb-6 text-lg font-semibold text-foreground">{t("newProductsHeading")}</h2>
-            {popular.isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <CatalogGrid products={suggested} />
-            )}
-          </section>
-        )}
       </div>
     );
   }
@@ -198,7 +191,7 @@ const HomeTab = ({ onBrowseCourses }: HomeTabProps) => {
       {showProducts && (
         <section>
           <h2 className="mb-3 text-lg font-semibold text-foreground">{t("myProducts")}</h2>
-          <CatalogGrid products={myProducts} />
+          <PurchasesList rows={productRows} />
         </section>
       )}
     </div>

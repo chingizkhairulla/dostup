@@ -50,7 +50,7 @@ const TeacherMaterialsTab = ({ productIds, teacherName }: TeacherMaterialsTabPro
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">
-          {language === "ru" ? "Мои материалы" : "Менің материалдарым"}
+          {language === "ru" ? "Материалы" : "Материалдар"}
         </h2>
         <p className="text-sm text-muted-foreground mt-1 mb-4">
           {language === "ru"
