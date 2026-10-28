@@ -46,8 +46,8 @@ function DropSurface({ enabled, onFiles, children, className }: { enabled: boole
       else toast.error("Перетащите файлы, а не папку");
     }}>
     {children}
-    {over && enabled && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/95 p-6">
-      <div className="flex flex-col items-center gap-3 text-center text-primary"><Upload className="h-9 w-9" /><p className="font-semibold">Отпустите файлы для загрузки</p></div>
+    {over && enabled && <div className="pointer-events-none absolute inset-3 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/95 p-6">
+      <div className="flex flex-col items-center gap-3 text-center text-primary"><Upload className="h-9 w-9" /><p className="font-semibold">Отпустите мышку</p></div>
     </div>}
   </div>;
 }

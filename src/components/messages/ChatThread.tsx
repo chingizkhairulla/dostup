@@ -175,14 +175,14 @@ const ChatThread = ({
   const viewerItems = useMemo(() => viewer?.items ?? [], [viewer]);
 
   return (
-    <FileDropZone enabled={canAttach && !!uploadFile && !composerNotice && !sending} onFiles={(files) => void handleFiles(files, "media")}
-      className={
+    <div className={
         variant === "embedded"
           ? "flex h-full flex-col bg-transparent"
           : "flex flex-col h-[70vh] max-h-[70vh] border rounded-lg bg-card"
       }
     >
-      {variant === "card" && title && <div className="px-4 py-3 border-b font-semibold">{title}</div>}
+      {variant === "card" && title && <div className="shrink-0 px-4 py-3 border-b font-semibold">{title}</div>}
+      <FileDropZone enabled={canAttach && !!uploadFile && !composerNotice && !sending} onFiles={(files) => void handleFiles(files, "media")} className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {loading ? (
           <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
@@ -327,7 +327,8 @@ const ChatThread = ({
         index={viewer?.index ?? null}
         onIndexChange={(index) => setViewer((v) => (index === null || !v ? null : { ...v, index }))}
       />
-    </FileDropZone>
+      </FileDropZone>
+    </div>
   );
 };
 

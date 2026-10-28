@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
       return json({ show: data === true })
     }
     if (body.action === 'unread') {
-      // No-op until the campaign is explicitly enabled after review.
+      // Retry only a pending first-profile welcome; all other profiles are a no-op.
       const welcome = await db.rpc('deliver_support_welcome', { p_profile: profileId })
       if (welcome.error) throw welcome.error
       const type = caller.kind === 'creator' ? 'creator' : caller.role === 'teacher' ? 'teacher' : 'student'

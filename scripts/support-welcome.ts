@@ -1,35 +1,30 @@
-/** Dry-run by default. Run only after review; never add this to a migration/deploy hook. */
+/** Automatic welcome runs on first-profile creation; this is a dry-run/retry tool only. */
 import { createClient } from '@supabase/supabase-js';
 
 const send = process.argv.includes('--send');
-const activate = process.argv.includes('--activate');
+if (process.argv.includes('--activate')) {
+  throw new Error('--activate is no longer supported. First-profile welcomes are automatic; --send only retries pending deliveries.');
+}
 const db = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_ROLE_KEY || '', { auth: { persistSession: false } });
-let sent = 0, skipped = 0, errors = 0, offset = 0;
-if (activate && !send) throw new Error('--activate requires --send');
-if (activate) {
-  const { error } = await db.from('support_campaigns').update({ enabled: true }).eq('key', 'support_welcome_v1');
-  if (error) throw error;
-}
-if (send) {
-  const { data, error } = await db.from('support_campaigns').select('enabled').eq('key','support_welcome_v1').single();
-  if (error || !data?.enabled) throw error || new Error('Campaign disabled. Review first, then use --send --activate.');
-}
+let sent = 0, skipped = 0, errors = 0, processed = 0;
+let cursor: string | null = null;
 while (true) {
-  const { data: profiles, error } = await db.from('profiles').select('id').in('type',['buyer','creator','school']).not('auth_user_id','is',null).eq('is_demo',false).order('id').range(offset,offset+199);
+  let query = db.from('messenger_account_state').select('auth_user_id,first_profile_id')
+    .eq('welcome_pending',true).is('welcome_delivered_at',null).not('first_profile_id','is',null)
+    .order('auth_user_id').limit(200);
+  if (cursor) query = query.gt('auth_user_id',cursor);
+  const { data: accounts, error } = await query;
   if (error) throw error;
-  if (!profiles?.length) break;
-  const { data: delivered, error: readError } = await db.from('support_campaign_deliveries').select('profile_id').eq('campaign_key','support_welcome_v1').in('profile_id',profiles.map((p)=>p.id));
-  if (readError) throw readError;
-  const done = new Set(delivered?.map((p)=>p.profile_id));
-  for (const p of profiles) {
-    if (done.has(p.id)) { skipped++; continue; }
+  if (!accounts?.length) break;
+  for (const account of accounts) {
     if (!send) { sent++; continue; }
-    const { data, error: deliveryError } = await db.rpc('deliver_support_welcome',{p_profile:p.id});
-    if (deliveryError) { errors++; console.error('Delivery failed for profile',p.id,deliveryError.code); }
+    const { data, error: deliveryError } = await db.rpc('deliver_support_welcome',{p_profile:account.first_profile_id});
+    if (deliveryError) { errors++; console.error('Delivery failed for profile',account.first_profile_id,deliveryError.code); }
     else if (data) sent++; else skipped++;
   }
-  offset += profiles.length;
-  console.log({ mode: send ? 'send' : 'dry-run', processed: offset, [send ? 'sent' : 'pending']: sent, skipped, errors });
+  processed += accounts.length;
+  cursor = accounts[accounts.length-1].auth_user_id;
+  console.log({ mode: send ? 'send' : 'dry-run', processed, [send ? 'sent' : 'pending']: sent, skipped, errors });
 }
 console.log({ mode: send ? 'send' : 'dry-run', [send ? 'sent' : 'pending']: sent, skipped, errors });
 if (errors) process.exitCode = 1;

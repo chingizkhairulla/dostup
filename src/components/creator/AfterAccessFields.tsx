@@ -12,14 +12,14 @@ export default function AfterAccessFields({ enabled, url, onChange }: {
         После получения доступа
       </div>
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor="after-access-enabled" className="font-normal">
+        <label htmlFor="after-access-enabled" className="text-sm font-normal sm:text-base">
           Отправлять ссылку на вступление в группу
         </label>
         <Switch id="after-access-enabled" checked={enabled} onCheckedChange={(value) => onChange({ afterAccessEnabled: value })} />
       </div>
       {enabled && <div className="space-y-2">
         <Input id="after-access-url" aria-label="Ссылка на вступление в группу" type="url" inputMode="url" placeholder="https://…" maxLength={2048} required value={url} onChange={(event) => onChange({ afterAccessUrl: event.target.value })} />
-        <p className="text-base leading-relaxed text-muted-foreground">После покупки человеку автоматически придет сообщение с вашей ссылкой</p>
+        <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">После покупки человеку автоматически придет сообщение с вашей ссылкой</p>
       </div>}
     </div>
   );

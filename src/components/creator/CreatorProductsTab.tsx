@@ -252,21 +252,10 @@ const FormSection = ({
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) => {
-  const headerRef = useRef<HTMLButtonElement>(null);
-
-  const collapseFromBottom = () => {
-    onOpenChange(false);
-    // The header may be far above after a long section; bring it back into view.
-    requestAnimationFrame(() => {
-      headerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  };
-
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <CollapsibleTrigger asChild>
         <button
-          ref={headerRef}
           type="button"
           className="group flex w-full items-center justify-between gap-3 py-4 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
@@ -290,17 +279,6 @@ const FormSection = ({
       <CollapsibleContent className="data-[state=open]:animate-section-open data-[state=closed]:animate-collapsible-up data-[state=closed]:overflow-hidden motion-reduce:animate-none">
         <div className="space-y-4 pt-1 pb-3 w-full min-w-0 max-w-full">
           {children}
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={collapseFromBottom}
-              className="h-8 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:text-white"
-            >
-              Свернуть
-            </Button>
-          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -1253,7 +1231,7 @@ const ProductForm = ({
         </div>
       ) : (
         <div className="space-y-4 w-full min-w-0 max-w-full">
-          <div className="divide-y divide-border border-y border-border">
+          <div className="divide-y divide-foreground/30 border-y border-foreground/30">
           {/* ============ ДЕТАЛИ ============ */}
     <FormSection label="Детали" open={detailsOpen} onOpenChange={setDetailsOpen}>
         {/* Unified Cover (Image & Video) upload */}
@@ -2353,15 +2331,6 @@ const ProductForm = ({
                                 Удалить этот вариант
                               </Button>
                             ) : <div />}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-white hover:bg-accent transition-all"
-                              onClick={() => setExpandedOptionId(null)}
-                            >
-                              Свернуть
-                            </Button>
                           </div>
                         </div>
                       )}
@@ -3000,7 +2969,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
             </Button>
           </DialogTrigger>
           <DialogContent
-          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          mobileFullScreen
+          className="dialog-static product-editor-dialog w-full sm:max-w-lg sm:max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -3028,7 +2998,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) void handleCloseEdit(); }}>
         <DialogContent
-          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          mobileFullScreen
+          className="dialog-static product-editor-dialog w-full sm:max-w-lg sm:max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}

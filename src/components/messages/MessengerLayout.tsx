@@ -303,7 +303,7 @@ const MessengerLayout = ({
 
       <FileDropProvider key={selectedId}>
       <ConversationVisibility.Provider value={desktop || mobilePane === "chat"}>
-      <FileDropTarget
+      <div
         className={cn("flex min-h-0 min-w-0 flex-1 flex-col", mobilePane === "list" && "hidden md:flex")}
       >
         {selectedId ? (
@@ -319,10 +319,12 @@ const MessengerLayout = ({
               </button>
               <div className="min-w-0 flex-1">{header}</div>
             </div>
+            <FileDropTarget className="flex min-h-0 flex-1 flex-col">
             <div ref={bodyRef} className="app-scroll min-h-0 flex-1 overflow-y-auto bg-muted/30">
               {children}
             </div>
             {footer && <div className="shrink-0 border-t border-border bg-background p-3">{footer}</div>}
+            </FileDropTarget>
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
@@ -332,7 +334,7 @@ const MessengerLayout = ({
             <p className="max-w-xs text-sm text-muted-foreground">{t("messagesPickChat")}</p>
           </div>
         )}
-      </FileDropTarget>
+      </div>
       </ConversationVisibility.Provider>
       </FileDropProvider>
     </div>
