@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { AutoResizeTextarea } from "@/components/ui/AutoResizeTextarea";
+import AfterAccessFields from "./AfterAccessFields";
+import { normalizeGroupLink } from "@/lib/groupLink";
 
 import { useCreatorProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -102,6 +104,8 @@ interface Product {
   price: number;
   kaspi_link: string | null;
   telegram_link: string | null;
+  after_access_enabled?: boolean;
+  after_access_url?: string | null;
   has_schedule: boolean;
   is_active: boolean;
   is_published?: boolean;
@@ -151,6 +155,8 @@ interface FormData {
   price: string;
   kaspiLink: string;
   telegramLink: string;
+  afterAccessEnabled: boolean;
+  afterAccessUrl: string;
   imageUrl: string;
   videoUrl: string;
   media: ProductMediaItem[];
@@ -246,21 +252,10 @@ const FormSection = ({
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) => {
-  const headerRef = useRef<HTMLButtonElement>(null);
-
-  const collapseFromBottom = () => {
-    onOpenChange(false);
-    // The header may be far above after a long section; bring it back into view.
-    requestAnimationFrame(() => {
-      headerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  };
-
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <CollapsibleTrigger asChild>
         <button
-          ref={headerRef}
           type="button"
           className="group flex w-full items-center justify-between gap-3 py-4 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
@@ -284,17 +279,6 @@ const FormSection = ({
       <CollapsibleContent className="data-[state=open]:animate-section-open data-[state=closed]:animate-collapsible-up data-[state=closed]:overflow-hidden motion-reduce:animate-none">
         <div className="space-y-4 pt-1 pb-3 w-full min-w-0 max-w-full">
           {children}
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={collapseFromBottom}
-              className="h-8 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:text-white"
-            >
-              Свернуть
-            </Button>
-          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -1144,6 +1128,9 @@ const ProductForm = ({
 
   /** Первая незаполненная настройка оплаты: id поля, вариант тарифа и (если нужно) свой текст ошибки. */
   const findPaymentIssue = (): { id: string; optId?: string; message?: string } | null => {
+    if (formData.afterAccessEnabled && !normalizeGroupLink(formData.afterAccessUrl)) {
+      return { id: "after-access-url", message: "Добавьте корректную ссылку на группу, начинающуюся с https://" };
+    }
     if (!formData.isPaid) return null;
     if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
       return { id: "field-pricing-options" };
@@ -1244,7 +1231,7 @@ const ProductForm = ({
         </div>
       ) : (
         <div className="space-y-4 w-full min-w-0 max-w-full">
-          <div className="divide-y divide-border border-y border-border">
+          <div className="divide-y divide-foreground/30 border-y border-foreground/30">
           {/* ============ ДЕТАЛИ ============ */}
     <FormSection label="Детали" open={detailsOpen} onOpenChange={setDetailsOpen}>
         {/* Unified Cover (Image & Video) upload */}
@@ -2344,15 +2331,6 @@ const ProductForm = ({
                                 Удалить этот вариант
                               </Button>
                             ) : <div />}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-white hover:bg-accent transition-all"
-                              onClick={() => setExpandedOptionId(null)}
-                            >
-                              Свернуть
-                            </Button>
                           </div>
                         </div>
                       )}
@@ -2374,6 +2352,7 @@ const ProductForm = ({
             </div>
           </div>
         )}
+        <AfterAccessFields enabled={formData.afterAccessEnabled} url={formData.afterAccessUrl} onChange={(value) => setFormData({ ...formData, ...value })} />
     </FormSection>
           </div>
 
@@ -2483,6 +2462,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     price: "49000",
     kaspiLink: "",
     telegramLink: "",
+    afterAccessEnabled: false,
+    afterAccessUrl: "",
     imageUrl: "",
     videoUrl: "",
     media: [],
@@ -2518,6 +2499,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       price: defaultOpt.price,
       kaspiLink: "",
       telegramLink: "",
+    afterAccessEnabled: false,
+    afterAccessUrl: "",
       imageUrl: "",
       videoUrl: "",
       media: [],
@@ -2606,6 +2589,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
+        after_access_enabled: formData.afterAccessEnabled,
+        after_access_url: formData.afterAccessEnabled ? normalizeGroupLink(formData.afterAccessUrl) : null,
         has_schedule: false,
         is_active: true,
         faq: (formData.faq || [])
@@ -2780,6 +2765,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       price: String(product.price ?? firstOpt.price),
       kaspiLink: firstOpt.kaspiLink,
       telegramLink: product.telegram_link || "",
+      afterAccessEnabled: product.after_access_enabled ?? false,
+      afterAccessUrl: product.after_access_url ?? "",
       imageUrl: product.image_url || "",
       videoUrl: product.video_url || "",
       media: loadedMedia,
@@ -2865,6 +2852,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
+        after_access_enabled: formData.afterAccessEnabled,
+        after_access_url: formData.afterAccessEnabled ? normalizeGroupLink(formData.afterAccessUrl) : null,
         image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,
         video_url: (formData.media || []).find((m) => m.type === "video")?.url || null,
         media: (formData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
@@ -2980,7 +2969,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
             </Button>
           </DialogTrigger>
           <DialogContent
-          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          mobileFullScreen
+          className="dialog-static product-editor-dialog w-full sm:max-w-lg sm:max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -3008,7 +2998,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       {/* Edit Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => { if (!open) void handleCloseEdit(); }}>
         <DialogContent
-          className="dialog-static w-[calc(100vw-2rem)] sm:w-full max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
+          mobileFullScreen
+          className="dialog-static product-editor-dialog w-full sm:max-w-lg sm:max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
