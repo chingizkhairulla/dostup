@@ -8,7 +8,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
 import { isVideoFileName } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -270,13 +269,10 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                     p.previewUrl && "bg-black/40",
                   )}
                 >
-                  {p.kind === "video" ? (
-                    <UploadingVideoBadge />
-                  ) : (
-                    <Loader2
-                      className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
-                    />
-                  )}
+                  {/* Only a spinner while it uploads, video or photo; the play mark comes once it is sent. */}
+                  <Loader2
+                    className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")}
+                  />
                 </span>
               </div>
               {/* Available while the file uploads, so a big video can be called off. */}

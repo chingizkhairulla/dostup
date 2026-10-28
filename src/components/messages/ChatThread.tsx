@@ -34,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MediaViewer from "@/components/media/MediaViewer";
-import UploadingVideoBadge from "@/components/media/UploadingVideoBadge";
 import { formatFileSize } from "@/lib/announcementHtml";
 import { ChatUploadError, isVideoFileName, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -398,11 +397,8 @@ const ChatThread = ({
                       </span>
                     )}
                     <span className={cn("absolute inset-0 flex items-center justify-center", p.previewUrl && "bg-black/40")}>
-                      {p.kind === "video" ? (
-                        <UploadingVideoBadge />
-                      ) : (
-                        <Loader2 className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")} />
-                      )}
+                      {/* Only a spinner while it uploads, video or photo; the play mark comes once it is sent. */}
+                      <Loader2 className={cn("h-5 w-5 animate-spin", p.previewUrl ? "text-white" : "text-muted-foreground")} />
                     </span>
                   </div>
                   {/* Available while the file uploads, so a big video can be called off. */}

@@ -1,4 +1,4 @@
-import { compressVideoIfNeeded } from "@/lib/videoCompressor";
+import { COMPRESSION_THRESHOLD, compressVideoIfNeeded } from "@/lib/videoCompressor";
 
 export type ChatAttachmentKind = "image" | "video" | "file";
 
@@ -85,18 +85,24 @@ function pageVisible(signal?: AbortSignal) {
 }
 
 /**
- * Chat videos: a clip over 30 MB is compressed in the browser first, then uploaded directly
- * to AWS S3 through a presigned URL.
+ * Chat videos: the upload URL is asked for first, so a server that refuses says so at once
+ * instead of after minutes of compressing. Then a clip over 30 MB is compressed in the
+ * browser and uploaded directly to AWS S3 through that presigned URL.
  */
 export async function uploadChatVideo(file: File, presign: PresignVideo, signal?: AbortSignal): Promise<ChatAttachment> {
-  const ready = await compressVideoIfNeeded(file, undefined, signal);
-  const type = videoType(ready);
-  if (!type) throw new ChatUploadError("unsupported", `Unsupported video type: ${ready.type || ready.name}`);
-  if (ready.size > CHAT_VIDEO_MAX_BYTES) throw new ChatUploadError("too_large", `Video is ${ready.size} bytes`);
+  const willCompress = file.size > COMPRESSION_THRESHOLD;
+  // A big file in another format still has a chance: the compressor turns it into mp4.
+  const expectedType = videoType(file) ?? (willCompress ? "video/mp4" : null);
+  if (!expectedType) throw new ChatUploadError("unsupported", `Unsupported video type: ${file.type || file.name}`);
 
   let presigned: Awaited<ReturnType<PresignVideo>>;
   try {
-    presigned = await presign({ file_name: ready.name, file_type: type, file_size: ready.size });
+    // A file over the cap may still fit once compressed; its real size is checked below.
+    presigned = await presign({
+      file_name: file.name,
+      file_type: expectedType,
+      file_size: Math.min(file.size, CHAT_VIDEO_MAX_BYTES),
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (/too large/i.test(message)) throw new ChatUploadError("too_large", message);
@@ -104,10 +110,17 @@ export async function uploadChatVideo(file: File, presign: PresignVideo, signal?
     throw e;
   }
 
+  const ready = await compressVideoIfNeeded(file, undefined, signal);
+  const type = videoType(ready);
+  if (!type) throw new ChatUploadError("unsupported", `Unsupported video type: ${ready.type || ready.name}`);
+  if (ready.size > CHAT_VIDEO_MAX_BYTES) throw new ChatUploadError("too_large", `Video is ${ready.size} bytes`);
+  // The compressed copy is an .mp4 of another size; the message shows what was really sent.
+  const attachment = { ...presigned.attachment, name: ready.name.slice(0, 200), size: ready.size };
+
   for (let attempt = 0; ; attempt++) {
     try {
       await putToS3(presigned.uploadUrl, ready, type, signal);
-      return presigned.attachment;
+      return attachment;
     } catch (e) {
       if (!(e instanceof RetryableUploadError) || signal?.aborted) throw e;
       if (attempt >= 2) throw new ChatUploadError("network", e.message);
