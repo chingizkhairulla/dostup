@@ -25,9 +25,6 @@ interface Props {
   light?: boolean;
 }
 
-/** Width of a dot plus the gap after it, for the sliding orange one. */
-const DOT_STEP_PX = 12;
-
 /**
  * Fullscreen window for a photo, video or PDF. The bar under the picture holds the arrows on
  * the left, a dot per item in the middle (the orange one is on screen) and "Done" on the right.
@@ -137,7 +134,8 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", l
 
                 {/* Dots in the middle of the bar, as under the FAQ cards; the orange one slides to the open item. */}
                 <div className="pointer-events-none absolute inset-x-0 top-3 flex h-10 items-center justify-center">
-                  <div className="pointer-events-auto relative flex items-center gap-1.5">
+                  {/* Tighter on phones, so ten dots clear the arrows and "Done" at 320 px. */}
+                  <div className="pointer-events-auto relative flex items-center gap-1 [--dot-step:10px] sm:gap-1.5 sm:[--dot-step:12px]">
                     {items.map((_, i) => (
                       <button
                         key={i}
@@ -156,7 +154,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", l
                     <span
                       aria-hidden
                       className="pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-primary transition-[left] duration-200 ease-out"
-                      style={{ left: index * DOT_STEP_PX }}
+                      style={{ left: `calc(var(--dot-step) * ${index})` }}
                     />
                   </div>
                 </div>
@@ -166,7 +164,7 @@ const MediaViewer = ({ items, index, onIndexChange, actions, align = "center", l
             <div className="ml-auto flex items-center gap-2">
               {actions}
               <DialogPrimitive.Close asChild>
-                <Button className="h-10 min-w-24 rounded-full px-5">{t("mediaViewerDone")}</Button>
+                <Button className="h-10 min-w-20 rounded-full px-4 sm:min-w-24 sm:px-5">{t("mediaViewerDone")}</Button>
               </DialogPrimitive.Close>
             </div>
           </div>
