@@ -1,5 +1,3 @@
-export const SUPPORT_CHAT_ID = "support";
-
 /** Cheap one-line preview for the chat list — the full post is parsed only when it opens. */
 export const previewOf = (html: string) =>
   html

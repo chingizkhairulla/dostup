@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
-import { HeaderAccountControl, HeaderNotificationsButton } from "@/components/layout/HeaderControls";
+import { HeaderAccountControl, HeaderNotificationsButton, HeaderSupportButton } from "@/components/layout/HeaderControls";
 import PublicLocaleToggle from "@/components/marketplace/PublicLocaleToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
@@ -39,6 +39,7 @@ const MarketplaceHeader = ({
     <AppHeader>
       {status === "loading" ? null : signedIn ? (
         <>
+          <HeaderSupportButton />
           <HeaderNotificationsButton
             active={notificationsActive}
             count={notificationCount}

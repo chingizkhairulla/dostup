@@ -27,8 +27,8 @@ export interface ChatCategory {
   icon: LucideIcon;
   items: ChatListItem[];
   emptyText?: string;
-  /** Second row of chips inside the category; the first one is selected by default. */
-  filters?: { key: string; label: string }[];
+  /** Second row of chips inside the category; the first one is selected by default. `full` keeps the whole label. */
+  filters?: { key: string; label: string; full?: boolean }[];
 }
 
 interface Props {
@@ -100,7 +100,9 @@ const MessengerLayout = ({
 
   const items = useMemo(() => {
     const all = active?.items ?? [];
-    const list = activeFilter ? all.filter((item) => item.filterKeys?.includes(activeFilter.key)) : all;
+    const list = activeFilter
+      ? all.filter((item) => item.filterKeys?.includes(activeFilter.key))
+      : all;
     const q = query.trim().toLowerCase();
     if (!q) return list;
     return list.filter((item) => item.title.toLowerCase().includes(q));
@@ -190,10 +192,13 @@ const MessengerLayout = ({
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setFilterKey(filter.key)}
+                    title={filter.label}
                     className={cn(
-                      "max-w-[180px] shrink-0 truncate rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      // About as wide as the word "Продукты"; longer product names are cut short.
+                      "shrink-0 truncate rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      !filter.full && "max-w-[5.5rem]",
                       isActive
-                        ? "bg-foreground text-background"
+                        ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                     )}
                   >
@@ -252,17 +257,18 @@ const MessengerLayout = ({
                         <span className="flex items-center gap-1.5">
                           <span
                             className={cn(
-                              "min-w-0 flex-1 truncate text-sm font-medium",
+                              "min-w-0 truncate text-sm font-medium",
                               isOpen ? "text-primary" : "text-foreground",
                             )}
                           >
                             {item.title}
                           </span>
+                          {/* Right after the name; the far right is where the time goes. */}
                           {item.verified && (
                             <BadgeCheck className="h-4 w-4 shrink-0 text-[#FF6B00]" strokeWidth={2} />
                           )}
                           {item.timestamp ? (
-                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                            <span className="ml-auto shrink-0 pl-1 text-[11px] text-muted-foreground">
                               {timeLabel(item.timestamp)}
                             </span>
                           ) : null}
