@@ -112,11 +112,11 @@ export const MaterialsSectionsNav = ({
               type="button"
               variant="outline"
               size="sm"
-              className="relative h-9 gap-1 px-2"
+              className="relative h-11 gap-1 px-3"
               aria-label={current.label}
               title={current.label}
             >
-              <CurrentIcon className="h-4 w-4" />
+              <CurrentIcon className="h-5 w-5" />
               <ChevronDown className="h-3.5 w-3.5 opacity-60" />
               {current.key === "trash" && trashCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-semibold text-white">
@@ -132,9 +132,9 @@ export const MaterialsSectionsNav = ({
                 <DropdownMenuItem
                   key={item.key}
                   onClick={() => onChange(item.key)}
-                  className="gap-2"
+                  className="min-h-11 gap-3 py-3 text-base"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-5 w-5" />
                   <span className="flex-1">{item.label}</span>
                   {item.key === "trash" && trashCount > 0 && (
                     <span className="text-xs text-muted-foreground">{trashCount}</span>

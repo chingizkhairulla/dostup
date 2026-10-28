@@ -948,7 +948,7 @@ const CreatorMaterialsReadOnlyList = ({
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-accent text-muted-foreground hover:text-white transition-colors ${dragOverCrumb === "home" ? "bg-accent text-white ring-2 ring-primary" : ""}`}
           >
             <Home className="w-3.5 h-3.5" />
-            {language === "kk" ? "Үй" : "Дом"}
+            {language === "kk" ? "Үй" : "Главная"}
           </button>
           {folderPath.length > 0 && folderPath.map((f, i) => (
             <div key={f.id} className="flex items-center gap-1">
@@ -1133,7 +1133,6 @@ const MaterialNode = ({
 }) => {
   const isFolder = material.type === "folder";
   const isRenaming = renamingId === material.id;
-  const [viewerOpen, setViewerOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const downloadUrl = material.type === "file" && material.file_url && material.allow_download !== false
     ? getFileUrl(material, 'download') : null;
@@ -1255,7 +1254,7 @@ const MaterialNode = ({
           </div>
           {isRenaming ? (
             <form
-              className="flex items-center gap-1 w-1/2"
+              className="flex min-w-0 flex-1 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
               onSubmit={(e) => { e.preventDefault(); submitRename(); }}
             >
@@ -1280,13 +1279,13 @@ const MaterialNode = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 min-h-0 flex-shrink-0 text-muted-foreground"
+                className="h-7 w-7 min-h-0 shrink-0 text-muted-foreground"
                 title={language === "kk" ? "Атын өзгерту" : "Переименовать"}
                 onClick={(e) => { e.stopPropagation(); startRename(material); }}
               >
                 <Pencil className="w-3 h-3" />
               </Button>
-              <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <div className="grid w-[100px] shrink-0 grid-cols-3 items-center gap-0.5 sm:flex sm:w-auto" onClick={(e) => e.stopPropagation()}>
                 <BookmarkStars
                   viewerType={viewerType}
                   state={bookmarkState}
@@ -1325,17 +1324,7 @@ const MaterialNode = ({
                     <Copy className="w-4 h-4" />
                   </Button>
                 )}
-                {material.type === "text" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 min-h-0"
-                    title={language === "kk" ? "Жаю" : "Развернуть"}
-                    onClick={(e) => { e.stopPropagation(); setViewerOpen((v) => !v); }}
-                  >
-                    <ChevronRight className={`w-4 h-4 transition-transform ${viewerOpen ? "rotate-90" : ""}`} />
-                  </Button>
-                )}
+                {!isFolder && !downloadUrl && material.type !== "link" && <span className="sm:hidden" />}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1371,7 +1360,7 @@ const MaterialNode = ({
               {(material.parent_id ?? null) !== null && (
                 <ContextMenuItem onSelect={() => onMoveToFolder(material.id, null)}>
                   <Home className="w-4 h-4 mr-2" />
-                  {language === "kk" ? "Басты бет" : "Дом"}
+                  {language === "kk" ? "Басты бет" : "Главная"}
                 </ContextMenuItem>
               )}
               {allFolders
@@ -1424,25 +1413,6 @@ const MaterialNode = ({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {viewerOpen && material.type === "text" && (
-        <div className="mt-1 rounded-md border bg-muted/30 p-3 space-y-2">
-          <div className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap break-words text-sm">
-            {material.content}
-          </div>
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-7 px-2 text-xs"
-              onClick={(e) => { e.stopPropagation(); copyToClipboard(material.content || ""); }}
-            >
-              <Copy className="w-3 h-3" />
-              {language === "kk" ? "Көшіру" : "Скопировать"}
-            </Button>
-          </div>
-        </div>
-      )}
       {material.type === "text" && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-2xl">
@@ -1514,7 +1484,7 @@ const CreatorTrashList = ({
     return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
-  const homeLabel = language === "kk" ? "Үй" : "Дом";
+  const homeLabel = language === "kk" ? "Үй" : "Главная";
 
   const handleRestoreClick = (m: typeof items[number]) => {
     const origId = m.original_parent_id ?? null;
@@ -1739,7 +1709,7 @@ const CreatorTrashList = ({
             <AlertDialogDescription>
               {language === "kk"
                 ? "Қалта жойылған. Файл үйге қалпына келтіріледі, немесе басқа қалтаны таңдаңыз."
-                : "Папка была удалена. Файл будет восстановлен в Дом, либо можете выбрать в какую папку хотите."}
+                : "Папка была удалена. Файл будет восстановлен в Главную, либо можете выбрать в какую папку хотите."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
@@ -2045,7 +2015,7 @@ const CreatorStorageList = ({ creatorName }: { creatorName: string }) => {
                   <div className="text-sm font-medium truncate">{f.title}</div>
                 </div>
                 <div className="text-sm tabular-nums font-medium text-muted-foreground flex-shrink-0">
-                  {f.type === "link" ? formatMaterialBytes(0) : formatMaterialBytes(f.file_size)}
+                  {f.type === "link" ? formatMaterialBytes(0) : f.file_size == null ? (language === "kk" ? "Өлшемі белгісіз" : "Размер недоступен") : formatMaterialBytes(f.file_size)}
                 </div>
               </CardContent>
             </Card>
