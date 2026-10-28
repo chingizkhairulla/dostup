@@ -13,8 +13,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { buildAnnouncementHtml, formatFileSize, type AnnouncementAttachment } from "@/lib/announcementHtml";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
+import { FileDropZone } from "@/components/messages/FileDropZone";
+import { chatFileError, MAX_CHAT_ATTACHMENTS } from "@/lib/chatFiles";
 
-const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS = MAX_CHAT_ATTACHMENTS;
 
 type LocalAttachment = AnnouncementAttachment & { id: string };
 
@@ -38,6 +40,8 @@ interface Props {
   /** Resolves true when the post was saved, so the field can be cleared. */
   onSubmit: (html: string) => Promise<boolean>;
   saving?: boolean;
+  /** Allows an isolated preview to use local files without contacting storage. */
+  uploadMedia?: typeof uploadAnnouncementMedia;
 }
 
 const newId = () => `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -55,7 +59,7 @@ const fromHtml = (html: string) => {
 const enterSends = () => typeof window !== "undefined" && !window.matchMedia?.("(pointer: coarse)").matches;
 
 /** Telegram-like input for a read-only channel: text, photos/videos and documents. No links outside the text. */
-const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, saving }: Props) => {
+const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, saving, uploadMedia = uploadAnnouncementMedia }: Props) => {
   const { t } = useLanguage();
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
@@ -66,6 +70,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
   const current = useRef({ text, attachments });
   current.current = { text, attachments };
   const draft = useRef<{ text: string; attachments: LocalAttachment[] } | null>(null);
+  const submittingRef = useRef(false);
 
   const editingId = editing?.id ?? null;
   const editingHtml = editing?.html ?? "";
@@ -103,21 +108,25 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
     [],
   );
 
-  const dropPending = (id: string) =>
+  const dropPending = (id: string) => {
+    pendingRef.current = pendingRef.current.filter((p) => p.id !== id);
     setPending((prev) => {
       const gone = prev.find((p) => p.id === id);
       if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
       return prev.filter((p) => p.id !== id);
     });
+  };
 
-  const handleFiles = async (files: FileList | null, source: "media" | "documents") => {
-    if (!files?.length) return;
-    const room = MAX_ATTACHMENTS - current.current.attachments.length - pending.length;
+  const handleFiles = async (files: FileList | File[] | null, source: "media" | "documents") => {
+    if (!files?.length || saving || submittingRef.current) return;
+    const room = MAX_ATTACHMENTS - current.current.attachments.length - pendingRef.current.length;
     const list = Array.from(files).slice(0, Math.max(room, 0));
     if (list.length < files.length) toast.error(t("announcementTooManyFiles", { count: MAX_ATTACHMENTS }));
     if (!list.length) return;
     await Promise.all(
       list.map(async (file) => {
+        const error = chatFileError(file);
+        if (error) { toast.error(`${file.name}: ${error}`); return; }
         const kind: AttachmentKind =
           source === "documents"
             ? "file"
@@ -133,13 +142,15 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
           previewUrl: kind === "file" ? undefined : URL.createObjectURL(file),
           controller: new AbortController(),
         };
-        setPending((prev) => [...prev, entry]);
+        pendingRef.current = [...pendingRef.current, entry];
+        setPending(pendingRef.current);
         try {
-          const url = await uploadAnnouncementMedia(file, productId, kind, entry.controller.signal);
+          const url = await uploadMedia(file, productId, kind, entry.controller.signal);
           if (entry.controller.signal.aborted) return;
           const attachment: LocalAttachment =
             kind === "file" ? { id: newId(), kind, url, name: file.name, size: file.size } : { id: newId(), kind, url };
-          setAttachments((prev) => [...prev, attachment]);
+          current.current = { ...current.current, attachments: [...current.current.attachments, attachment] };
+          setAttachments(current.current.attachments);
         } catch (e) {
           // Cancelling is not a failure — the tile simply disappears.
           if (!entry.controller.signal.aborted) {
@@ -157,7 +168,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
   const canSend = !saving && pending.length === 0 && hasContent;
 
   const submit = async () => {
-    if (!canSend) return;
+    if (!canSend || submittingRef.current || pendingRef.current.length) return;
     const html = buildAnnouncementHtml(
       text,
       attachments.map(({ id: _id, ...attachment }) => attachment),
@@ -166,7 +177,9 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
       toast.error(t("announcementEmpty"));
       return;
     }
-    const ok = await onSubmit(html);
+    submittingRef.current = true;
+    let ok = false;
+    try { ok = await onSubmit(html); } finally { submittingRef.current = false; }
     if (ok && !editingId) {
       setText("");
       setAttachments([]);
@@ -178,7 +191,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
 
   return (
     // Same look as the support chat's input row: "+" on the left, a plain field, a round send button.
-    <div className="bg-background">
+    <FileDropZone enabled={!saving} onFiles={(files) => void handleFiles(files, "media")} className="bg-background">
       {editing && (
         <div className="flex items-center gap-3 px-1 pb-2">
           <Pencil className="h-4 w-4 shrink-0 text-primary" />
@@ -367,7 +380,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
           e.target.value = "";
         }}
       />
-    </div>
+    </FileDropZone>
   );
 };
 
