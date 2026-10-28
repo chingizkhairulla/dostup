@@ -1,6 +1,7 @@
 import { json, optionsResponse } from './http.ts'
 import { authorizeUpload, presignPut } from './s3.ts'
 import { serviceClient } from './session.ts'
+import { materialRelayKey, MAX_MATERIAL_PROXY_BYTES } from './materialUploadPolicy.ts'
 
 const AVATAR_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024
@@ -135,6 +136,8 @@ export async function handlePresignedUpload(req: Request): Promise<Response> {
     let body: Record<string, unknown>
 
     if (contentType.includes('multipart/form-data')) {
+      const contentLength = Number(req.headers.get('content-length') || 0);
+      if (contentLength > MAX_MATERIAL_PROXY_BYTES + 65536) return json({ error: 'Server relay supports files up to 20 MB' }, 413);
       const form = await req.formData()
       body = {
         productId: form.get('productId'),
@@ -147,6 +150,7 @@ export async function handlePresignedUpload(req: Request): Promise<Response> {
         sessionToken: form.get('sessionToken'),
         teacherId: form.get('teacherId'),
         file: form.get('file'),
+        storagePath: form.get('storagePath'),
       }
     } else {
       body = await req.json()
@@ -162,18 +166,25 @@ export async function handlePresignedUpload(req: Request): Promise<Response> {
 
     const fileName = String(body.fileName || 'file.bin')
     const productId = String(body.productId)
-    const fileExt = fileName.split('.').pop()
+    const rawExt = fileName.split('.').pop() || ''
+    const fileExt = /^[a-zA-Z0-9]{1,12}$/.test(rawExt) ? rawExt : 'bin'
     const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
-    const s3Key = auth.role === 'teacher'
+    const prefix = auth.role === 'teacher' ? `teacher-${auth.teacherId}/${productId}/` : `${productId}/`;
+    const retryPath = asString(body.storagePath);
+    const retryKey = retryPath ? materialRelayKey(retryPath, prefix) : null;
+    if (retryPath && !retryKey) return json({ error: 'Invalid upload path' }, 400);
+    const s3Key = retryKey || (auth.role === 'teacher'
       ? `teacher-${auth.teacherId}/${productId}/${uniqueId}.${fileExt}`
-      : `${productId}/${uniqueId}.${fileExt}`
+      : `${productId}/${uniqueId}.${fileExt}`)
 
     const signed = await presignPut(s3Key)
     if (!signed) return json({ error: 'Server misconfiguration' }, 500)
 
+    if (retryPath && signed.storagePath !== retryPath) return json({ error: 'Invalid upload bucket' }, 400);
     const file = body.file
     if (file instanceof File) {
-      const put = await fetch(signed.uploadUrl, { method: 'PUT', body: file })
+      if (file.size > MAX_MATERIAL_PROXY_BYTES) return json({ error: 'Server relay supports files up to 20 MB' }, 413);
+      const put = await fetch(signed.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
       if (!put.ok) return json({ error: 'Upload failed' }, 500)
       return json({ path: signed.storagePath, uploadUrl: signed.uploadUrl, storagePath: signed.storagePath })
     }

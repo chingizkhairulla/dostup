@@ -8,6 +8,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { FileText, Video, Type, Download, ExternalLink, Link as LinkIcon, Loader2, Play, X, Folder, User, Lock, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import MaterialsSearchBar from "@/components/materials/MaterialsSearchBar";
 import MaterialsSectionsNav, { type MaterialsSection } from "@/components/materials/MaterialsSectionsNav";
 import BookmarkStars from "@/components/materials/BookmarkStars";
@@ -178,7 +179,7 @@ const MaterialsTab = () => {
   const { t, language } = useLanguage();
   const { user } = useSimpleAuth();
   const [expandedVideos, setExpandedVideos] = useState<Set<string>>(new Set());
-  const [expandedTexts, setExpandedTexts] = useState<Set<string>>(new Set());
+  const [openedText, setOpenedText] = useState<{title:string;content:string} | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [fullscreenVideo, setFullscreenVideo] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -410,7 +411,8 @@ const MaterialsTab = () => {
     return (
       <Card 
         key={material.id} 
-        className={`animate-fade-in transition-colors hover:bg-muted/70 ${isChild ? 'ml-2' : ''}`}
+        className={`animate-fade-in transition-colors hover:bg-muted/70 ${material.type === "text" && !isLocked ? "cursor-pointer" : ""} ${isChild ? 'ml-2' : ''}`}
+        onClick={() => { if (material.type === "text" && !isLocked) { trackMaterialOpen(material); setOpenedText({title:material.title,content:material.content || ""}); } }}
         style={{ animationDelay: `${index * 50}ms` }}
       >
         <CardContent className="p-4">
@@ -512,24 +514,6 @@ const MaterialsTab = () => {
               </Button>
             )}
 
-            {material.type === "text" && material.content && !isLocked && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="flex-shrink-0"
-                onClick={() => {
-                  setExpandedTexts(prev => {
-                    const next = new Set(prev);
-                    if (next.has(material.id)) next.delete(material.id);
-                    else next.add(material.id);
-                    return next;
-                  });
-                }}
-              >
-                {expandedTexts.has(material.id) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-              </Button>
-            )}
-
             {isLocked && (
               <div className="flex items-center gap-1.5 text-muted-foreground flex-shrink-0">
                 <Lock className="w-4 h-4" />
@@ -540,11 +524,6 @@ const MaterialsTab = () => {
             )}
           </div>
 
-          {material.type === "text" && material.content && expandedTexts.has(material.id) && (
-            <p className="text-sm text-muted-foreground mt-3 whitespace-pre-line">
-              {material.content}
-            </p>
-          )}
         </CardContent>
       </Card>
     );
@@ -652,6 +631,11 @@ const MaterialsTab = () => {
         );
       })()}
 
+      <Dialog open={!!openedText} onOpenChange={open => {if(!open)setOpenedText(null);}}>
+        <DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>{openedText?.title}</DialogTitle></DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto whitespace-pre-wrap break-words text-sm">{openedText?.content}</div>
+        </DialogContent>
+      </Dialog>
       {/* Fullscreen Video Modal */}
       {fullscreenVideo && (
         <VideoPlayer url={fullscreenVideo} onClose={() => setFullscreenVideo(null)} />
