@@ -153,6 +153,7 @@
   .hero-headline {
     font-weight: 700;
     letter-spacing: -0.02em;
+    word-spacing: 0.2em;
     line-height: 1;
     font-size: 34px;
     color: #1f2328;
@@ -160,7 +161,7 @@
 
   @media (min-width: 1024px) {
     .hero-headline {
-      font-size: 76px;
+      font-size: clamp(34px, 6vw, 76px);
       width: fit-content;
       max-width: 100%;
       white-space: nowrap;
@@ -169,12 +170,6 @@
     :lang(kk) .hero-headline {
       white-space: normal;
     }
-  }
-
-  /* "Buy. Learn. Sell." reads cramped in English at the tight letter-spacing
-     the Russian/Kazakh lines were tuned for (customer request). */
-  :lang(en) .hero-headline {
-    word-spacing: 0.2em;
   }
 
   .public-display {

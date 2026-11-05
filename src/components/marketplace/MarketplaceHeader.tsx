@@ -46,7 +46,7 @@ const MarketplaceHeader = ({
   };
 
   return (
-    <AppHeader>
+    <AppHeader contentClassName={signedIn ? undefined : "gap-2 px-3 sm:gap-6 sm:px-6"}>
       {status === "loading" ? null : signedIn ? (
         <>
           <HeaderChatsButton
@@ -62,17 +62,16 @@ const MarketplaceHeader = ({
           <HeaderAccountControl />
         </>
       ) : (
-        <>
-          {/* A small space before "Sign in" (customer request) — the header's own gap is only 4px on desktop. */}
-          <PublicLocaleToggle className="mr-3" />
+        <div className="flex items-center gap-3 sm:gap-4">
+          <PublicLocaleToggle />
           <Link
             to="/login"
             state={loginState(location)}
-            className="inline-flex h-10 items-center rounded-full border border-[#E3E5E8] px-5 text-[15px] font-medium text-[#1F2328] transition-colors hover:bg-[#F6F7F8] focus-ring"
+            className="inline-flex h-10 items-center whitespace-nowrap rounded-full border border-[#E3E5E8] px-3 text-sm font-medium text-[#1F2328] transition-colors hover:bg-[#F6F7F8] focus-ring sm:px-5 sm:text-[15px]"
           >
             {t("signIn")}
           </Link>
-        </>
+        </div>
       )}
     </AppHeader>
   );

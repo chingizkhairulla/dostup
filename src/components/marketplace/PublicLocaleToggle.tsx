@@ -12,7 +12,7 @@ const PublicLocaleToggle = ({ className }: { className?: string }) => {
     <div
       role="group"
       aria-label={t("languageSwitcherLabel")}
-      className={cn("flex items-center gap-2 text-[13px] font-medium text-[#6B7280]", className)}
+      className={cn("flex items-center gap-0.5 whitespace-nowrap text-[13px] font-medium text-[#6B7280] sm:gap-2", className)}
     >
       {LANGUAGES.map((entry, index) => (
         <Fragment key={entry.code}>
