@@ -53,3 +53,39 @@ export async function activeBuyerIds(
   }
   return [...active]
 }
+
+type SeatProduct = { id: string; max_buyers?: number | null; sales_closed?: boolean | null }
+
+/** True when the limit of paid buyers is reached; trial users take no seat. */
+export async function seatsFull(supabase: SupabaseClient, product: SeatProduct): Promise<boolean> {
+  if (product.max_buyers == null) return false
+  const paid = await activeBuyerIds(supabase, product.id, { includeTrials: false })
+  return paid.length >= product.max_buyers
+}
+
+/**
+ * Whether this buyer may pay for the product now. With every seat taken, a buyer still may
+ * when they already hold one (paying the next period) or when their earlier paid access ran
+ * out by itself; a buyer whose access the seller closed may not.
+ */
+export async function buyerCanTakeSeat(
+  supabase: SupabaseClient,
+  product: SeatProduct,
+  buyerId: string,
+): Promise<{ ok: true } | { ok: false; code: 'sales_closed' | 'no_seats' }> {
+  if (product.sales_closed) return { ok: false, code: 'sales_closed' }
+  if (product.max_buyers == null) return { ok: true }
+  const paid = await activeBuyerIds(supabase, product.id, { includeTrials: false })
+  if (paid.includes(buyerId)) return { ok: true }
+  if (paid.length < product.max_buyers) return { ok: true }
+
+  const { data: earlier } = await supabase
+    .from('simple_purchases')
+    .select('status, is_trial')
+    .eq('product_id', product.id)
+    .eq('buyer_profile_id', buyerId)
+  const rows = (earlier ?? []) as { status: string; is_trial: boolean | null }[]
+  if (rows.some((r) => r.status === 'revoked')) return { ok: false, code: 'no_seats' }
+  if (rows.some((r) => r.status === 'completed' && !r.is_trial)) return { ok: true }
+  return { ok: false, code: 'no_seats' }
+}

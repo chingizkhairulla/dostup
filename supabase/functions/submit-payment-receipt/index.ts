@@ -1,6 +1,7 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { resolveUser, serviceClient } from '../_shared/session.ts'
 import { latestSubmissionForPurchase, recordVerificationEvent } from '../_shared/purchase.ts'
+import { buyerCanTakeSeat } from '../_shared/productBuyers.ts'
 
 const MAX_BYTES = 4_194_304
 const ALLOWED_MIME = new Set([
@@ -76,12 +77,13 @@ Deno.serve(async (req) => {
 
     const { data: product } = await supabase
       .from('products')
-      .select('id, title, creator_account_id, sales_closed')
+      .select('id, title, creator_account_id, sales_closed, max_buyers')
       .eq('id', purchase.product_id)
       .maybeSingle()
-    // The seller ended sales after this order was started: it can no longer be paid.
-    if (product?.sales_closed) {
-      return fail('product_status', 'SALES_CLOSED', 'Мест нет. Продавец завершил продажи.', 409)
+    // Sales ended or the seats filled up after this order was started: it can no longer be paid.
+    if (product) {
+      const seat = await buyerCanTakeSeat(supabase, product, user.userId)
+      if (!seat.ok) return fail('product_status', seat.code.toUpperCase(), 'Мест нет', 409)
     }
 
     const fileSha = await sha256Hex(parsed.bytes)

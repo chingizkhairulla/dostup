@@ -29,6 +29,10 @@ export interface Product {
   paused_message?: string | null;
   /** The seller ended sales: nobody can buy or pay again. */
   sales_closed?: boolean;
+  /** Paid buyers allowed at once; null means no limit. */
+  max_buyers?: number | null;
+  /** Every seat is taken (from the catalog; the buyer's own exemption is asked separately). */
+  seats_full?: boolean;
   author_name?: string | null;
   seller_handle?: string | null;
   seller_avatar_url?: string | null;
@@ -191,6 +195,7 @@ interface CreateProductInput {
   trial_days?: number | null;
   pricing_options?: ProductPricingOption[] | null;
   topic?: string | null;
+  max_buyers?: number | null;
 }
 
 export const useCreateProduct = () => {

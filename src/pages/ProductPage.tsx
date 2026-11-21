@@ -243,6 +243,19 @@ const ProductPage = () => {
     enabled: Boolean(user && product?.id && (effectiveHasTrial || product?.has_free_trial)),
   });
 
+  // Every seat taken: a signed-in buyer may still be let through (their own seat, or earlier
+  // access that simply ran out); the server decides.
+  const { data: seatStatus } = useQuery({
+    queryKey: ["seat-status", product?.id, user?.id],
+    queryFn: () =>
+      invokeApi<{ canBuy: boolean }>("checkout", {
+        action: "seat_status",
+        productId: product!.id,
+        sessionToken: localStorage.getItem("creator_token") || "",
+      }),
+    enabled: Boolean(user && product?.id && product?.seats_full && !isSellerProfile),
+  });
+
   const handleActivateTrial = async () => {
     if (!user) {
       toast.error(t("loginRequiredCheckout") || "Для активации необходимо войти");
@@ -416,8 +429,9 @@ const ProductPage = () => {
     : [];
   // Ended sales read as "no seats": no buy button and no trial, just the note in their place.
   const salesClosed = Boolean(product.sales_closed);
-  const isPaused = Boolean(product.is_paused) || salesClosed;
-  const pausedMessage: string = salesClosed
+  const noSeats = salesClosed || (Boolean(product.seats_full) && !seatStatus?.canBuy);
+  const isPaused = Boolean(product.is_paused) || noSeats;
+  const pausedMessage: string = noSeats
     ? t("productNoSeats")
     : (product.paused_message && String(product.paused_message).trim()) || t("productPausedDefault");
   const sellerName = product.author_name || t("author");

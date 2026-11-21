@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
           trial_days: product.trial_days ?? null,
           pricing_options: product.pricing_options ?? [],
           topic: product.topic ?? null,
+          max_buyers: typeof product.max_buyers === 'number' && product.max_buyers >= 1 ? Math.floor(product.max_buyers) : null,
         })
         .select()
         .single()

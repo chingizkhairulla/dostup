@@ -6,6 +6,7 @@ import {
   unauthorized,
 } from '../_shared/session.ts'
 import { latestSubmissionForPurchase } from '../_shared/purchase.ts'
+import { buyerCanTakeSeat, seatsFull } from '../_shared/productBuyers.ts'
 import {
   isSubscriptionProduct,
   purchaseAccessOpen,
@@ -183,14 +184,15 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, price, is_active, is_paused, sales_closed')
+        .select('id, price, is_active, is_paused, sales_closed, max_buyers')
         .eq('id', productId)
         .maybeSingle()
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
-      // Ended sales: no new purchase and no repeat payment for a subscription.
-      if (product.sales_closed) return json({ error: 'Мест нет', code: 'sales_closed' }, 409)
+      // Ended sales or every seat taken: no new purchase (a seat holder still pays the next period).
+      const seat = await buyerCanTakeSeat(supabase, product, user.userId)
+      if (!seat.ok) return json({ error: 'Мест нет', code: seat.code }, 409)
 
       const isSub = await isSubscriptionProduct(supabase, productId)
 
@@ -246,6 +248,19 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
+    if (action === 'seat_status') {
+      const productId = String(body.productId || '').trim()
+      if (!productId) return json({ error: 'Missing productId' }, 400)
+      const { data: product } = await supabase
+        .from('products')
+        .select('id, sales_closed, max_buyers')
+        .eq('id', productId)
+        .maybeSingle()
+      if (!product) return json({ error: 'Not found' }, 404)
+      const seat = await buyerCanTakeSeat(supabase, product, user.userId)
+      return json({ canBuy: seat.ok, code: seat.ok ? null : seat.code })
+    }
+
     if (action === 'check_trial') {
       const productId = String(body.productId || '').trim()
       if (!productId) return json({ error: 'Missing productId' }, 400)
@@ -283,14 +298,16 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, has_free_trial, trial_days, is_active, is_paused, sales_closed')
+        .select('id, has_free_trial, trial_days, is_active, is_paused, sales_closed, max_buyers')
         .eq('id', productId)
         .maybeSingle()
 
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
-      if (product.sales_closed) return json({ error: 'Мест нет', code: 'sales_closed' }, 409)
+      if (product.sales_closed || (await seatsFull(supabase, product))) {
+        return json({ error: 'Мест нет', code: product.sales_closed ? 'sales_closed' : 'no_seats' }, 409)
+      }
 
       if (!product.has_free_trial || !product.trial_days || product.trial_days <= 0) {
         return json({ error: 'Free trial not available for this product' }, 400)

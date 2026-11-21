@@ -17,6 +17,7 @@ import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } fro
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
 import DeleteProductDialog from "@/components/creator/DeleteProductDialog";
+import MaxBuyersField from "@/components/creator/MaxBuyersField";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import PaymentMethodFields from "./PaymentMethodFields";
 import {
@@ -103,6 +104,8 @@ interface Product {
   is_paused?: boolean;
   paused_message?: string | null;
   sales_closed?: boolean;
+  /** Paid buyers allowed at once; null means no limit. */
+  max_buyers?: number | null;
   billing_period?: string | null;
   payment_type?: string | null;
   recurring_interval?: string | null;
@@ -134,6 +137,8 @@ interface FormData {
   lessonFormat: LessonFormat | "";
   eventStartsAt: string;
   capacity: string;
+  /** "Максимальное число покупателей": digits, "inf" for no limit, "" while not chosen. */
+  maxBuyers: string;
   billingPeriod: "month" | "quarter" | "year" | "";
   title: string;
   headline: string;
@@ -204,6 +209,13 @@ function validateTaxonomyFields(formData: FormData, _categories: CatalogCategory
     return "Выберите категорию и подкатегорию";
   }
   return null;
+}
+
+/** null = no limit, a number = the limit, undefined = not chosen yet (the field is required). */
+function parseMaxBuyers(value: string): number | null | undefined {
+  if (value === "inf") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
 }
 
 function stripHtml(html: string): string {
@@ -1134,6 +1146,7 @@ const ProductForm = ({
 
   /** Первая незаполненная настройка оплаты: id поля, вариант тарифа и (если нужно) свой текст ошибки. */
   const findPaymentIssue = (): { id: string; optId?: string; message?: string } | null => {
+    if (parseMaxBuyers(formData.maxBuyers) === undefined) return { id: "field-max-buyers" };
     if (!formData.isPaid) return null;
     if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
       return { id: "field-pricing-options" };
@@ -2003,12 +2016,24 @@ const ProductForm = ({
         </div>
     </FormSection>
 
-    {/* ============ ОПЛАТА ============ */}
-    <FormSection label="Оплата" open={paymentOpen} onOpenChange={setPaymentOpen}>
+    {/* ============ ДОСТУП ============ */}
+    <FormSection label="Доступ" open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <div className="space-y-2">
+          <Label className="text-sm sm:text-base font-semibold text-foreground flex items-center">
+            Сколько людей его получат? <ReqStar />
+          </Label>
+          <p className="text-sm text-muted-foreground">Максимальное число покупателей:</p>
+          <MaxBuyersField
+            id="field-max-buyers"
+            value={formData.maxBuyers}
+            onChange={(maxBuyers) => setFormData((prev) => ({ ...prev, maxBuyers }))}
+          />
+        </div>
+
         {/* Choice between Free access and Paid access (Whop style) */}
         <div className="space-y-2">
           <Label className="text-sm sm:text-base font-semibold text-foreground flex items-center">
-            Как люди получат доступ? <ReqStar />
+            Как люди его получат? <ReqStar />
           </Label>
           <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
             {/* Карточка 1: Бесплатно */}
@@ -2463,6 +2488,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     lessonFormat: "",
     eventStartsAt: "",
     capacity: "",
+    maxBuyers: "",
     billingPeriod: "",
     title: "",
     headline: "",
@@ -2498,6 +2524,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       lessonFormat: "",
       eventStartsAt: "",
       capacity: "",
+      maxBuyers: "",
       billingPeriod: "",
       title: "",
       headline: "",
@@ -2547,6 +2574,12 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       return;
     }
 
+    const maxBuyers = parseMaxBuyers(formData.maxBuyers);
+    if (maxBuyers === undefined) {
+      toast.error("Укажите максимальное число покупателей");
+      return;
+    }
+
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
     let primaryBillingPeriod: string | null = null;
@@ -2593,6 +2626,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
+        max_buyers: maxBuyers,
         has_schedule: false,
         is_active: true,
         faq: (formData.faq || [])
@@ -2760,6 +2794,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       lessonFormat: (product.lesson_format as LessonFormat) || "",
       eventStartsAt: eventLocal,
       capacity: product.capacity != null ? String(product.capacity) : "",
+      maxBuyers: product.max_buyers != null ? String(product.max_buyers) : "inf",
       billingPeriod: (product.billing_period as BillingPeriod) || "",
       title: product.title,
       headline: product.headline || "",
@@ -2803,6 +2838,12 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
 
     if (formData.isPaid && options.some(o => !o.price || Number(o.price) <= 0)) {
       toast.error("Укажите цену для всех вариантов оплаты");
+      return;
+    }
+
+    const maxBuyers = parseMaxBuyers(formData.maxBuyers);
+    if (maxBuyers === undefined) {
+      toast.error("Укажите максимальное число покупателей");
       return;
     }
 
@@ -2852,6 +2893,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
         trial_days: primaryTrialDays,
         pricing_options: serializedOptions,
+        max_buyers: maxBuyers,
         image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,
         video_url: (formData.media || []).find((m) => m.type === "video")?.url || null,
         media: (formData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
