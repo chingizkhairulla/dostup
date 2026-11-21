@@ -27,6 +27,8 @@ export interface Product {
   access_duration_days: number | null;
   is_paused?: boolean;
   paused_message?: string | null;
+  /** The seller ended sales: nobody can buy or pay again. */
+  sales_closed?: boolean;
   author_name?: string | null;
   seller_handle?: string | null;
   seller_avatar_url?: string | null;

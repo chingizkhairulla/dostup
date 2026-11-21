@@ -12,6 +12,7 @@ import {
 } from '../_shared/session.ts'
 import { latestSubmissionsForPurchases, recordVerificationEvent } from '../_shared/purchase.ts'
 import { subscriptionGrantsAccess } from '../_shared/subscription.ts'
+import { activeBuyerIds } from '../_shared/productBuyers.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return optionsResponse()
@@ -127,9 +128,35 @@ Deno.serve(async (req) => {
       const id = String(body.id || body.productId || '')
       if (!id) return json({ error: 'Missing id' }, 400)
       if (!(await creatorOwnsProduct(supabase, caller.accountId, id))) return forbidden()
+      // While someone can still use the product it stays; the seller ends sales and waits.
+      if ((await activeBuyerIds(supabase, id)).length > 0) {
+        return json({ error: 'Удалить продукт нельзя, пока есть активные пользователи', code: 'active_buyers' }, 409)
+      }
+      // Schedule slots, materials, the channel, reviews (and with them the seller's rating)
+      // go with the product through ON DELETE CASCADE. Chats stay.
       const { error } = await supabase.from('products').delete().eq('id', id)
       if (error) return json({ error: error.message }, 500)
       return json({ ok: true })
+    }
+
+    if (action === 'delete_status') {
+      if (caller.kind !== 'creator') return forbidden()
+      const id = String(body.id || body.productId || '')
+      if (!id) return json({ error: 'Missing id' }, 400)
+      if (!(await creatorOwnsProduct(supabase, caller.accountId, id))) return forbidden()
+      const { data: product } = await supabase.from('products').select('sales_closed').eq('id', id).maybeSingle()
+      const active = await activeBuyerIds(supabase, id)
+      return json({ activeBuyers: active.length, salesClosed: Boolean(product?.sales_closed) })
+    }
+
+    if (action === 'set_sales_closed') {
+      if (caller.kind !== 'creator') return forbidden()
+      const id = String(body.id || body.productId || '')
+      if (!id || typeof body.closed !== 'boolean') return json({ error: 'Bad input' }, 400)
+      if (!(await creatorOwnsProduct(supabase, caller.accountId, id))) return forbidden()
+      const { error } = await supabase.from('products').update({ sales_closed: body.closed }).eq('id', id)
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true, salesClosed: body.closed })
     }
 
     if (action === 'list_teachers') {

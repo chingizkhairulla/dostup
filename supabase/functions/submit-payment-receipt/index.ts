@@ -76,9 +76,13 @@ Deno.serve(async (req) => {
 
     const { data: product } = await supabase
       .from('products')
-      .select('id, title, creator_account_id')
+      .select('id, title, creator_account_id, sales_closed')
       .eq('id', purchase.product_id)
       .maybeSingle()
+    // The seller ended sales after this order was started: it can no longer be paid.
+    if (product?.sales_closed) {
+      return fail('product_status', 'SALES_CLOSED', 'Мест нет. Продавец завершил продажи.', 409)
+    }
 
     const fileSha = await sha256Hex(parsed.bytes)
     const fingerprint = `sha256:${fileSha}`

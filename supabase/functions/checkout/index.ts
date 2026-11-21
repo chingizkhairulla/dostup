@@ -183,12 +183,14 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, price, is_active, is_paused')
+        .select('id, price, is_active, is_paused, sales_closed')
         .eq('id', productId)
         .maybeSingle()
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
+      // Ended sales: no new purchase and no repeat payment for a subscription.
+      if (product.sales_closed) return json({ error: 'Мест нет', code: 'sales_closed' }, 409)
 
       const isSub = await isSubscriptionProduct(supabase, productId)
 
@@ -281,13 +283,14 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, has_free_trial, trial_days, is_active, is_paused')
+        .select('id, has_free_trial, trial_days, is_active, is_paused, sales_closed')
         .eq('id', productId)
         .maybeSingle()
 
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
+      if (product.sales_closed) return json({ error: 'Мест нет', code: 'sales_closed' }, 409)
 
       if (!product.has_free_trial || !product.trial_days || product.trial_days <= 0) {
         return json({ error: 'Free trial not available for this product' }, 400)

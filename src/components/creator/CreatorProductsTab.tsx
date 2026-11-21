@@ -3,20 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { AutoResizeTextarea } from "@/components/ui/AutoResizeTextarea";
 
-import { useCreatorProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
+import { useCreatorProducts, useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, Check, Globe, Lock, DollarSign, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
+import { Plus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, Check, Globe, Lock, DollarSign, Sparkles, Wand2, ArrowRight } from "lucide-react";
 import { predictProductCategory, isTopicMatch, isExactTopicMatch, type CategoryPrediction, suggestCustomTopicWithEmoji } from "@/lib/aiCategory";
 import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } from "@/lib/taxonomyData";
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
+import DeleteProductDialog from "@/components/creator/DeleteProductDialog";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import PaymentMethodFields from "./PaymentMethodFields";
 import {
@@ -26,17 +26,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import ProductMaterialsManager from "./ProductMaterialsManager";
 import CreatorPendingPayments from "./CreatorPendingPayments";
@@ -113,6 +102,7 @@ interface Product {
   access_duration_days?: number | null;
   is_paused?: boolean;
   paused_message?: string | null;
+  sales_closed?: boolean;
   billing_period?: string | null;
   payment_type?: string | null;
   recurring_interval?: string | null;
@@ -2448,7 +2438,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const sellerHandle = typeof window !== "undefined" ? localStorage.getItem("profile_handle") : null;
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
-  const deleteProduct = useDeleteProduct();
   
   const [isCreating, setIsCreating] = useState(false);
   const [isCroppingMedia, setIsCroppingMedia] = useState(false);
@@ -2460,12 +2449,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
   const [visibilityProductId, setVisibilityProductId] = useState<string | null>(null);
-  const [pausingProduct, setPausingProduct] = useState<Product | null>(null);
   // Read from the live list so the dialog reflects the saved value after refetch.
   const visibilityProduct = visibilityProductId
     ? (products.find((p) => p.id === visibilityProductId) as Product | undefined) ?? null
     : null;
-  const [pauseMessage, setPauseMessage] = useState<string>("");
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
   
@@ -2903,19 +2890,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     }
   };
 
-  const handleDelete = async () => {
-    if (!deletingProduct) return;
-
-    try {
-      await deleteProduct.mutateAsync(deletingProduct.id);
-      toast.success("Продукт удалён!");
-      setDeletingProduct(null);
-    } catch (error: any) {
-      console.error("Delete product error:", error);
-      toast.error(error?.message || "Ошибка при удалении продукта");
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -3032,30 +3006,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Вы уверены, что хотите удалить "{deletingProduct?.title}"? Это действие нельзя отменить.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteProduct.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                t("delete")
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteProductDialog product={deletingProduct} onClose={() => setDeletingProduct(null)} />
 
       {/* Products List */}
       <div className="space-y-3">
@@ -3113,6 +3064,11 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                         {language === "ru" ? "Приватный" : "Жабық"}
                       </span>
                     )}
+                    {(product as Product).sales_closed && (
+                      <span className={`bg-muted text-muted-foreground px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                        {language === "ru" ? "Продажи завершены" : "Сатылым аяқталды"}
+                      </span>
+                    )}
                     {product.billing_period && (
                       <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
                         {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
@@ -3163,37 +3119,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    if ((product as any).is_paused) {
-                      updateProduct.mutate(
-                        { id: product.id, is_paused: false } as any,
-                        {
-                          onSuccess: () => toast.success(language === "ru" ? "Продукт возобновлён" : "Өнім қайта іске қосылды"),
-                          onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                        }
-                      );
-                    } else {
-                      setPauseMessage(
-                        (product as any).paused_message ||
-                          (language === "ru"
-                            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
-                            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
-                      );
-                      setPausingProduct(product as Product);
-                    }
-                  }}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                  <span className="ml-1">
-                    {(product as any).is_paused
-                      ? (language === "ru" ? "Возобновить" : "Қайта қосу")
-                      : (language === "ru" ? "Приостановить" : "Тоқтату")}
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => setDeletingProduct(product)}
                   className={`text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 ${isMobile ? "h-8 px-2 text-xs" : "h-9"}`}
                 >
@@ -3228,72 +3153,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       product={visibilityProduct}
       onOpenChange={(open) => { if (!open) setVisibilityProductId(null); }}
     />
-
-    {/* Pause Dialog */}
-    <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            {language === "ru"
-              ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="pause-message">
-              {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
-            </Label>
-            <Textarea
-              id="pause-message"
-              rows={4}
-              value={pauseMessage}
-              onChange={(e) => setPauseMessage(e.target.value)}
-              placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
-            />
-            <p className="text-xs text-muted-foreground">
-              {language === "ru"
-                ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
-                : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
-            </p>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setPausingProduct(null)}>
-            {t("cancel")}
-          </Button>
-          <Button
-            onClick={() => {
-              if (!pausingProduct) return;
-              updateProduct.mutate(
-                {
-                  id: pausingProduct.id,
-                  is_paused: true,
-                  paused_message: pauseMessage.trim() || null,
-                } as any,
-                {
-                  onSuccess: () => {
-                    toast.success(language === "ru" ? "Продукт приостановлен" : "Өнім тоқтатылды");
-                    setPausingProduct(null);
-                  },
-                  onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                }
-              );
-            }}
-            disabled={updateProduct.isPending}
-          >
-            {updateProduct.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              language === "ru" ? "Приостановить" : "Тоқтату"
-            )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
 
   </div>
   );

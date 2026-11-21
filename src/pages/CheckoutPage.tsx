@@ -90,12 +90,14 @@ const CheckoutPage = () => {
 
   const hasKaspiLink = !!displayProduct.kaspi_link;
 
-  const isPaused = Boolean((product as any)?.is_paused);
-  const pausedMessage: string =
-    ((product as any)?.paused_message && String((product as any).paused_message).trim()) ||
-    (language === "kk"
-      ? "Автор осы сілтемені уақытша өшірді."
-      : "Автор отключил ссылку.");
+  const salesClosed = Boolean((product as any)?.sales_closed);
+  const isPaused = Boolean((product as any)?.is_paused) || salesClosed;
+  const pausedMessage: string = salesClosed
+    ? (language === "kk" ? "Орын жоқ" : "Мест нет")
+    : ((product as any)?.paused_message && String((product as any).paused_message).trim()) ||
+      (language === "kk"
+        ? "Автор осы сілтемені уақытша өшірді."
+        : "Автор отключил ссылку.");
 
   if (product && isPaused) {
     return (

@@ -414,9 +414,12 @@ const ProductPage = () => {
   const faq = Array.isArray(product.faq)
     ? product.faq.filter((it) => it && (it.question || it.answer))
     : [];
-  const isPaused = Boolean(product.is_paused);
-  const pausedMessage: string =
-    (product.paused_message && String(product.paused_message).trim()) || t("productPausedDefault");
+  // Ended sales read as "no seats": no buy button and no trial, just the note in their place.
+  const salesClosed = Boolean(product.sales_closed);
+  const isPaused = Boolean(product.is_paused) || salesClosed;
+  const pausedMessage: string = salesClosed
+    ? t("productNoSeats")
+    : (product.paused_message && String(product.paused_message).trim()) || t("productPausedDefault");
   const sellerName = product.author_name || t("author");
   const isEffectiveSubscription = activeOption
     ? activeOption.payment_type === "recurring"
@@ -511,7 +514,7 @@ const ProductPage = () => {
       <p className="public-meta mt-2">{effectiveAccessLabel}</p>
       <div className="mt-6 border-t border-border pt-6">{sellerBlock}</div>
       <div className="mt-6">
-        {effectiveHasTrial && effectiveTrialDays && (
+        {effectiveHasTrial && effectiveTrialDays && !isPaused && (
           <Button
             type="button"
             variant="outline"
