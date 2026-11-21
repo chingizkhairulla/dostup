@@ -204,23 +204,29 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
     return purchase.assigned_teacher_id;
   };
 
+  // Requests after a trial ("Ожидающие") and the waiting list.
+  const { data: applications = [] } = useApplications(!!creatorName);
+
   // Paid buyers, plus those whose access the seller closed (so it can be opened again).
   const filtered = useMemo(() => {
     const from = periodStart(period);
     const q = searchQuery.trim().toLowerCase();
+    // Someone who asked to pay after a trial is listed under "Ожидающие" / "Лист ожидания" instead.
+    const applied = new Set(applications.map((a) => `${a.product_id}:${a.buyer_profile_id}`));
     return purchases.filter((p) => {
       if (p.status !== "completed" && p.status !== "revoked") return false;
+      const buyerId = (p as { buyer_profile_id?: string | null; simple_user_id?: string }).buyer_profile_id ?? (p as { simple_user_id?: string }).simple_user_id;
+      if (p.is_trial && applied.has(`${p.product_id}:${buyerId}`)) return false;
       if (!showAll && p.product_id !== selectedProductId) return false;
       if (from && new Date(p.created_at) < from) return false;
       if (!q) return true;
       return p.simple_user.name.toLowerCase().includes(q) || p.simple_user.phone.includes(q);
     });
-  }, [purchases, period, searchQuery, showAll, selectedProductId]);
+  }, [purchases, period, searchQuery, showAll, selectedProductId, applications]);
 
   const opened = purchases.find((p) => p.id === openId) ?? null;
 
   // Requests after a trial ("Ожидающие") and the waiting list, for the product on screen.
-  const { data: applications = [] } = useApplications(!!creatorName);
   const shownApplications = applications.filter((a) => showAll || a.product_id === selectedProductId);
   const pendingApplications = shownApplications.filter((a) => a.status === "pending");
   const waitlist = shownApplications.filter((a) => a.status !== "pending");

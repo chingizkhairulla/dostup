@@ -297,3 +297,35 @@ export async function buyerUsableScheduleIds(
     })
     .map((s) => s.id)
 }
+
+/** Every completed row of this buyer for the product is a trial: they have no paid access. */
+export async function buyerTrialOnly(supabase: SupabaseClient, buyerProfileId: string, productId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('simple_purchases')
+    .select('is_trial')
+    .eq('buyer_profile_id', buyerProfileId)
+    .eq('product_id', productId)
+    .eq('status', 'completed')
+  const rows = (data ?? []) as { is_trial: boolean | null }[]
+  return rows.length > 0 && rows.every((r) => r.is_trial)
+}
+
+/**
+ * A material file may be opened: with paid access any of them; on a trial only those the seller
+ * marked "for the trial" (the rest are listed, dimmed with a lock, and do not open).
+ */
+export async function buyerCanOpenMaterial(
+  supabase: SupabaseClient,
+  buyerProfileId: string,
+  productId: string,
+  ref: { path?: string; materialId?: string },
+): Promise<boolean> {
+  if (!(await buyerHasProductAccess(supabase, buyerProfileId, productId))) return false
+  if (!(await buyerTrialOnly(supabase, buyerProfileId, productId))) return true
+  let q = supabase.from('materials').select('trial_open').eq('product_id', productId)
+  if (ref.materialId) q = q.eq('id', ref.materialId)
+  else if (ref.path) q = q.eq('file_url', ref.path)
+  else return false
+  const { data } = await q.limit(1)
+  return Boolean((data?.[0] as { trial_open?: boolean } | undefined)?.trial_open)
+}

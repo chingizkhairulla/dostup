@@ -8,9 +8,9 @@ import {
   resolveCreator,
   resolveUser,
   serviceClient,
-  studentHasPurchase,
   teacherAssignedToProduct,
 } from './session.ts'
+import { buyerCanOpenMaterial } from './subscription.ts'
 
 export function parseS3Path(path: string): { bucket: string; key: string } | null {
   if (!path.startsWith('s3://')) return null
@@ -198,7 +198,8 @@ export async function authorizeDownload(opts: {
     const user = await resolveUser(supabase, opts.sessionToken)
     if (!user) return false
     if (user.role === 'teacher' && (await teacherAssignedToProduct(supabase, user.name, productId))) return true
-    if (await studentHasPurchase(supabase, user.userId, productId)) return true
+    // On a trial only the materials marked for it open.
+    if (await buyerCanOpenMaterial(supabase, user.userId, productId, { path: opts.path })) return true
   }
   return false
 }

@@ -107,3 +107,7 @@ ALTER TABLE public.product_trials ALTER COLUMN trial_days DROP NOT NULL;
 
 -- 6. «Пробный доступ окончен» отправляется один раз.
 ALTER TABLE public.simple_purchases ADD COLUMN IF NOT EXISTS trial_end_notified_at timestamptz;
+
+-- 7. Материалы «для пробного»: открыты на пробном. Остальные видны в списке с замком и не
+--    открываются. Кнопку, которой продавец отмечает материал, добавим позже.
+ALTER TABLE public.materials ADD COLUMN IF NOT EXISTS trial_open boolean NOT NULL DEFAULT false;

@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useSimplePurchases, useSimpleSchedules, useSimpleTimeSlots, useSimpleBookings, useCreateSimpleBooking, useCancelSimpleBooking, useAllBookingsForSchedule } from "@/hooks/useSimplePurchases";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimezone } from "@/contexts/TimezoneContext";
@@ -65,6 +67,8 @@ const ScheduleTab = () => {
   });
   
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
+  const [trialEndsBeforeSlot, setTrialEndsBeforeSlot] = useState(false);
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -336,6 +340,16 @@ const ScheduleTab = () => {
       });
       toast.success(t("bookingConfirmed"));
     } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      // On a "period" trial a slot after the trial ends needs the product paid first.
+      if (/пробный доступ закончится/i.test(message)) {
+        setTrialEndsBeforeSlot(true);
+        return;
+      }
+      if (/только на один слот/i.test(message)) {
+        toast.error(message);
+        return;
+      }
       toast.error(t("bookingFailed"));
     }
   };
@@ -792,6 +806,25 @@ const ScheduleTab = () => {
       )}
 
       {/* Confirm Cancel Dialog with Reasons */}
+      <Dialog open={trialEndsBeforeSlot} onOpenChange={setTrialEndsBeforeSlot}>
+        <DialogContent hideCloseButton className="max-w-sm gap-4 rounded-2xl">
+          <DialogTitle className="sr-only">Пробный доступ</DialogTitle>
+          <DialogDescription className="text-sm text-foreground">
+            К сожалению, к тому времени пробный доступ закончится. Оплатите продукт, чтобы записаться на слот
+          </DialogDescription>
+          <button
+            type="button"
+            onClick={() => {
+              setTrialEndsBeforeSlot(false);
+              if (selectedSchedule?.product_id) navigate(`/checkout/${selectedSchedule.product_id}`);
+            }}
+            className="h-11 w-full rounded-xl bg-[#FF6B00] text-sm font-semibold text-white hover:bg-[#E86000]"
+          >
+            Купить
+          </button>
+        </DialogContent>
+      </Dialog>
+
       <CancellationReasonDialog
         isOpen={!!bookingToCancel}
         onClose={() => setBookingToCancel(null)}

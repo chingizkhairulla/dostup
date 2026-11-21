@@ -8,6 +8,7 @@ import {
   forbidden,
 } from '../_shared/session.ts'
 import { buyerUsableScheduleIds } from '../_shared/subscription.ts'
+import { answerTrialLessonCheck, pendingTrialLessonChecks, trialBookingCheck } from '../_shared/trial.ts'
 
 function slotEndFromDuration(currentStart: string, currentEnd: string, newStart: string): string {
   const [sh, sm] = currentStart.split(':').map(Number)
@@ -51,10 +52,14 @@ Deno.serve(async (req) => {
 
       const { data: slot } = await supabase
         .from('time_slots')
-        .select('id, max_participants, is_available')
+        .select('id, max_participants, is_available, date, start_time')
         .eq('id', timeSlotId)
         .maybeSingle()
       if (!slot || !slot.is_available) return json({ error: 'Slot not available' }, 400)
+
+      // On a trial: one slot for "lesson", nothing after the trial ends for "period".
+      const trialCheck = await trialBookingCheck(supabase, caller.userId, productId, slot)
+      if (!trialCheck.ok) return json({ error: trialCheck.error, code: trialCheck.code, productId }, 409)
 
       const { data: schedule } = await supabase
         .from('schedules')
@@ -86,6 +91,26 @@ Deno.serve(async (req) => {
         .single()
       if (error) return json({ error: error.message }, 500)
       return json({ booking: data })
+    }
+
+    // "Пробный урок прошёл?": the seller's open questions and their answers.
+    if (action === 'trial_lesson_checks') {
+      if (caller.kind !== 'creator') return forbidden()
+      return json({ checks: await pendingTrialLessonChecks(supabase, caller.accountId) })
+    }
+
+    if (action === 'answer_trial_lesson') {
+      if (caller.kind !== 'creator') return forbidden()
+      const productId = String(body.productId || '')
+      const buyerProfileId = String(body.buyerProfileId || '')
+      const timeSlotId = String(body.timeSlotId || '')
+      if (!productId || !buyerProfileId || !timeSlotId || typeof body.held !== 'boolean') {
+        return json({ error: 'Bad input' }, 400)
+      }
+      const { data: product } = await supabase.from('products').select('creator_account_id').eq('id', productId).maybeSingle()
+      if (product?.creator_account_id !== caller.accountId) return forbidden()
+      await answerTrialLessonCheck(supabase, { productId, buyerProfileId, timeSlotId, held: body.held })
+      return json({ ok: true })
     }
 
     if (action === 'cancel') {

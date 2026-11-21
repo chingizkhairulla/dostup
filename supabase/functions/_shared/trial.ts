@@ -418,3 +418,171 @@ export async function processTrialsAndWaitlists(supabase: SupabaseClient) {
   }
   return { trialsEnded: (endedTrials ?? []).length, paymentsClosed: backToList.length }
 }
+
+/** Slot times are stored as local Kazakhstan wall-clock time (UTC+5). */
+const SLOT_UTC_OFFSET = '+05:00'
+
+export function slotMoment(date: string, time: string): Date {
+  const hhmmss = time.length === 5 ? `${time}:00` : time.slice(0, 8)
+  return new Date(`${date}T${hhmmss}${SLOT_UTC_OFFSET}`)
+}
+
+/**
+ * Booking rules while a buyer is on a trial (no paid access):
+ * - "lesson": one slot at a time; another only after the seller answered "Нет" about it;
+ * - "period": any number of slots, but none that starts after the trial ends.
+ */
+export async function trialBookingCheck(
+  supabase: SupabaseClient,
+  buyerId: string,
+  productId: string,
+  slot: { date: string; start_time: string },
+): Promise<{ ok: true } | { ok: false; code: string; error: string }> {
+  const { data: product } = await supabase.from('products').select(TRIAL_PRODUCT_COLUMNS).eq('id', productId).maybeSingle()
+  if (!product) return { ok: true }
+  const state = await buyerProductState(supabase, product, buyerId)
+  if (state.paidActive || state.trial !== 'active') return { ok: true }
+
+  if (state.trialMode === 'period') {
+    if (state.trialEndsAt && slotMoment(slot.date, slot.start_time) > new Date(state.trialEndsAt)) {
+      return {
+        ok: false,
+        code: 'trial_ends_before_slot',
+        error: 'К сожалению, к тому времени пробный доступ закончится. Оплатите продукт, чтобы записаться на слот',
+      }
+    }
+    return { ok: true }
+  }
+
+  const { data: schedules } = await supabase.from('schedules').select('id').eq('product_id', productId)
+  const scheduleIds = ((schedules ?? []) as { id: string }[]).map((s) => s.id)
+  if (!scheduleIds.length) return { ok: true }
+  const { data: bookings } = await supabase
+    .from('simple_bookings')
+    .select('time_slot_id')
+    .eq('buyer_profile_id', buyerId)
+    .in('schedule_id', scheduleIds)
+    .eq('status', 'confirmed')
+  const slotIds = ((bookings ?? []) as { time_slot_id: string }[]).map((b) => b.time_slot_id)
+  if (!slotIds.length) return { ok: true }
+  const { data: answered } = await supabase
+    .from('trial_lesson_checks')
+    .select('time_slot_id')
+    .eq('buyer_profile_id', buyerId)
+    .in('time_slot_id', slotIds)
+  const done = new Set(((answered ?? []) as { time_slot_id: string }[]).map((a) => a.time_slot_id))
+  if (slotIds.some((id) => !done.has(id))) {
+    return { ok: false, code: 'trial_one_slot', error: 'На пробном можно записаться только на один слот' }
+  }
+  return { ok: true }
+}
+
+/**
+ * "Пробный урок прошёл?" for the seller: lesson-trial bookings whose slot is over, the buyer did
+ * not cancel, and the seller has not answered yet.
+ */
+export async function pendingTrialLessonChecks(supabase: SupabaseClient, creatorAccountId: string) {
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, title')
+    .eq('creator_account_id', creatorAccountId)
+    .eq('trial_mode', 'lesson')
+  const productList = (products ?? []) as { id: string; title: string }[]
+  if (!productList.length) return []
+  const productIds = productList.map((p) => p.id)
+
+  const { data: trials } = await supabase
+    .from('simple_purchases')
+    .select('product_id, buyer_profile_id, trial_ends_at')
+    .in('product_id', productIds)
+    .eq('is_trial', true)
+    .eq('status', 'completed')
+    .is('trial_ends_at', null)
+  const onTrial = new Set(
+    ((trials ?? []) as { product_id: string; buyer_profile_id: string | null }[])
+      .filter((t) => t.buyer_profile_id)
+      .map((t) => `${t.product_id}:${t.buyer_profile_id}`),
+  )
+  if (!onTrial.size) return []
+
+  const { data: schedules } = await supabase.from('schedules').select('id, product_id').in('product_id', productIds)
+  const productBySchedule = new Map(((schedules ?? []) as { id: string; product_id: string }[]).map((s) => [s.id, s.product_id]))
+  if (!productBySchedule.size) return []
+  const { data: bookings } = await supabase
+    .from('simple_bookings')
+    .select('buyer_profile_id, schedule_id, time_slot_id, time_slots (date, start_time, end_time)')
+    .in('schedule_id', [...productBySchedule.keys()])
+    .eq('status', 'confirmed')
+  const now = new Date()
+  const candidates = ((bookings ?? []) as unknown as {
+    buyer_profile_id: string | null
+    schedule_id: string
+    time_slot_id: string
+    time_slots: { date: string; start_time: string; end_time: string } | null
+  }[]).filter((b) => {
+    if (!b.buyer_profile_id || !b.time_slots) return false
+    const productId = productBySchedule.get(b.schedule_id)!
+    return onTrial.has(`${productId}:${b.buyer_profile_id}`) && slotMoment(b.time_slots.date, b.time_slots.end_time) <= now
+  })
+  if (!candidates.length) return []
+
+  const { data: answered } = await supabase
+    .from('trial_lesson_checks')
+    .select('time_slot_id, buyer_profile_id')
+    .in('time_slot_id', candidates.map((c) => c.time_slot_id))
+  const done = new Set(((answered ?? []) as { time_slot_id: string; buyer_profile_id: string }[]).map((a) => `${a.time_slot_id}:${a.buyer_profile_id}`))
+  const open = candidates.filter((c) => !done.has(`${c.time_slot_id}:${c.buyer_profile_id}`))
+  if (!open.length) return []
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, display_name')
+    .in('id', [...new Set(open.map((c) => c.buyer_profile_id!))])
+  const nameById = new Map(((profiles ?? []) as { id: string; display_name: string | null }[]).map((p) => [p.id, p.display_name]))
+  const titleById = new Map(productList.map((p) => [p.id, p.title]))
+  return open.map((c) => {
+    const productId = productBySchedule.get(c.schedule_id)!
+    return {
+      product_id: productId,
+      product_title: titleById.get(productId) ?? '',
+      buyer_profile_id: c.buyer_profile_id!,
+      buyer_name: nameById.get(c.buyer_profile_id!) || 'Покупатель',
+      time_slot_id: c.time_slot_id,
+      date: c.time_slots!.date,
+      start_time: c.time_slots!.start_time,
+      end_time: c.time_slots!.end_time,
+    }
+  })
+}
+
+/** The seller's answer. "Да" closes the lesson trial; "Нет" lets the buyer book another slot. */
+export async function answerTrialLessonCheck(
+  supabase: SupabaseClient,
+  input: { productId: string; buyerProfileId: string; timeSlotId: string; held: boolean },
+) {
+  const { error } = await supabase.from('trial_lesson_checks').upsert(
+    {
+      product_id: input.productId,
+      buyer_profile_id: input.buyerProfileId,
+      time_slot_id: input.timeSlotId,
+      held: input.held,
+      answered_at: new Date().toISOString(),
+    },
+    { onConflict: 'time_slot_id,buyer_profile_id' },
+  )
+  if (error) throw error
+  if (!input.held) return
+  const now = new Date().toISOString()
+  await supabase
+    .from('simple_purchases')
+    .update({ trial_ends_at: now, trial_end_notified_at: now })
+    .eq('product_id', input.productId)
+    .eq('buyer_profile_id', input.buyerProfileId)
+    .eq('is_trial', true)
+    .is('trial_ends_at', null)
+  await notify(supabase, { buyerProfileId: input.buyerProfileId }, {
+    productId: input.productId,
+    kind: 'trial_ended',
+    title: 'Пробный доступ окончен',
+  })
+}
