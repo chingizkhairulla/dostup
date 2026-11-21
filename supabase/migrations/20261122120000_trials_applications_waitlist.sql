@@ -104,3 +104,6 @@ GRANT ALL ON TABLE public.app_notifications TO service_role;
 --    отвечает «Да» на «Пробный урок прошёл?».
 ALTER TABLE public.product_trials ALTER COLUMN ends_at DROP NOT NULL;
 ALTER TABLE public.product_trials ALTER COLUMN trial_days DROP NOT NULL;
+
+-- 6. «Пробный доступ окончен» отправляется один раз.
+ALTER TABLE public.simple_purchases ADD COLUMN IF NOT EXISTS trial_end_notified_at timestamptz;

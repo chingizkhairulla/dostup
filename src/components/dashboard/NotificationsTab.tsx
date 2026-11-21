@@ -9,6 +9,7 @@ import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { format, formatDistanceToNow } from "date-fns";
 import { ru, kk } from "date-fns/locale";
+import { AppNotificationCard, useAppNotifications, type AppNotification } from "@/components/notifications/AppNotificationsList";
 
 interface BookingCancellation {
   id: string;
@@ -227,6 +228,8 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
 
   const locale = language === "ru" ? ru : kk;
 
+  const { data: appNotifications = [] } = useAppNotifications("buyer", !!user);
+
   const isLoading = loadingCancellations || loadingPurchases || loadingUnlocks || loadingRejected || loadingIncoming;
 
   if (isLoading) {
@@ -243,7 +246,8 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
     | { type: "purchase_confirmed"; date: string; data: ConfirmedPurchase }
     | { type: "material_unlock"; date: string; data: MaterialUnlock }
     | { type: "reschedule_rejected"; date: string; data: RejectedReschedule }
-    | { type: "incoming_reschedule"; date: string; data: IncomingReschedule };
+    | { type: "incoming_reschedule"; date: string; data: IncomingReschedule }
+    | { type: "app"; date: string; data: AppNotification };
 
   const allNotifications: NotificationItem[] = [
     ...cancellations.map(c => ({ type: "cancellation" as const, date: c.cancelled_at, data: c })),
@@ -251,6 +255,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
     ...materialUnlocks.map(u => ({ type: "material_unlock" as const, date: u.unlocked_at, data: u })),
     ...rejectedReschedules.map(r => ({ type: "reschedule_rejected" as const, date: r.responded_at, data: r })),
     ...incomingReschedules.map(r => ({ type: "incoming_reschedule" as const, date: r.created_at, data: r })),
+    ...appNotifications.map(n => ({ type: "app" as const, date: n.created_at, data: n })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const hasNotifications = allNotifications.length > 0;
@@ -270,6 +275,7 @@ const NotificationsTab = ({ lastViewedAt, purchasedProductIds = [] }: Notificati
       ) : (
         <div className="space-y-3">
           {allNotifications.map((item) => {
+            if (item.type === "app") return <AppNotificationCard key={`app-${item.data.id}`} item={item.data} />;
             if (item.type === "material_unlock") {
               const unlock = item.data as MaterialUnlock;
               return (

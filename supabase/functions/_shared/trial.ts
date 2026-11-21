@@ -293,3 +293,128 @@ export async function afterPaidPurchase(
     await supabase.from('products').update({ max_buyers: paid.length }).eq('id', product.id)
   }
 }
+
+/**
+ * Seats became free (the seller closed someone's access, raised "Максимальное число
+ * покупателей", a subscription ran out, an opened payment expired) and people wait in the list.
+ * - "Период времени" with auto-opening on: payment opens for the oldest requests, one per free
+ *   seat, for `waitlist_pay_days` days; each gets a notification, the seller one summary.
+ * - Otherwise nobody is let in automatically: the seller is told how many people they may allow.
+ * A payment opened but not yet used holds no seat, yet it is counted here so the same seat is not
+ * offered twice.
+ */
+export async function releaseSeats(
+  supabase: SupabaseClient,
+  productId: string,
+  { skipBuyerIds = [] as string[] } = {},
+) {
+  const { data: product } = await supabase.from('products').select(TRIAL_PRODUCT_COLUMNS).eq('id', productId).maybeSingle()
+  if (!product || product.sales_closed) return
+
+  const { data: apps } = await supabase
+    .from('product_applications')
+    .select('id, buyer_profile_id, status, applied_at')
+    .eq('product_id', productId)
+    .in('status', ['allowed', 'closed'])
+    .order('applied_at', { ascending: true })
+  const rows = (apps ?? []) as { id: string; buyer_profile_id: string; status: string }[]
+  const waiting = rows.filter((r) => r.status === 'closed' && !skipBuyerIds.includes(r.buyer_profile_id))
+  if (!waiting.length) return
+
+  let free = Number.POSITIVE_INFINITY
+  if (product.max_buyers != null) {
+    const paid = await activeBuyerIds(supabase, productId, { includeTrials: false })
+    const opened = rows.filter((r) => r.status === 'allowed').length
+    free = product.max_buyers - paid.length - opened
+  }
+  if (free <= 0) return
+  const count = Math.min(free, waiting.length)
+  const title = product.title ?? ''
+
+  if (trialModeOf(product) === 'period' && product.waitlist_auto_open) {
+    const lucky = waiting.slice(0, count)
+    const payUntil = new Date(Date.now() + Math.max(1, Number(product.waitlist_pay_days) || 7) * 86400000).toISOString()
+    const now = new Date().toISOString()
+    await supabase
+      .from('product_applications')
+      .update({ status: 'allowed', decided_at: now, pay_until: payUntil })
+      .in('id', lucky.map((r) => r.id))
+    for (const r of lucky) {
+      await notify(supabase, { buyerProfileId: r.buyer_profile_id }, {
+        productId,
+        kind: 'seat_opened',
+        title: 'Место освободилось!',
+        body: `Теперь вы можете оплатить ${title} в разделе "Покупки"`,
+      })
+    }
+    if (product.creator_account_id) {
+      await notify(supabase, { creatorAccountId: product.creator_account_id }, {
+        productId,
+        kind: 'seats_auto_opened',
+        title: 'Места освободились',
+        body: `Оплата автоматически открыта ${count} покупателям из листа ожидания`,
+      })
+    }
+    return
+  }
+
+  if (product.creator_account_id) {
+    await notify(supabase, { creatorAccountId: product.creator_account_id }, {
+      productId,
+      kind: 'seats_free',
+      title: 'Места освободились',
+      body: `Вы можете разрешить оплату ${count} людям, стоящих в листе ожидания`,
+    })
+  }
+}
+
+/**
+ * Daily housekeeping run by process-subscriptions: "Пробный доступ окончен" for trials that ran
+ * out, payments opened automatically and not used in time go back to the waiting list, and the
+ * seats freed by all that are offered to the next people in line.
+ */
+export async function processTrialsAndWaitlists(supabase: SupabaseClient) {
+  const now = new Date().toISOString()
+  const touched = new Set<string>()
+
+  const { data: endedTrials } = await supabase
+    .from('simple_purchases')
+    .select('id, product_id, buyer_profile_id')
+    .eq('is_trial', true)
+    .eq('status', 'completed')
+    .lte('trial_ends_at', now)
+    .is('trial_end_notified_at', null)
+    .limit(500)
+  for (const t of (endedTrials ?? []) as { id: string; product_id: string; buyer_profile_id: string | null }[]) {
+    if (t.buyer_profile_id) {
+      await notify(supabase, { buyerProfileId: t.buyer_profile_id }, {
+        productId: t.product_id,
+        kind: 'trial_ended',
+        title: 'Пробный доступ окончен',
+      })
+    }
+    await supabase.from('simple_purchases').update({ trial_end_notified_at: now }).eq('id', t.id)
+  }
+
+  const { data: expired } = await supabase
+    .from('product_applications')
+    .select('id, product_id, buyer_profile_id')
+    .eq('status', 'allowed')
+    .lte('pay_until', now)
+    .limit(500)
+  const backToList = (expired ?? []) as { id: string; product_id: string; buyer_profile_id: string }[]
+  if (backToList.length) {
+    await supabase
+      .from('product_applications')
+      .update({ status: 'closed', pay_until: null, decided_at: now })
+      .in('id', backToList.map((r) => r.id))
+    for (const r of backToList) touched.add(r.product_id)
+  }
+
+  for (const productId of touched) {
+    await releaseSeats(supabase, productId, {
+      skipBuyerIds: backToList.filter((r) => r.product_id === productId).map((r) => r.buyer_profile_id),
+    })
+  }
+  return { trialsEnded: (endedTrials ?? []).length, paymentsClosed: backToList.length }
+}

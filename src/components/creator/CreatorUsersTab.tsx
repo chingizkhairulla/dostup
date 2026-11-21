@@ -8,6 +8,7 @@ import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import CreatorPendingPayments from "./CreatorPendingPayments";
+import { PendingApplicationCards, useApplications, WaitlistSection } from "./CreatorApplications";
 import ProductSwitcher from "./ProductSwitcher";
 import BuyerDetailsDialog, { UrgencyBadge, type BuyerPurchase } from "./BuyerDetailsDialog";
 import { BUYER_PERIODS, periodStart, type BuyerPeriod } from "./buyerAccess";
@@ -218,6 +219,19 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
 
   const opened = purchases.find((p) => p.id === openId) ?? null;
 
+  // Requests after a trial ("Ожидающие") and the waiting list, for the product on screen.
+  const { data: applications = [] } = useApplications(!!creatorName);
+  const shownApplications = applications.filter((a) => showAll || a.product_id === selectedProductId);
+  const pendingApplications = shownApplications.filter((a) => a.status === "pending");
+  const waitlist = shownApplications.filter((a) => a.status !== "pending");
+  const productTitle = showAll
+    ? (id: string) => creatorProducts.find((p) => p.id === id)?.title
+    : undefined;
+  const selectedProduct = creatorProducts.find((p) => p.id === selectedProductId) as
+    | { id: string; trial_mode?: string | null; waitlist_auto_open?: boolean; waitlist_pay_days?: number }
+    | undefined;
+  const waitlistSettingsProduct = !showAll && selectedProduct?.trial_mode === "period" ? selectedProduct : null;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -297,7 +311,11 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
         />
       </div>
 
-      <CreatorPendingPayments creatorName={creatorName} />
+      <CreatorPendingPayments
+        creatorName={creatorName}
+        extraCount={pendingApplications.length}
+        extra={<PendingApplicationCards applications={pendingApplications} productTitle={productTitle} />}
+      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -359,6 +377,8 @@ const CreatorUsersTab = ({ creatorName }: CreatorUsersTabProps) => {
           </Card>
         ))}
       </div>
+
+      <WaitlistSection applications={waitlist} productTitle={productTitle} settingsProduct={waitlistSettingsProduct} />
 
       <BuyerDetailsDialog
         purchase={opened}

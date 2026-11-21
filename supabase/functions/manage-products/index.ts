@@ -13,6 +13,7 @@ import {
 import { latestSubmissionsForPurchases, recordVerificationEvent } from '../_shared/purchase.ts'
 import { subscriptionGrantsAccess } from '../_shared/subscription.ts'
 import { activeBuyerIds } from '../_shared/productBuyers.ts'
+import { notify, releaseSeats, sendSellerMessage } from '../_shared/trial.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return optionsResponse()
@@ -120,8 +121,14 @@ Deno.serve(async (req) => {
       delete updates.id
       delete updates.creator_account_id
       delete updates.creator_id
+      const { data: before } = await supabase.from('products').select('max_buyers').eq('id', id).maybeSingle()
       const { data, error } = await supabase.from('products').update(updates).eq('id', id).select().single()
       if (error) return json({ error: error.message }, 500)
+      // More seats than before (or no limit any more): offer them to the waiting list.
+      if ('max_buyers' in updates && before && before.max_buyers != null &&
+        (data.max_buyers == null || data.max_buyers > before.max_buyers)) {
+        await releaseSeats(supabase, id)
+      }
       return json({ product: data })
     }
 
@@ -160,6 +167,138 @@ Deno.serve(async (req) => {
       const { error } = await supabase.from('products').update({ sales_closed: body.closed }).eq('id', id)
       if (error) return json({ error: error.message }, 500)
       return json({ ok: true, salesClosed: body.closed })
+    }
+
+    // "Ожидающие" (requests after a trial) and "Лист ожидания" for the seller's products.
+    if (action === 'list_applications') {
+      if (caller.kind !== 'creator') return forbidden()
+      const ids = await creatorProductIds(supabase, caller.accountId)
+      if (!ids.length) return json({ applications: [] })
+      const { data, error } = await supabase
+        .from('product_applications')
+        .select('id, product_id, buyer_profile_id, status, applied_at, decided_at, pay_until')
+        .in('product_id', ids)
+        .in('status', ['pending', 'allowed', 'closed'])
+        .order('applied_at', { ascending: true })
+      if (error) return json({ error: error.message }, 500)
+      const rows = (data ?? []) as { buyer_profile_id: string; product_id: string }[]
+      const buyerIds = [...new Set(rows.map((r) => r.buyer_profile_id))]
+      const { data: profiles } = buyerIds.length
+        ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', buyerIds)
+        : { data: [] }
+      const byId = new Map(((profiles ?? []) as { id: string }[]).map((p) => [p.id, p]))
+      return json({
+        applications: rows.map((r) => {
+          const profile = byId.get(r.buyer_profile_id) as { display_name?: string | null; avatar_url?: string | null } | undefined
+          return { ...r, name: profile?.display_name || 'Покупатель', avatar_url: profile?.avatar_url ?? null }
+        }),
+      })
+    }
+
+    if (action === 'decide_application') {
+      if (caller.kind !== 'creator') return forbidden()
+      const applicationId = String(body.applicationId || '')
+      const decision = String(body.decision || '')
+      if (!applicationId || !['allow', 'waitlist', 'close_payment', 'remove'].includes(decision)) {
+        return json({ error: 'Bad input' }, 400)
+      }
+      const { data: app } = await supabase
+        .from('product_applications')
+        .select('id, product_id, buyer_profile_id, status')
+        .eq('id', applicationId)
+        .maybeSingle()
+      if (!app) return json({ error: 'Not found' }, 404)
+      if (!(await creatorOwnsProduct(supabase, caller.accountId, app.product_id))) return forbidden()
+      const { data: product } = await supabase.from('products').select('id, title').eq('id', app.product_id).maybeSingle()
+      const title = product?.title ?? ''
+      const now = new Date().toISOString()
+
+      if (decision === 'allow') {
+        // Personal permission for this one buyer; a seat is taken only once they pay.
+        await supabase
+          .from('product_applications')
+          .update({ status: 'allowed', decided_at: now, pay_until: null })
+          .eq('id', app.id)
+        await notify(supabase, { buyerProfileId: app.buyer_profile_id }, {
+          productId: app.product_id,
+          kind: 'payment_allowed',
+          title: `Вам открыли оплату на ${title}`,
+          body: 'Можете оплатить его в разделе "Покупки"',
+        })
+        return json({ ok: true, status: 'allowed' })
+      }
+
+      if (decision === 'waitlist') {
+        const message = typeof body.message === 'string' ? body.message.trim() : ''
+        if (!message) return json({ error: 'Напишите сообщение' }, 400)
+        await supabase
+          .from('product_applications')
+          .update({ status: 'closed', decided_at: now, pay_until: null })
+          .eq('id', app.id)
+        // Only a personal message from the seller, no notification from the platform.
+        await sendSellerMessage(supabase, caller.accountId, app.buyer_profile_id, message.slice(0, 4000))
+        return json({ ok: true, status: 'closed' })
+      }
+
+      if (decision === 'close_payment') {
+        // Back to "Ожидающие", where the seller decides again.
+        await supabase
+          .from('product_applications')
+          .update({ status: 'pending', decided_at: now, pay_until: null })
+          .eq('id', app.id)
+        return json({ ok: true, status: 'pending' })
+      }
+
+      // remove: gone from the waiting list for good; the trial (if still on) ends with it.
+      await supabase
+        .from('product_applications')
+        .update({ status: 'removed', decided_at: now, pay_until: null })
+        .eq('id', app.id)
+      await supabase
+        .from('simple_purchases')
+        .update({ trial_ends_at: now })
+        .eq('product_id', app.product_id)
+        .eq('buyer_profile_id', app.buyer_profile_id)
+        .eq('is_trial', true)
+      await notify(supabase, { buyerProfileId: app.buyer_profile_id }, {
+        productId: app.product_id,
+        kind: 'waitlist_removed',
+        title: 'Вас убрали из листа ожидания',
+        body: title,
+      })
+      return json({ ok: true, status: 'removed' })
+    }
+
+    if (action === 'waitlist_settings') {
+      if (caller.kind !== 'creator') return forbidden()
+      const id = String(body.productId || '')
+      if (!id || !(await creatorOwnsProduct(supabase, caller.accountId, id))) return forbidden()
+      const updates: Record<string, unknown> = {}
+      if (typeof body.autoOpen === 'boolean') updates.waitlist_auto_open = body.autoOpen
+      if (body.payDays !== undefined) {
+        const days = Math.floor(Number(body.payDays))
+        if (!(days >= 1 && days <= 365)) return json({ error: 'Bad days' }, 400)
+        updates.waitlist_pay_days = days
+      }
+      if (!Object.keys(updates).length) return json({ ok: true })
+      const { error } = await supabase.from('products').update(updates).eq('id', id)
+      if (error) return json({ error: error.message }, 500)
+      // Switching it on may open payment right away if seats are already free.
+      if (updates.waitlist_auto_open === true) await releaseSeats(supabase, id)
+      return json({ ok: true })
+    }
+
+    // Platform notifications for the seller ("Места освободились…", "… вышел из листа ожидания").
+    if (action === 'list_notifications') {
+      if (caller.kind !== 'creator') return forbidden()
+      const { data, error } = await supabase
+        .from('app_notifications')
+        .select('id, product_id, kind, title, body, created_at')
+        .eq('creator_account_id', caller.accountId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) return json({ error: error.message }, 500)
+      return json({ notifications: data ?? [] })
     }
 
     if (action === 'list_teachers') {
@@ -390,6 +529,8 @@ Deno.serve(async (req) => {
             .eq('product_id', purchase.product_id)
             .eq('buyer_profile_id', purchase.buyer_profile_id)
         }
+        // The freed seat goes to the waiting list.
+        await releaseSeats(supabase, purchase.product_id)
         return json({ ok: true })
       }
 

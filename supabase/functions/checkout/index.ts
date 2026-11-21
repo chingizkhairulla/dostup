@@ -289,6 +289,18 @@ Deno.serve(async (req) => {
     }
 
     // "Подать заявку": after the trial lesson ("lesson" kind) the request waits for the seller in
+    // Platform notifications for this buyer ("Пробный доступ окончен", "Вам открыли оплату…").
+    if (action === 'list_notifications') {
+      const { data, error } = await supabase
+        .from('app_notifications')
+        .select('id, product_id, kind, title, body, created_at')
+        .eq('buyer_profile_id', user.userId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) return json({ error: error.message }, 500)
+      return json({ notifications: data ?? [] })
+    }
+
     // "Ожидающие"; when the seats ran out during a "period" trial it joins the waiting list.
     if (action === 'apply') {
       const productId = String(body.productId || '').trim()

@@ -314,7 +314,7 @@ export const translations = {
     
     // Creator actions
     confirmPayment: "Подтвердить оплату",
-    pendingPayments: "Ожидающие доступа",
+    pendingPayments: "Ожидающие",
     kaspiLink: "Ссылка Kaspi",
     kaspiLinkPlaceholder: "https://kaspi.kz/pay/...",
     paymentConfirmed: "Оплата подтверждена!",
@@ -1010,7 +1010,7 @@ export const translations = {
     
     // Creator actions
     confirmPayment: "Төлемді растау",
-    pendingPayments: "Қол жеткізуді күтуде",
+    pendingPayments: "Күтудегілер",
     kaspiLink: "Kaspi сілтемесі",
     kaspiLinkPlaceholder: "https://kaspi.kz/pay/...",
     paymentConfirmed: "Төлем расталды!",
