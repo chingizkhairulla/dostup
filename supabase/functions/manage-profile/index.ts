@@ -233,6 +233,11 @@ Deno.serve(async (req) => {
         return json({ error: 'Profile not found' }, 404)
       }
 
+      // The buyer profile stays with the account for good; only seller profiles can go.
+      if (row.type !== 'creator' && row.type !== 'school') {
+        return json({ error: 'buyer_profile_permanent' }, 409)
+      }
+
       const allProfiles = await listProfiles(supabase, authUserId)
       if (allProfiles.length <= 1) {
         return json({ error: 'last_profile' }, 409)

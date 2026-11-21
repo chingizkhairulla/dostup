@@ -35,9 +35,11 @@ const ROLE_OPTIONS: {
 interface RoleSelectionScreenProps {
   onSelect: (type: ProfileType) => void | Promise<void>;
   types?: ProfileType[];
+  /** A card that does not fill a phone screen (opened over the page, closed with a tap around it). */
+  compact?: boolean;
 }
 
-const RoleSelectionScreen = ({ onSelect, types }: RoleSelectionScreenProps) => {
+const RoleSelectionScreen = ({ onSelect, types, compact = false }: RoleSelectionScreenProps) => {
   const { t } = useLanguage();
   const [busyType, setBusyType] = useState<ProfileType | null>(null);
   const options = types?.length
@@ -55,8 +57,13 @@ const RoleSelectionScreen = ({ onSelect, types }: RoleSelectionScreenProps) => {
   };
 
   return (
-    <Card className={cn(LOGIN_CARD_CLASS, "motion-safe:animate-fade-in")}>
-      <CardHeader className="pb-2 pt-14 text-center">
+    <Card
+      className={cn(
+        compact ? "w-full rounded-2xl border shadow-sm" : LOGIN_CARD_CLASS,
+        "motion-safe:animate-fade-in",
+      )}
+    >
+      <CardHeader className={cn("pb-2 text-center", compact ? "pt-6" : "pt-14")}>
         <CardTitle className="text-2xl font-bold">{t("chooseYourRole")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-2 pb-6">
