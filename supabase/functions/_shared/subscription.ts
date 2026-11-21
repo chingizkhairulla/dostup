@@ -91,10 +91,6 @@ export async function buyerHasProductAccess(
   buyerProfileId: string,
   productId: string,
 ): Promise<boolean> {
-  if (await isSubscriptionProduct(supabase, productId)) {
-    return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
-  }
-
   const { data } = await supabase
     .from('simple_purchases')
     .select('id, is_trial, trial_ends_at, access_expires_at')
@@ -103,11 +99,21 @@ export async function buyerHasProductAccess(
     .eq('status', 'completed')
     .maybeSingle()
 
-  if (!data) return false
-  if (data.is_trial) {
-    return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
+  // A trial opens the product whatever its payment options are (one-time or recurring).
+  if (data?.is_trial) return trialOpen(data)
+  if (await isSubscriptionProduct(supabase, productId)) {
+    return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
   }
+  if (!data) return false
   return purchaseAccessOpen(data)
+}
+
+/**
+ * A trial is open until trial_ends_at. A "lesson" trial has no end date: it stays open until the
+ * seller answers that the trial lesson took place (then trial_ends_at is set to that moment).
+ */
+export function trialOpen(row: { trial_ends_at?: string | null }, now = new Date()): boolean {
+  return !row.trial_ends_at || new Date(row.trial_ends_at) > now
 }
 
 /** A seller-set end date closes a one-time purchase; NULL keeps it open for good. */
@@ -131,9 +137,7 @@ export async function buyerAccessibleProductIds(
   for (const row of purchases ?? []) {
     const productId = row.product_id as string
     if (row.is_trial) {
-      if (row.trial_ends_at && new Date(row.trial_ends_at) > now) {
-        ids.add(productId)
-      }
+      if (trialOpen(row, now)) ids.add(productId)
       continue
     }
     if (!purchaseAccessOpen(row, now)) continue

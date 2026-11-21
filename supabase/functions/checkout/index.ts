@@ -6,11 +6,20 @@ import {
   unauthorized,
 } from '../_shared/session.ts'
 import { latestSubmissionForPurchase } from '../_shared/purchase.ts'
-import { buyerCanTakeSeat, seatsFull } from '../_shared/productBuyers.ts'
+import {
+  buyerProductState,
+  notify,
+  paymentDecision,
+  sendSellerMessage,
+  shutOut,
+  TRIAL_PRODUCT_COLUMNS,
+  trialDecision,
+} from '../_shared/trial.ts'
 import {
   isSubscriptionProduct,
   purchaseAccessOpen,
   subscriptionGrantsAccess,
+  trialOpen,
   type SubscriptionRow,
 } from '../_shared/subscription.ts'
 
@@ -93,13 +102,14 @@ Deno.serve(async (req) => {
     if (action === 'list_my_purchases') {
       const { data, error } = await supabase
         .from('simple_purchases')
-        .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id, access_expires_at')
+        .select('id, product_id, status, amount, created_at, can_choose_teacher, assigned_teacher_id, access_expires_at, is_trial, trial_ends_at')
         .eq('buyer_profile_id', user.userId)
         .eq('status', body.status || 'completed')
       if (error) return json({ error: error.message }, 500)
-      // Access the seller ended is no longer "mine" on the buyer's side.
+      // Access the seller ended, or a trial that is over, is no longer "mine" on the buyer's side.
       const rows = (body.status || 'completed') === 'completed'
-        ? (data ?? []).filter((p: { access_expires_at?: string | null }) => purchaseAccessOpen(p))
+        ? (data ?? []).filter((p: { access_expires_at?: string | null; is_trial?: boolean | null; trial_ends_at?: string | null }) =>
+            p.is_trial ? trialOpen(p) : purchaseAccessOpen(p))
         : data ?? []
       if (!rows.length) return json({ purchases: [] })
       const productIds = rows.map((p: { product_id: string }) => p.product_id)
@@ -108,10 +118,14 @@ Deno.serve(async (req) => {
         .select('id, title, headline, telegram_link, group_link_label')
         .in('id', productIds)
       return json({
-        purchases: rows.map((purchase: { product_id: string }) => ({
-          ...purchase,
-          product: products?.find((p: { id: string }) => p.id === purchase.product_id) || null,
-        })),
+        purchases: rows.map((purchase: { product_id: string; is_trial?: boolean | null }) => {
+          const product = products?.find((p: { id: string }) => p.id === purchase.product_id) || null
+          // The group link goes out only after a purchase; a trial does not get it.
+          return {
+            ...purchase,
+            product: product && purchase.is_trial ? { ...product, telegram_link: null } : product,
+          }
+        }),
       })
     }
 
@@ -184,15 +198,17 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, price, is_active, is_paused, sales_closed, max_buyers')
+        .select(`price, is_active, is_paused, ${TRIAL_PRODUCT_COLUMNS}`)
         .eq('id', productId)
         .maybeSingle()
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
-      // Ended sales or every seat taken: no new purchase (a seat holder still pays the next period).
-      const seat = await buyerCanTakeSeat(supabase, product, user.userId)
-      if (!seat.ok) return json({ error: 'Мест нет', code: seat.code }, 409)
+      // The same rules as the storefront button, checked here so a direct call cannot skip them:
+      // ended sales, no seats, "only with permission" without the seller's permission, etc.
+      const state = await buyerProductState(supabase, product, user.userId)
+      const decision = paymentDecision(state)
+      if (!decision.ok) return json({ error: decision.error, code: decision.code }, 409)
 
       const isSub = await isSubscriptionProduct(supabase, productId)
 
@@ -206,11 +222,13 @@ Deno.serve(async (req) => {
           .maybeSingle()
         if (pending) return json({ purchase: pending })
       } else {
+        // The trial row stays until the payment is confirmed; the purchase is a row of its own.
         const { data: existing } = await supabase
           .from('simple_purchases')
           .select('id, status')
           .eq('buyer_profile_id', user.userId)
           .eq('product_id', productId)
+          .or('is_trial.is.null,is_trial.eq.false')
           .maybeSingle()
         if (existing) return json({ purchase: existing })
       }
@@ -248,48 +266,85 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    if (action === 'seat_status') {
+    // Everything the storefront button needs for this buyer: trial, application, seats, payment.
+    if (action === 'storefront_state' || action === 'seat_status' || action === 'check_trial') {
       const productId = String(body.productId || '').trim()
       if (!productId) return json({ error: 'Missing productId' }, 400)
-      const { data: product } = await supabase
-        .from('products')
-        .select('id, sales_closed, max_buyers')
-        .eq('id', productId)
-        .maybeSingle()
+      const { data: product } = await supabase.from('products').select(TRIAL_PRODUCT_COLUMNS).eq('id', productId).maybeSingle()
       if (!product) return json({ error: 'Not found' }, 404)
-      const seat = await buyerCanTakeSeat(supabase, product, user.userId)
-      return json({ canBuy: seat.ok, code: seat.ok ? null : seat.code })
+      const state = await buyerProductState(supabase, product, user.userId)
+      const pay = paymentDecision(state)
+      const trial = trialDecision(state)
+      return json({
+        ...state,
+        canBuy: pay.ok,
+        payCode: pay.ok ? null : pay.code,
+        canStartTrial: trial.ok,
+        // Older clients read these.
+        hasFreeTrial: Boolean(state.trialMode),
+        hasUsedTrial: state.trial !== 'none',
+        canUseTrial: trial.ok,
+        trialDays: product.trial_days ?? null,
+      })
     }
 
-    if (action === 'check_trial') {
+    // "Подать заявку": after the trial lesson ("lesson" kind) the request waits for the seller in
+    // "Ожидающие"; when the seats ran out during a "period" trial it joins the waiting list.
+    if (action === 'apply') {
+      const productId = String(body.productId || '').trim()
+      if (!productId || body.wantToPay !== true) return json({ error: 'Bad input' }, 400)
+      const { data: product } = await supabase.from('products').select(TRIAL_PRODUCT_COLUMNS).eq('id', productId).maybeSingle()
+      if (!product) return json({ error: 'Not found' }, 404)
+      const state = await buyerProductState(supabase, product, user.userId)
+      if (state.salesClosed || shutOut(state)) return json({ error: 'Мест нет', code: 'no_seats' }, 409)
+      if (state.application) return json({ ok: true, status: state.application.status })
+      if (state.trial === 'none') return json({ error: 'Сначала получите пробный доступ', code: 'trial_first' }, 409)
+      let status: 'pending' | 'closed'
+      if (state.trialMode === 'lesson') {
+        if (!state.lessonHeld) return json({ error: 'Доступно после пробного урока', code: 'lesson_not_held' }, 409)
+        status = 'pending'
+      } else {
+        if (paymentDecision(state).ok) return json({ error: 'Оплата уже доступна', code: 'can_pay' }, 409)
+        status = 'closed'
+      }
+      const { error } = await supabase.from('product_applications').insert({
+        product_id: productId,
+        buyer_profile_id: user.userId,
+        status,
+        applied_at: new Date().toISOString(),
+      })
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true, status })
+    }
+
+    // "Выйти" from the waiting list: gone from the seller's lists for good, no new trial or purchase.
+    if (action === 'leave_waitlist') {
       const productId = String(body.productId || '').trim()
       if (!productId) return json({ error: 'Missing productId' }, 400)
-
-      const { data: product } = await supabase
-        .from('products')
-        .select('id, has_free_trial, trial_days')
-        .eq('id', productId)
-        .maybeSingle()
-
-      if (!product || !product.has_free_trial || !product.trial_days) {
-        return json({ hasFreeTrial: false, hasUsedTrial: false, canUseTrial: false, trialDays: null })
-      }
-
-      const { data: trial } = await supabase
-        .from('product_trials')
-        .select('id, starts_at, ends_at')
+      const { data: application } = await supabase
+        .from('product_applications')
+        .select('id, status')
         .eq('product_id', productId)
         .eq('buyer_profile_id', user.userId)
         .maybeSingle()
-
-      const hasUsedTrial = Boolean(trial)
-      return json({
-        hasFreeTrial: true,
-        hasUsedTrial,
-        canUseTrial: !hasUsedTrial,
-        trialDays: product.trial_days,
-        trialEndsAt: trial?.ends_at ?? null,
-      })
+      if (!application || !['allowed', 'closed', 'pending'].includes(application.status)) {
+        return json({ error: 'Not in the waiting list' }, 409)
+      }
+      await supabase
+        .from('product_applications')
+        .update({ status: 'left', decided_at: new Date().toISOString(), pay_until: null })
+        .eq('id', application.id)
+      const { data: product } = await supabase.from('products').select('id, title, creator_account_id').eq('id', productId).maybeSingle()
+      const { data: me } = await supabase.from('profiles').select('display_name').eq('id', user.userId).maybeSingle()
+      if (product?.creator_account_id) {
+        await notify(supabase, { creatorAccountId: product.creator_account_id }, {
+          productId,
+          kind: 'waitlist_left',
+          title: `${me?.display_name || 'Покупатель'} вышел из листа ожидания`,
+          body: product.title ?? '',
+        })
+      }
+      return json({ ok: true })
     }
 
     if (action === 'activate_trial') {
@@ -298,86 +353,63 @@ Deno.serve(async (req) => {
 
       const { data: product } = await supabase
         .from('products')
-        .select('id, has_free_trial, trial_days, is_active, is_paused, sales_closed, max_buyers')
+        .select(`is_active, is_paused, ${TRIAL_PRODUCT_COLUMNS}`)
         .eq('id', productId)
         .maybeSingle()
-
       if (!product || !product.is_active || product.is_paused) {
         return json({ error: 'Product unavailable' }, 400)
       }
-      if (product.sales_closed || (await seatsFull(supabase, product))) {
-        return json({ error: 'Мест нет', code: product.sales_closed ? 'sales_closed' : 'no_seats' }, 409)
-      }
+      const { data: profile } = await supabase.from('profiles').select('type').eq('id', user.userId).maybeSingle()
+      if (profile?.type !== 'buyer') return json({ error: 'Переключитесь на профиль покупателя', code: 'not_buyer' }, 403)
 
-      if (!product.has_free_trial || !product.trial_days || product.trial_days <= 0) {
-        return json({ error: 'Free trial not available for this product' }, 400)
-      }
+      const state = await buyerProductState(supabase, product, user.userId)
+      const decision = trialDecision(state)
+      if (!decision.ok) return json({ error: decision.error, code: decision.code, message: decision.error }, 409)
 
-      // Check if user already used trial
-      const { data: existingTrial } = await supabase
-        .from('product_trials')
-        .select('id')
-        .eq('product_id', productId)
-        .eq('buyer_profile_id', user.userId)
-        .maybeSingle()
+      // The name the person gave in the trial window becomes their buyer profile name.
+      const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 100) : ''
+      if (displayName) await supabase.from('profiles').update({ display_name: displayName }).eq('id', user.userId)
 
-      if (existingTrial) {
-        return json({ error: 'trial_already_used', message: 'Пробный период уже был использован' }, 400)
-      }
-
-      const trialDays = Number(product.trial_days)
+      const mode = state.trialMode!
       const now = new Date()
-      const endsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000)
+      const days = mode === 'period' ? Math.max(1, Number(product.trial_days) || 7) : null
+      // "Lesson" has no end date: it closes when the seller confirms the trial lesson took place.
+      const endsAt = days ? new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString() : null
 
-      // 1. Record trial in product_trials (enforces uniqueness)
-      const { error: trialError } = await supabase
-        .from('product_trials')
-        .insert({
-          product_id: productId,
-          buyer_profile_id: user.userId,
-          trial_days: trialDays,
-          starts_at: now.toISOString(),
-          ends_at: endsAt.toISOString(),
-        })
-
+      const { error: trialError } = await supabase.from('product_trials').insert({
+        product_id: productId,
+        buyer_profile_id: user.userId,
+        trial_days: days,
+        starts_at: now.toISOString(),
+        ends_at: endsAt,
+      })
       if (trialError) {
-        return json({ error: 'trial_already_used', message: 'Пробный период уже был использован' }, 400)
+        return json({ error: 'trial_already_used', message: 'Пробный доступ уже был использован' }, 409)
       }
 
-      // 2. Grant access in simple_purchases
-      const { data: existingPurchase } = await supabase
-        .from('simple_purchases')
-        .select('id')
-        .eq('buyer_profile_id', user.userId)
-        .eq('product_id', productId)
-        .maybeSingle()
-
-      if (existingPurchase) {
-        await supabase
-          .from('simple_purchases')
-          .update({
-            status: 'completed',
-            amount: 0,
-            is_trial: true,
-            trial_ends_at: endsAt.toISOString(),
-            confirmed_at: now.toISOString(),
-          })
-          .eq('id', existingPurchase.id)
-      } else {
-        await supabase
-          .from('simple_purchases')
-          .insert({
-            buyer_profile_id: user.userId,
-            product_id: productId,
-            amount: 0,
-            status: 'completed',
-            is_trial: true,
-            trial_ends_at: endsAt.toISOString(),
-            confirmed_at: now.toISOString(),
-          })
+      const { error: purchaseError } = await supabase.from('simple_purchases').insert({
+        buyer_profile_id: user.userId,
+        product_id: productId,
+        amount: 0,
+        status: 'completed',
+        is_trial: true,
+        trial_ends_at: endsAt,
+        confirmed_at: now.toISOString(),
+      })
+      if (purchaseError) {
+        await supabase.from('product_trials').delete().eq('product_id', productId).eq('buyer_profile_id', user.userId)
+        return json({ error: purchaseError.message }, 500)
       }
 
-      return json({ ok: true, trialEndsAt: endsAt.toISOString(), trialDays })
+      if (product.creator_account_id) {
+        await sendSellerMessage(
+          supabase,
+          product.creator_account_id,
+          user.userId,
+          'Здравствуйте! Пробный доступ открыт. Если будут вопросы, пишите',
+        )
+      }
+      return json({ ok: true, trialMode: mode, trialEndsAt: endsAt, trialDays: days })
     }
 
     return json({ error: 'Unknown action' }, 400)

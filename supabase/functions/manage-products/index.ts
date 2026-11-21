@@ -101,6 +101,8 @@ Deno.serve(async (req) => {
           pricing_options: product.pricing_options ?? [],
           topic: product.topic ?? null,
           max_buyers: typeof product.max_buyers === 'number' && product.max_buyers >= 1 ? Math.floor(product.max_buyers) : null,
+          trial_mode: product.trial_mode === 'lesson' || product.trial_mode === 'period' ? product.trial_mode : null,
+          trial_button_text: typeof product.trial_button_text === 'string' ? product.trial_button_text.slice(0, 60) : null,
         })
         .select()
         .single()

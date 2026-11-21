@@ -33,6 +33,8 @@ export interface Product {
   max_buyers?: number | null;
   /** Every seat is taken (from the catalog; the buyer's own exemption is asked separately). */
   seats_full?: boolean;
+  trial_mode?: "lesson" | "period" | null;
+  trial_button_text?: string | null;
   author_name?: string | null;
   seller_handle?: string | null;
   seller_avatar_url?: string | null;

@@ -6,7 +6,7 @@ import {
   sanitizeChatAttachments,
   withSignedAttachmentUrls,
 } from '../_shared/chatAttachments.ts'
-import { purchaseAccessOpen, subscriptionGrantsAccess } from '../_shared/subscription.ts'
+import { purchaseAccessOpen, subscriptionGrantsAccess, trialOpen } from '../_shared/subscription.ts'
 
 // Personal chats between a seller and the people who bought their products, or who wrote to
 // the seller from a storefront.
@@ -69,7 +69,7 @@ async function pairPurchases(supabase: Supabase, creatorAccountId: string, buyer
 function purchaseActive(p: PurchaseRow, sub: { status: string; current_period_end: string } | undefined) {
   if (p.status !== 'completed') return false
   if (sub) return subscriptionGrantsAccess(sub as never)
-  if (p.is_trial) return !!p.trial_ends_at && new Date(p.trial_ends_at) > new Date()
+  if (p.is_trial) return trialOpen(p)
   return purchaseAccessOpen(p)
 }
 

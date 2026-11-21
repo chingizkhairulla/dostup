@@ -18,6 +18,7 @@ import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/
 import ShareProductButton from "@/components/share/ShareProductButton";
 import DeleteProductDialog from "@/components/creator/DeleteProductDialog";
 import MaxBuyersField from "@/components/creator/MaxBuyersField";
+import TrialSettings, { emptyTrial, TRIAL_DEFAULT_TEXT, type TrialMode, type TrialValue } from "@/components/creator/TrialSettings";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import PaymentMethodFields from "./PaymentMethodFields";
 import {
@@ -106,6 +107,8 @@ interface Product {
   sales_closed?: boolean;
   /** Paid buyers allowed at once; null means no limit. */
   max_buyers?: number | null;
+  trial_mode?: "lesson" | "period" | null;
+  trial_button_text?: string | null;
   billing_period?: string | null;
   payment_type?: string | null;
   recurring_interval?: string | null;
@@ -139,6 +142,8 @@ interface FormData {
   capacity: string;
   /** "Максимальное число покупателей": digits, "inf" for no limit, "" while not chosen. */
   maxBuyers: string;
+  /** "Бесплатный пробный" for the whole product (no longer per payment option). */
+  trial: TrialValue;
   billingPeriod: "month" | "quarter" | "year" | "";
   title: string;
   headline: string;
@@ -209,6 +214,34 @@ function validateTaxonomyFields(formData: FormData, _categories: CatalogCategory
     return "Выберите категорию и подкатегорию";
   }
   return null;
+}
+
+/** Product fields of "Бесплатный пробный"; a free product has no trial. */
+function trialPayload(formData: FormData) {
+  const { trial } = formData;
+  const on = formData.isPaid && trial.enabled;
+  return {
+    has_free_trial: on,
+    trial_mode: on ? trial.mode : null,
+    trial_days: on && trial.mode === "period" ? trial.days : null,
+    trial_button_text: on ? trial.texts[trial.mode].trim() || TRIAL_DEFAULT_TEXT[trial.mode] : null,
+  };
+}
+
+/** The form's trial block from a saved product (an old trial in days reads as "Период времени"). */
+function trialFromProduct(product: Product): TrialValue {
+  const base = emptyTrial();
+  const mode: TrialMode = product.trial_mode === "lesson" ? "lesson" : "period";
+  const enabled = Boolean(product.trial_mode || product.has_free_trial);
+  return {
+    enabled,
+    mode: enabled ? mode : base.mode,
+    days: product.trial_days || base.days,
+    texts: {
+      ...base.texts,
+      ...(enabled && product.trial_button_text ? { [mode]: product.trial_button_text } : {}),
+    },
+  };
 }
 
 /** null = no limit, a number = the limit, undefined = not chosen yet (the field is required). */
@@ -2145,11 +2178,6 @@ const ProductForm = ({
                             <span className="font-semibold text-sm sm:text-base text-foreground">
                               {summaryText}
                             </span>
-                            {opt.hasFreeTrial && (
-                              <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                                Пробный {opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -2278,67 +2306,6 @@ const ProductForm = ({
                             </div>
                           )}
 
-                          {/* Бесплатный пробный период */}
-                          <div className="rounded-xl border border-border p-3 sm:p-4 space-y-3 bg-muted/20">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Label className="text-sm sm:text-base font-medium cursor-pointer">
-                                  Бесплатный пробный период
-                                </Label>
-                                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                                  Дать покупателям доступ на несколько дней перед оплатой
-                                </p>
-                              </div>
-                              <Switch
-                                checked={opt.hasFreeTrial}
-                                onCheckedChange={(checked) =>
-                                  updateOption(opt.id, { hasFreeTrial: checked })
-                                }
-                              />
-                            </div>
-
-                            {opt.hasFreeTrial && (
-                              <div className="space-y-2 pt-2 border-t border-border/60">
-                                <Label className="text-xs sm:text-sm text-muted-foreground">Длительность пробного периода</Label>
-                                <div className="grid grid-cols-4 gap-2">
-                                  {(["3", "7", "30", "custom"] as const).map((preset) => (
-                                    <Button
-                                      key={preset}
-                                      type="button"
-                                      size="sm"
-                                      variant={opt.trialPreset === preset ? "default" : "toggle"}
-                                      onClick={() => updateOption(opt.id, { trialPreset: preset })}
-                                      className="text-xs sm:text-sm h-9"
-                                    >
-                                      {preset === "custom" ? "Выбрать" : `${preset} ${preset === "3" ? "дня" : "дней"}`}
-                                    </Button>
-                                  ))}
-                                </div>
-
-                                {opt.trialPreset === "custom" && (
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                      Число дней:
-                                    </Label>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      className="h-10 w-32 text-base"
-                                      placeholder="14"
-                                      value={opt.trialCustomDays || ""}
-                                      onChange={(e) =>
-                                        updateOption(opt.id, {
-                                          trialCustomDays: Number(e.target.value) || 0,
-                                        })
-                                      }
-                                    />
-                                    <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
                           <PaymentMethodFields
                             value={opt}
                             onChange={(updates) => updateOption(opt.id, updates)}
@@ -2386,6 +2353,11 @@ const ProductForm = ({
                 <Plus className="w-4 h-4" />
                 Добавить вариант оплаты
               </Button>
+
+              <TrialSettings
+                value={formData.trial}
+                onChange={(trial) => setFormData((prev) => ({ ...prev, trial }))}
+              />
             </div>
           </div>
         )}
@@ -2489,6 +2461,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     eventStartsAt: "",
     capacity: "",
     maxBuyers: "",
+    trial: emptyTrial(),
     billingPeriod: "",
     title: "",
     headline: "",
@@ -2525,6 +2498,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       eventStartsAt: "",
       capacity: "",
       maxBuyers: "",
+      trial: emptyTrial(),
       billingPeriod: "",
       title: "",
       headline: "",
@@ -2579,6 +2553,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       toast.error("Укажите максимальное число покупателей");
       return;
     }
+    if (formData.isPaid && formData.trial.enabled && formData.trial.mode === "period" && !(formData.trial.days >= 1)) {
+      toast.error("Укажите длительность пробного");
+      return;
+    }
 
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
@@ -2601,14 +2579,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
     }
 
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
     const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
@@ -2623,8 +2593,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
+        ...trialPayload(formData),
         pricing_options: serializedOptions,
         max_buyers: maxBuyers,
         has_schedule: false,
@@ -2795,6 +2764,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       eventStartsAt: eventLocal,
       capacity: product.capacity != null ? String(product.capacity) : "",
       maxBuyers: product.max_buyers != null ? String(product.max_buyers) : "inf",
+      trial: trialFromProduct(product),
       billingPeriod: (product.billing_period as BillingPeriod) || "",
       title: product.title,
       headline: product.headline || "",
@@ -2846,6 +2816,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       toast.error("Укажите максимальное число покупателей");
       return;
     }
+    if (formData.isPaid && formData.trial.enabled && formData.trial.mode === "period" && !(formData.trial.days >= 1)) {
+      toast.error("Укажите длительность пробного");
+      return;
+    }
 
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
@@ -2868,14 +2842,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
     }
 
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
     const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
@@ -2890,8 +2856,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
+        ...trialPayload(formData),
         pricing_options: serializedOptions,
         max_buyers: maxBuyers,
         image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,

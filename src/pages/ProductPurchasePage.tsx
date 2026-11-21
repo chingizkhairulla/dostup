@@ -297,7 +297,8 @@ const ProductPurchasePage = () => {
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "";
       console.error("create_purchase failed", err);
-      toast.error(message ? `Ошибка создания заказа: ${message}` : "Ошибка создания заказа");
+      // "Мест нет", "Оплата откроется после разрешения продавца" and the like are shown as is.
+      toast.error(message || "Ошибка создания заказа");
     }
     setIsProcessing(false);
   };
@@ -488,42 +489,6 @@ const ProductPurchasePage = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* Free trial card if product supports it */}
-        {effectiveHasTrial && effectiveTrialDays && (
-          <Card className="mb-6 border-primary/40 bg-primary/5 animate-fade-in">
-            <CardContent className="pt-5 pb-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    Бесплатный пробный период на {effectiveTrialDays} {effectiveTrialDays === 3 ? "дня" : "дней"}
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {trialInfo?.hasUsedTrial
-                      ? "Вы уже использовали пробный период для этого продукта. Доступно только приобретение."
-                      : "Получите полный доступ к продукту на весь пробный период бесплатно."}
-                  </p>
-                </div>
-                {user && !trialInfo?.hasUsedTrial && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="shrink-0 rounded-xl border-primary/50 text-primary hover:bg-primary/10 font-medium"
-                    disabled={isProcessing || activatingTrial}
-                    onClick={handleActivateTrial}
-                  >
-                    {activatingTrial ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : (
-                      "Попробовать бесплатно"
-                    )}
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {!user ? (
           <Card className="animate-fade-in">

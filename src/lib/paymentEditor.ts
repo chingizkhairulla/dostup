@@ -93,9 +93,6 @@ export const serializePricingOption = (option: PricingOptionFormItem): ProductPr
   const accessDays = recurring
     ? intervals[option.recurringInterval] ?? (option.recurringInterval === "custom" ? option.recurringCustomDays || 30 : null)
     : null;
-  const trialDays = option.hasFreeTrial
-    ? option.trialPreset === "custom" ? option.trialCustomDays || 7 : Number(option.trialPreset)
-    : null;
   return {
     id: option.id,
     payment_type: option.paymentType,
@@ -103,8 +100,9 @@ export const serializePricingOption = (option: PricingOptionFormItem): ProductPr
     recurring_interval: recurring ? option.recurringInterval : null,
     access_duration_days: accessDays,
     billing_period: recurring ? billingPeriods[option.recurringInterval] || option.recurringInterval : null,
-    has_free_trial: option.hasFreeTrial,
-    trial_days: trialDays,
+    // The trial is set once for the whole product now ("Бесплатный пробный"), not per option.
+    has_free_trial: false,
+    trial_days: null,
     ...serializeKaspiFields(option),
   };
 };
