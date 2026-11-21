@@ -15,6 +15,8 @@ export interface DirectContact {
   product_ids: string[];
   /** Has at least one product they can still open. */
   active: boolean;
+  /** Seller side: the product whose storefront this person opened the chat from, if any. */
+  origin_product_id?: string | null;
   last_message_at: string | null;
   last_message_preview: string | null;
   unread: number;

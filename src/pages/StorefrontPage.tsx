@@ -7,6 +7,8 @@ import PublicFooter from "@/components/layout/PublicFooter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSellerStorefront } from "@/hooks/useSellerStorefront";
+import ShareProductButton from "@/components/share/ShareProductButton";
+import StorefrontChatButton from "@/components/share/StorefrontChatButton";
 import { sellerInitial } from "@/lib/productCover";
 
 const StorefrontPage = () => {
@@ -35,10 +37,20 @@ const StorefrontPage = () => {
                   {sellerInitial(seller.display_name || seller.handle)}
                 </AvatarFallback>
               </Avatar>
-              <div className="min-w-0 space-y-2">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  {seller.display_name || seller.handle}
-                </h1>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h1 className="min-w-0 text-2xl font-bold tracking-tight text-foreground">
+                    {seller.display_name || seller.handle}
+                  </h1>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <ShareProductButton
+                      title={seller.display_name || seller.handle}
+                      id={seller.handle}
+                      url={typeof window !== "undefined" ? `${window.location.origin}/s/${encodeURIComponent(seller.handle)}` : undefined}
+                    />
+                    <StorefrontChatButton sellerHandle={seller.handle} />
+                  </div>
+                </div>
                 <p className="public-meta">
                   {seller.type === "school" ? t("sellerRoleSchool") : t("sellerRoleCreator")}
                 </p>

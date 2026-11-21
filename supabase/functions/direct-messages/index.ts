@@ -8,7 +8,8 @@ import {
 } from '../_shared/chatAttachments.ts'
 import { purchaseAccessOpen, subscriptionGrantsAccess } from '../_shared/subscription.ts'
 
-// Personal chats between a seller and the people who bought their products.
+// Personal chats between a seller and the people who bought their products, or who wrote to
+// the seller from a storefront.
 // The seller sees one chat per buyer (tagged with the products they bought and whether their
 // access is still active); the buyer sees one chat per seller they bought from.
 
@@ -101,8 +102,22 @@ async function resolvePair(supabase: Supabase, me: Me, peerId: string) {
   const creatorAccountId = me.side === 'creator' ? me.creatorAccountId! : peerId
   const buyerProfileId = me.side === 'buyer' ? me.buyerProfileId! : peerId
   const purchases = await pairPurchases(supabase, creatorAccountId, buyerProfileId)
-  if (!purchases.length) return null
+  // A buyer who opened the chat from a storefront has a thread without any purchase.
+  if (!purchases.length && !(await findThread(supabase, creatorAccountId, buyerProfileId))) return null
   return { creatorAccountId, buyerProfileId }
+}
+
+/** The seller behind a product or a storefront handle, for a chat started from there. */
+async function sellerForStorefront(supabase: Supabase, productId: string, handle: string) {
+  if (productId) {
+    const { data } = await supabase.from('products').select('id, creator_account_id').eq('id', productId).maybeSingle()
+    return data?.creator_account_id ? { creatorAccountId: data.creator_account_id as string, productId: data.id as string } : null
+  }
+  if (!handle) return null
+  const { data: profile } = await supabase.from('profiles').select('id').eq('handle', handle).maybeSingle()
+  if (!profile) return null
+  const { data: account } = await supabase.from('creator_accounts').select('id').eq('profile_id', profile.id).maybeSingle()
+  return account ? { creatorAccountId: account.id as string, productId: null } : null
 }
 
 async function listForCreator(supabase: Supabase, creatorAccountId: string) {
@@ -119,7 +134,18 @@ async function listForCreator(supabase: Supabase, creatorAccountId: string) {
     .in('status', ['completed', 'revoked'])
     .not('buyer_profile_id', 'is', null)
   const rows = (purchases ?? []) as PurchaseRow[]
-  const buyerIds = [...new Set(rows.map((r) => r.buyer_profile_id!))]
+  // People who wrote from a storefront without buying are chats too, once there is a message.
+  const { data: started } = await supabase
+    .from('direct_threads')
+    .select('buyer_profile_id')
+    .eq('creator_account_id', creatorAccountId)
+    .not('last_message_at', 'is', null)
+  const buyerIds = [
+    ...new Set([
+      ...rows.map((r) => r.buyer_profile_id!),
+      ...((started ?? []) as { buyer_profile_id: string }[]).map((t) => t.buyer_profile_id),
+    ]),
+  ]
   if (!buyerIds.length) return []
 
   const [{ data: profiles }, { data: subs }, { data: threads }] = await Promise.all([
@@ -149,6 +175,8 @@ async function listForCreator(supabase: Supabase, creatorAccountId: string) {
       avatar_url: profile?.avatar_url ?? null,
       product_ids: [...new Set(mine.map((r) => r.product_id))],
       active,
+      // Storefront chat of someone without access: shown under that product's tab.
+      origin_product_id: (thread?.origin_product_id as string | null | undefined) ?? null,
       last_message_at: thread?.last_message_at ?? null,
       last_message_preview: thread?.last_message_preview ?? null,
       unread: Number(thread?.unread_for_creator ?? 0),
@@ -164,9 +192,10 @@ async function listForBuyer(supabase: Supabase, buyerProfileId: string) {
     .in('status', ['completed', 'revoked'])
   const rows = (purchases ?? []) as PurchaseRow[]
   const productIds = [...new Set(rows.map((r) => r.product_id))]
-  if (!productIds.length) return []
   const [{ data: products }, { data: subs }, { data: threads }] = await Promise.all([
-    supabase.from('products').select('id, creator_account_id').in('id', productIds),
+    productIds.length
+      ? supabase.from('products').select('id, creator_account_id').in('id', productIds)
+      : Promise.resolve({ data: [] }),
     supabase
       .from('subscriptions')
       .select('product_id, status, current_period_end')
@@ -180,7 +209,13 @@ async function listForBuyer(supabase: Supabase, buyerProfileId: string) {
   const subByProduct = new Map(
     ((subs ?? []) as { product_id: string; status: string; current_period_end: string }[]).map((s) => [s.product_id, s]),
   )
-  const creatorIds = [...new Set([...creatorByProduct.values()].filter(Boolean))] as string[]
+  // Sellers this buyer wrote to from a storefront count too, bought or not.
+  const creatorIds = [
+    ...new Set([
+      ...[...creatorByProduct.values()].filter(Boolean),
+      ...((threads ?? []) as { creator_account_id: string }[]).map((t) => t.creator_account_id),
+    ]),
+  ] as string[]
   if (!creatorIds.length) return []
   const { data: accounts } = await supabase.from('creator_accounts').select('id, login, profile_id').in('id', creatorIds)
   const profileIds = ((accounts ?? []) as { profile_id: string | null }[]).map((a) => a.profile_id).filter(Boolean) as string[]
@@ -229,6 +264,20 @@ Deno.serve(async (req) => {
         ? await listForCreator(supabase, me.creatorAccountId!)
         : await listForBuyer(supabase, me.buyerProfileId!)
       return json({ contacts })
+    }
+
+    // "Чат" on a product or seller storefront: makes sure the thread exists and remembers where
+    // it was opened, so the seller finds it under that product (or under "Inactive").
+    if (action === 'start') {
+      if (me.side !== 'buyer') return forbidden()
+      const seller = await sellerForStorefront(supabase, String(body.productId || ''), String(body.sellerHandle || ''))
+      if (!seller) return json({ error: 'Not found' }, 404)
+      const thread = await ensureThread(supabase, seller.creatorAccountId, me.buyerProfileId!)
+      if (!thread) return json({ error: 'Thread unavailable' }, 500)
+      if ((thread as Record<string, unknown>).origin_product_id !== seller.productId) {
+        await supabase.from('direct_threads').update({ origin_product_id: seller.productId }).eq('id', thread.id)
+      }
+      return json({ peerId: seller.creatorAccountId })
     }
 
     const pair = await resolvePair(supabase, me, String(body.peerId || ''))

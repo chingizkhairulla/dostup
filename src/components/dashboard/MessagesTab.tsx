@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Loader2, Megaphone, Package, Radio, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
@@ -25,7 +26,10 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
   const { accessiblePurchases, productIds, isLoading: productsLoading } = useAccessibleProducts();
   const { data: announcements = [], isLoading: announcementsLoading } = useAnnouncementsForProducts(productIds);
   const { data: sellers = [] } = useDirectContacts("buyer", !!user);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "Чат" on a storefront lands here with ?chat=<seller>, so that conversation opens first.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedChat = searchParams.get("chat");
+  const [selectedId, setSelectedId] = useState<string | null>(requestedChat ? `${DIRECT_PREFIX}${requestedChat}` : null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Channels with the freshest post first, so the list opens on what's new.
@@ -82,14 +86,23 @@ const MessagesTab = ({ onBrowseCourses }: Props) => {
     [channels, t, sellers],
   );
 
+  // The requested chat is opened once; the link parameter is then dropped.
+  useEffect(() => {
+    if (!requestedChat || !sellers.some((c) => c.peer_id === requestedChat)) return;
+    setSelectedId(`${DIRECT_PREFIX}${requestedChat}`);
+    const next = new URLSearchParams(searchParams);
+    next.delete("chat");
+    setSearchParams(next, { replace: true });
+  }, [requestedChat, sellers, searchParams, setSearchParams]);
+
   // Open the freshest channel by default.
   useEffect(() => {
-    if (loading) return;
+    if (loading || requestedChat) return;
     const stillThere =
       channels.some((c) => c.id === selectedId) ||
       sellers.some((c) => `${DIRECT_PREFIX}${c.peer_id}` === selectedId);
     if (!stillThere) setSelectedId(channels[0]?.id ?? null);
-  }, [channels, sellers, loading, selectedId]);
+  }, [channels, sellers, loading, selectedId, requestedChat]);
 
   const directPeer = selectedId?.startsWith(DIRECT_PREFIX) ? selectedId.slice(DIRECT_PREFIX.length) : null;
   const openSeller = directPeer ? sellers.find((c) => c.peer_id === directPeer) : undefined;

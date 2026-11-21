@@ -31,6 +31,7 @@ import { touchRecentProduct } from "@/lib/buyerActivity";
 import { sellerInitial } from "@/lib/productCover";
 import { invokeApi } from "@/lib/sessionApi";
 import { rememberAuthNext } from "@/lib/creatorAuth";
+import StorefrontChatButton from "@/components/share/StorefrontChatButton";
 import { loginPath, loginState } from "@/lib/loginModal";
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -652,11 +653,12 @@ const ProductPage = () => {
               )}
             </div>
 
-            <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
-              <h1 className="public-display text-foreground text-balance min-w-0 flex-1 whitespace-pre-wrap break-words">
+            <div className="mt-6 flex flex-col gap-3">
+              <h1 className="public-display text-foreground text-balance min-w-0 whitespace-pre-wrap break-words">
                 {renderSafeFormattedContent(product.title)}
               </h1>
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Wraps on a narrow phone rather than pushing "Пожаловаться" off the screen. */}
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <ShareProductButton
                   title={product.title}
                   id={product.id}
@@ -666,6 +668,7 @@ const ProductPage = () => {
                   size="sm"
                   className="shrink-0"
                 />
+                <StorefrontChatButton productId={product.id} className="shrink-0" />
                 <ReportProductDialog
                   productId={product.id}
                   productTitle={product.title}

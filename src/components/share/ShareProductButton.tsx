@@ -17,14 +17,19 @@ type ShareProductButtonProps = {
   variant?: "default" | "outline" | "ghost";
   /** Предупреждение продавцу перед отправкой ссылки на продукт. */
   warning?: string;
+  /** Своя ссылка вместо ссылки на продукт (например, на витрину продавца). */
+  url?: string;
+  /** Текст кнопки и заголовок окна вместо «Поделиться продуктом». */
+  label?: string;
 };
 
-const ShareProductButton = ({ title, id, slug, sellerHandle, className, size = "sm", variant = "outline", warning }: ShareProductButtonProps) => {
+const ShareProductButton = ({ title, id, slug, sellerHandle, className, size = "sm", variant = "outline", warning, url, label }: ShareProductButtonProps) => {
   const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const shareUrl = buildProductShareUrl({ id, slug }, sellerHandle);
+  const shareUrl = url ?? buildProductShareUrl({ id, slug }, sellerHandle);
+  const heading = label ?? t("shareProduct");
   const canNativeShare = typeof navigator !== "undefined" && Boolean(navigator.share);
 
   const handleCopy = async (message?: string) => {
@@ -62,14 +67,14 @@ const ShareProductButton = ({ title, id, slug, sellerHandle, className, size = "
       <DialogTrigger asChild>
         <Button type="button" variant={variant} size={size} className={className}>
           <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{t("shareProduct")}</span>
+          <span>{heading}</span>
         </Button>
       </DialogTrigger>
       <DialogContent hideCloseButton
         onOpenAutoFocus={(event) => { event.preventDefault(); titleRef.current?.focus(); }}
         className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl gap-5 overflow-y-auto rounded-2xl p-5 sm:p-7">
         <DialogHeader>
-          <DialogTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">{t("shareProduct")}</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">{heading}</DialogTitle>
           <DialogDescription className="sr-only">
             {language === "ru" ? "Скопируйте ссылку или выберите приложение" : "Сілтемені көшіріңіз немесе қолданбаны таңдаңыз"}
           </DialogDescription>
