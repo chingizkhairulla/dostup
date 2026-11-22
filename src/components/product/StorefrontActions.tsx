@@ -115,8 +115,11 @@ interface Props {
   className?: string;
 }
 
-const ORANGE = "h-12 w-full rounded-2xl bg-[#FF6B00] px-6 text-base font-semibold text-white focus-ring hover:bg-[#E86000] disabled:opacity-60";
-const GREY = "h-12 w-full rounded-2xl bg-muted px-6 text-base font-semibold text-muted-foreground";
+// Long seller texts ("Записаться на пробный урок") fit the narrow phone bar on one or two tidy lines.
+const ORANGE =
+  "h-12 w-full rounded-2xl bg-[#FF6B00] px-3 text-[15px] font-semibold leading-tight text-white focus-ring hover:bg-[#E86000] disabled:opacity-60 sm:px-6 sm:text-base";
+const GREY =
+  "h-12 w-full rounded-2xl bg-muted px-3 text-[15px] font-semibold leading-tight text-muted-foreground sm:px-6 sm:text-base";
 
 /**
  * The one button of a product storefront: buy, take the trial, apply after the trial, wait for
