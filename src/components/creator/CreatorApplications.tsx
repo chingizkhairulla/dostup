@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ru } from "date-fns/locale";
+import { kk, ru } from "date-fns/locale";
 import { Check, ChevronDown, ChevronUp, Loader2, Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { daysLabel, localizeServerMessage } from "@/lib/serverMessages";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
+import type { Language, TranslationKey } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
 export interface Application {
@@ -35,7 +38,8 @@ export function useApplications(enabled = true) {
 const decide = (applicationId: string, decision: "allow" | "waitlist" | "close_payment" | "remove", message?: string) =>
   invokeApi("manage-products", { action: "decide_application", ...creatorCreds(), applicationId, decision, message });
 
-const appliedLabel = (a: Application) => format(new Date(a.applied_at), "d MMMM yyyy", { locale: ru });
+const appliedLabel = (a: Application, language: Language) =>
+  format(new Date(a.applied_at), "d MMMM yyyy", { locale: language === "kk" ? kk : ru });
 
 /** White button, light orange on hover; on a phone only its icon shows. */
 const ActionButton = ({
@@ -80,6 +84,7 @@ export const PendingApplicationCards = ({
   /** Set when every product is listed, so the card says which one. */
   productTitle?: (productId: string) => string | undefined;
 }) => {
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [waitlistFor, setWaitlistFor] = useState<Application | null>(null);
@@ -90,7 +95,7 @@ export const PendingApplicationCards = ({
       await decide(a.id, "allow");
       await queryClient.invalidateQueries({ queryKey: ["creator-applications"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось сохранить");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("saveFailed"));
     } finally {
       setBusyId(null);
     }
@@ -106,13 +111,13 @@ export const PendingApplicationCards = ({
               <div className="min-w-0 flex-1">
                 <h4 className="truncate text-sm font-medium text-foreground">{a.name}</h4>
                 <p className="truncate text-xs text-muted-foreground">
-                  С пробного доступа · {appliedLabel(a)}
+                  {t("fromTrial")} · {appliedLabel(a, language)}
                   {productTitle?.(a.product_id) ? ` · ${productTitle(a.product_id)}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <ActionButton icon={Check} label="Разрешить оплату" onClick={() => void allow(a)} busy={busyId === a.id} />
-                <ActionButton icon={X} label="В лист ожидания" onClick={() => setWaitlistFor(a)} />
+                <ActionButton icon={Check} label={t("allowPayment")} onClick={() => void allow(a)} busy={busyId === a.id} />
+                <ActionButton icon={X} label={t("toWaitlist")} onClick={() => setWaitlistFor(a)} />
               </div>
             </div>
           </CardContent>
@@ -123,24 +128,27 @@ export const PendingApplicationCards = ({
   );
 };
 
-const REASONS = [
-  { label: "Набрал(а) достаточно учеников", text: "Здравствуйте, у меня полная запись, к сожалению я не смогу вас взять" },
-  { label: "Время занятий не подходит", text: "Здравствуйте, к сожалению, мне не подходит время занятий" },
-  { label: "Решил(а) взять перерыв", text: "Здравствуйте, я решила временно приостановить работу. Спасибо за понимание" },
-  { label: "Другая причина", text: "" },
+const REASONS: { label: TranslationKey; text: TranslationKey | null }[] = [
+  { label: "waitlistReasonFull", text: "waitlistReasonFullText" },
+  { label: "waitlistReasonTime", text: "waitlistReasonTimeText" },
+  { label: "waitlistReasonBreak", text: "waitlistReasonBreakText" },
+  { label: "waitlistReasonOther", text: null },
 ];
 
 /** "В лист ожидания": a reason and the personal message the buyer gets (no platform notification). */
 const WaitlistReasonDialog = ({ application, onClose }: { application: Application | null; onClose: () => void }) => {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
+  const reasonText = (i: number) => (REASONS[i].text ? t(REASONS[i].text!) : "");
   const [reason, setReason] = useState(0);
-  const [message, setMessage] = useState(REASONS[0].text);
+  const [message, setMessage] = useState(() => reasonText(0));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!application) return;
     setReason(0);
-    setMessage(REASONS[0].text);
+    setMessage(reasonText(0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [application]);
 
   const send = async () => {
@@ -151,7 +159,7 @@ const WaitlistReasonDialog = ({ application, onClose }: { application: Applicati
       await queryClient.invalidateQueries({ queryKey: ["creator-applications"] });
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось отправить");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("sendFailed"));
     } finally {
       setBusy(false);
     }
@@ -160,10 +168,8 @@ const WaitlistReasonDialog = ({ application, onClose }: { application: Applicati
   return (
     <Dialog open={!!application} onOpenChange={(open) => !open && onClose()}>
       <DialogContent hideCloseButton className="max-w-md gap-4 rounded-2xl">
-        <DialogTitle className="text-lg">В лист ожидания</DialogTitle>
-        <DialogDescription>
-          После “Отправить” людей переносит в “Лист ожидания”, где вы сможете всегда разрешить им оплату
-        </DialogDescription>
+        <DialogTitle className="text-lg">{t("toWaitlist")}</DialogTitle>
+        <DialogDescription>{t("toWaitlistNote")}</DialogDescription>
         <div className="space-y-1.5" role="radiogroup">
           {REASONS.map((r, i) => (
             <button
@@ -173,7 +179,7 @@ const WaitlistReasonDialog = ({ application, onClose }: { application: Applicati
               aria-checked={reason === i}
               onClick={() => {
                 setReason(i);
-                setMessage(r.text);
+                setMessage(reasonText(i));
               }}
               className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-primary/10"
             >
@@ -185,7 +191,7 @@ const WaitlistReasonDialog = ({ application, onClose }: { application: Applicati
               >
                 {reason === i && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
               </span>
-              {r.label}
+              {t(r.label)}
             </button>
           ))}
         </div>
@@ -197,7 +203,7 @@ const WaitlistReasonDialog = ({ application, onClose }: { application: Applicati
             disabled={busy || !message.trim()}
             className="flex h-10 min-w-28 items-center justify-center rounded-xl bg-[#FF6B00] px-5 text-sm font-semibold text-white hover:bg-[#E86000] disabled:bg-muted disabled:text-muted-foreground"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Отправить"}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t("waitlistSend")}
           </button>
         </div>
       </DialogContent>
@@ -216,6 +222,7 @@ export const WaitlistSection = ({
   /** A "Период времени" product: the gear opens its auto-opening settings. */
   settingsProduct?: { id: string; waitlist_auto_open?: boolean; waitlist_pay_days?: number } | null;
 }) => {
+  const { t, language } = useLanguage();
   const [opened, setOpened] = useState<Application | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   if (!applications.length) return null;
@@ -224,13 +231,13 @@ export const WaitlistSection = ({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <h3 className="text-base font-semibold text-foreground">Лист ожидания</h3>
+          <h3 className="text-base font-semibold text-foreground">{t("waitlistTitle")}</h3>
           {settingsProduct && (
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              aria-label="Настройки листа ожидания"
-              title="Настройки листа ожидания"
+              aria-label={t("waitlistSettings")}
+              title={t("waitlistSettings")}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
             >
               <Settings className="h-4 w-4" />
@@ -254,7 +261,7 @@ export const WaitlistSection = ({
               <div className="min-w-0 flex-1">
                 <h4 className="truncate text-sm font-medium text-foreground">{a.name}</h4>
                 <p className="truncate text-xs text-muted-foreground">
-                  {appliedLabel(a)}
+                  {appliedLabel(a, language)}
                   {productTitle?.(a.product_id) ? ` · ${productTitle(a.product_id)}` : ""}
                 </p>
               </div>
@@ -264,7 +271,7 @@ export const WaitlistSection = ({
                   a.status === "allowed" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
                 )}
               >
-                {a.status === "allowed" ? "Могут оплатить" : "Оплата закрыта"}
+                {a.status === "allowed" ? t("waitlistCanPay") : t("waitlistPaymentClosed")}
               </span>
             </div>
           </CardContent>
@@ -280,6 +287,7 @@ export const WaitlistSection = ({
 
 /** A card in the waiting list: close the payment again, allow it, or remove the person for good. */
 const WaitlistCardDialog = ({ application, onClose }: { application: Application | null; onClose: () => void }) => {
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -294,7 +302,7 @@ const WaitlistCardDialog = ({ application, onClose }: { application: Application
       await queryClient.invalidateQueries({ queryKey: ["creator-applications"] });
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось сохранить");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -316,18 +324,14 @@ const WaitlistCardDialog = ({ application, onClose }: { application: Application
             <button
               type="button"
               onClick={() => setConfirmRemove(false)}
-              title="Изменения не сохранятся"
-              aria-label="Закрыть"
+              title={t("changesNotSaved")}
+              aria-label={t("close")}
               className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
             <DialogTitle className="pr-8 text-lg">{application?.name}</DialogTitle>
-            <DialogDescription className="text-sm text-foreground">
-              Если вы уберете человека, то он больше не сможет воспользоваться пробным или приобрести ваш продукт. Так же
-              ему придет уведомление, о том что его убрали из листа ожидания. Используйте это только если вы точно не
-              хотите, чтобы он когда-либо стал вашим покупателем
-            </DialogDescription>
+            <DialogDescription className="text-sm text-foreground">{t("waitlistRemoveWarning")}</DialogDescription>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -335,7 +339,7 @@ const WaitlistCardDialog = ({ application, onClose }: { application: Application
                 disabled={busy !== null}
                 className="flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
               >
-                {busy === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Убрать из листа ожидания"}
+                {busy === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : t("waitlistRemoveAction")}
               </button>
             </div>
           </>
@@ -343,13 +347,13 @@ const WaitlistCardDialog = ({ application, onClose }: { application: Application
           <>
             <DialogTitle className="text-lg">{application?.name}</DialogTitle>
             <DialogDescription>
-              {application?.status === "allowed" ? "Могут оплатить" : "Оплата закрыта"}
-              {application ? ` · ${appliedLabel(application)}` : ""}
+              {application?.status === "allowed" ? t("waitlistCanPay") : t("waitlistPaymentClosed")}
+              {application ? ` · ${appliedLabel(application, language)}` : ""}
             </DialogDescription>
             <div className="flex flex-wrap justify-end gap-2">
               {application?.status === "allowed" ? (
                 <button type="button" className={plain} disabled={busy !== null} onClick={() => void run("close_payment")}>
-                  {busy === "close_payment" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Закрыть оплату"}
+                  {busy === "close_payment" ? <Loader2 className="h-4 w-4 animate-spin" /> : t("waitlistClosePayment")}
                 </button>
               ) : (
                 <>
@@ -358,13 +362,13 @@ const WaitlistCardDialog = ({ application, onClose }: { application: Application
                     onClick={() => setConfirmRemove(true)}
                     className="flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                   >
-                    Убрать из листа
+                    {t("waitlistRemove")}
                   </button>
                   <button type="button" className={plain} disabled={busy !== null} onClick={() => void run("allow")}>
                     {busy === "allow" ? <Loader2 className="h-4 w-4 animate-spin" /> : (
                       <>
                         <Check className="h-4 w-4" />
-                        Разрешить оплату
+                        {t("allowPayment")}
                       </>
                     )}
                   </button>
@@ -390,6 +394,7 @@ const WaitlistSettingsDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const [auto, setAuto] = useState(Boolean(product.waitlist_auto_open));
   const [days, setDays] = useState(String(product.waitlist_pay_days ?? 7));
@@ -407,7 +412,7 @@ const WaitlistSettingsDialog = ({
       void queryClient.invalidateQueries({ queryKey: ["creator-products"] });
       void queryClient.invalidateQueries({ queryKey: ["creator-applications"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось сохранить");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("saveFailed"));
     }
   };
 
@@ -420,9 +425,9 @@ const WaitlistSettingsDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent hideCloseButton className="max-w-md gap-4 rounded-2xl">
-        <DialogTitle className="sr-only">Лист ожидания</DialogTitle>
+        <DialogTitle className="sr-only">{t("waitlistTitle")}</DialogTitle>
         <label className="flex cursor-pointer items-center justify-between gap-4">
-          <span className="text-sm font-semibold">Автоматически открывать оплату при появлении места</span>
+          <span className="text-sm font-semibold">{t("waitlistAutoOpen")}</span>
           <Switch
             checked={auto}
             onCheckedChange={(v) => {
@@ -433,28 +438,28 @@ const WaitlistSettingsDialog = ({
         </label>
         {auto && (
           <div className="space-y-1.5">
-            <p className="text-sm text-muted-foreground">Время на оплату:</p>
+            <p className="text-sm text-muted-foreground">{t("waitlistPayTime")}</p>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex h-10 items-center gap-1 rounded-xl border border-input bg-background pl-3 pr-1">
                 <input
                   type="text"
                   inputMode="numeric"
-                  aria-label="Дней на оплату"
+                  aria-label={t("waitlistPayDays")}
                   value={days}
                   onChange={(e) => setDays(e.target.value.replace(/\D/g, "").slice(0, 3))}
                   onBlur={() => setDaysValue(Number(days) || 7)}
                   className="h-full w-12 bg-transparent text-sm outline-none"
                 />
                 <div className="flex h-8 w-6 flex-col overflow-hidden rounded-md bg-muted">
-                  <button type="button" aria-label="Больше" onClick={() => setDaysValue((Number(days) || 0) + 1)} className="flex h-1/2 items-center justify-center hover:bg-primary/10">
+                  <button type="button" aria-label={t("countMore")} onClick={() => setDaysValue((Number(days) || 0) + 1)} className="flex h-1/2 items-center justify-center hover:bg-primary/10">
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" aria-label="Меньше" onClick={() => setDaysValue((Number(days) || 2) - 1)} className="flex h-1/2 items-center justify-center hover:bg-primary/10">
+                  <button type="button" aria-label={t("countLess")} onClick={() => setDaysValue((Number(days) || 2) - 1)} className="flex h-1/2 items-center justify-center hover:bg-primary/10">
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <span className="text-sm text-muted-foreground">дн.</span>
+              <span className="text-sm text-muted-foreground">{t("daysShort")}</span>
               {DAY_OPTIONS.map((d) => (
                 <button
                   key={d}
@@ -465,16 +470,14 @@ const WaitlistSettingsDialog = ({
                     Number(days) === d ? "border-primary bg-primary text-white" : "border-border bg-background hover:bg-primary/10",
                   )}
                 >
-                  {d} {d === 3 ? "дня" : "дней"}
+                  {daysLabel(d, language)}
                 </button>
               ))}
             </div>
           </div>
         )}
         <DialogDescription className="text-xs">
-          {auto
-            ? "При выключении, оплата не будет открываться и закрываться автоматически. Вы сможете сделать это только вручную"
-            : "При включении, оплата будет автоматически открываться и закрываться по окончанию времени"}
+          {auto ? t("waitlistAutoOnNote") : t("waitlistAutoOffNote")}
         </DialogDescription>
       </DialogContent>
     </Dialog>

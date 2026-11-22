@@ -12,6 +12,7 @@ import {
   paymentDecision,
   sendSellerMessage,
   shutOut,
+  TRIAL_OPEN_MESSAGE,
   TRIAL_PRODUCT_COLUMNS,
   trialDecision,
 } from '../_shared/trial.ts'
@@ -293,7 +294,7 @@ Deno.serve(async (req) => {
     if (action === 'list_notifications') {
       const { data, error } = await supabase
         .from('app_notifications')
-        .select('id, product_id, kind, title, body, created_at')
+        .select('id, product_id, kind, title, body, params, created_at')
         .eq('buyer_profile_id', user.userId)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -354,6 +355,7 @@ Deno.serve(async (req) => {
           kind: 'waitlist_left',
           title: `${me?.display_name || 'Покупатель'} вышел из листа ожидания`,
           body: product.title ?? '',
+          params: { name: me?.display_name || 'Покупатель', product: product.title ?? '' },
         })
       }
       return json({ ok: true })
@@ -418,7 +420,7 @@ Deno.serve(async (req) => {
           supabase,
           product.creator_account_id,
           user.userId,
-          'Здравствуйте! Пробный доступ открыт. Если будут вопросы, пишите',
+          TRIAL_OPEN_MESSAGE[body.lang === 'kk' ? 'kk' : 'ru'],
         )
       }
       return json({ ok: true, trialMode: mode, trialEndsAt: endsAt, trialDays: days })

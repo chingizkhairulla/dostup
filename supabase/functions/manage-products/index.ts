@@ -224,6 +224,7 @@ Deno.serve(async (req) => {
           kind: 'payment_allowed',
           title: `Вам открыли оплату на ${title}`,
           body: 'Можете оплатить его в разделе "Покупки"',
+          params: { product: title },
         })
         return json({ ok: true, status: 'allowed' })
       }
@@ -265,6 +266,7 @@ Deno.serve(async (req) => {
         kind: 'waitlist_removed',
         title: 'Вас убрали из листа ожидания',
         body: title,
+        params: { product: title },
       })
       return json({ ok: true, status: 'removed' })
     }
@@ -293,7 +295,7 @@ Deno.serve(async (req) => {
       if (caller.kind !== 'creator') return forbidden()
       const { data, error } = await supabase
         .from('app_notifications')
-        .select('id, product_id, kind, title, body, created_at')
+        .select('id, product_id, kind, title, body, params, created_at')
         .eq('creator_account_id', caller.accountId)
         .order('created_at', { ascending: false })
         .limit(100)

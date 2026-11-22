@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useDeleteProduct } from "@/hooks/useProducts";
+import { localizeServerMessage } from "@/lib/serverMessages";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 
 interface Props {
@@ -21,6 +23,7 @@ type DeleteStatus = { activeBuyers: number; salesClosed: boolean };
  * "Delete for sure?" — that window has a cross and does not close with a tap outside.
  */
 const DeleteProductDialog = ({ product, onClose }: Props) => {
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const deleteProduct = useDeleteProduct();
   const [salesClosed, setSalesClosed] = useState(false);
@@ -50,7 +53,7 @@ const DeleteProductDialog = ({ product, onClose }: Props) => {
       queryClient.invalidateQueries({ queryKey: ["product"] });
     } catch (e) {
       setSalesClosed(!closed);
-      toast.error(e instanceof Error ? e.message : "Не удалось сохранить");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("saveFailed"));
     } finally {
       setSavingSales(false);
     }
@@ -60,10 +63,10 @@ const DeleteProductDialog = ({ product, onClose }: Props) => {
     if (!product) return;
     try {
       await deleteProduct.mutateAsync(product.id);
-      toast.success("Продукт удалён");
+      toast.success(t("productDeleted"));
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось удалить продукт");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("productDeleteFailed"));
       void status.refetch();
     }
   };
@@ -90,18 +93,16 @@ const DeleteProductDialog = ({ product, onClose }: Props) => {
               <TooltipTrigger asChild>
                 <DialogClose
                   className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-ring"
-                  aria-label="Закрыть"
+                  aria-label={t("close")}
                 >
                   <X className="h-4 w-4" />
                 </DialogClose>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Изменения не сохранятся</TooltipContent>
+              <TooltipContent side="bottom">{t("changesNotSaved")}</TooltipContent>
             </Tooltip>
             <div className="space-y-2 pr-8">
-              <DialogTitle className="text-lg">Точно удалить продукт?</DialogTitle>
-              <DialogDescription>
-                Материалы, слоты в расписании, канал и отзывы от продукта будут удалены вместе с этим продуктом.
-              </DialogDescription>
+              <DialogTitle className="text-lg">{t("deleteProductSure")}</DialogTitle>
+              <DialogDescription>{t("deleteProductWhat")}</DialogDescription>
             </div>
             <div className="flex justify-end">
               <button
@@ -110,21 +111,18 @@ const DeleteProductDialog = ({ product, onClose }: Props) => {
                 disabled={deleteProduct.isPending}
                 className="flex h-10 min-w-24 items-center justify-center rounded-xl px-5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-ring disabled:opacity-60"
               >
-                {deleteProduct.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Точно"}
+                {deleteProduct.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("deleteProductSureAction")}
               </button>
             </div>
           </>
         ) : (
           <>
-            <DialogTitle className="text-lg">Удалить продукт нельзя, пока есть активные пользователи</DialogTitle>
-            <DialogDescription className="sr-only">Завершить продажи</DialogDescription>
+            <DialogTitle className="text-lg">{t("deleteProductBlocked")}</DialogTitle>
+            <DialogDescription className="sr-only">{t("endSales")}</DialogDescription>
             <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border p-4">
               <span className="space-y-1">
-                <span className="block text-sm font-semibold text-foreground">Завершить продажи</span>
-                <span className="block text-sm text-muted-foreground">
-                  Никто не сможет купить или снова оплатить за продукт. После чего активных пользователей не останется и вы
-                  сможете удалить продукт
-                </span>
+                <span className="block text-sm font-semibold text-foreground">{t("endSales")}</span>
+                <span className="block text-sm text-muted-foreground">{t("endSalesNote")}</span>
               </span>
               <Switch
                 checked={salesClosed}

@@ -347,7 +347,7 @@ const ScheduleTab = () => {
         return;
       }
       if (/только на один слот/i.test(message)) {
-        toast.error(message);
+        toast.error(t("trialOneSlot"));
         return;
       }
       toast.error(t("bookingFailed"));
@@ -808,10 +808,8 @@ const ScheduleTab = () => {
       {/* Confirm Cancel Dialog with Reasons */}
       <Dialog open={trialEndsBeforeSlot} onOpenChange={setTrialEndsBeforeSlot}>
         <DialogContent hideCloseButton className="max-w-sm gap-4 rounded-2xl">
-          <DialogTitle className="sr-only">Пробный доступ</DialogTitle>
-          <DialogDescription className="text-sm text-foreground">
-            К сожалению, к тому времени пробный доступ закончится. Оплатите продукт, чтобы записаться на слот
-          </DialogDescription>
+          <DialogTitle className="sr-only">{t("trialAccessTitle")}</DialogTitle>
+          <DialogDescription className="text-sm text-foreground">{t("trialEndsBeforeSlot")}</DialogDescription>
           <button
             type="button"
             onClick={() => {
@@ -820,7 +818,7 @@ const ScheduleTab = () => {
             }}
             className="h-11 w-full rounded-xl bg-[#FF6B00] text-sm font-semibold text-white hover:bg-[#E86000]"
           >
-            Купить
+            {t("buy")}
           </button>
         </DialogContent>
       </Dialog>

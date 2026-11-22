@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Infinity as InfinityIcon } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -15,6 +16,7 @@ const MAX = 100000;
  * button that means anyone may buy. One of the two has to be set.
  */
 const MaxBuyersField = ({ id, value, onChange }: Props) => {
+  const { t } = useLanguage();
   const unlimited = value === "inf";
   const current = unlimited ? 0 : Number(value) || 0;
 
@@ -35,9 +37,9 @@ const MaxBuyersField = ({ id, value, onChange }: Props) => {
       <input
         type="text"
         inputMode="numeric"
-        aria-label="Максимальное число покупателей"
+        aria-label={t("maxBuyers")}
         value={unlimited ? "" : value}
-        placeholder={unlimited ? "Без ограничений" : ""}
+        placeholder={unlimited ? t("noLimit") : ""}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 6);
           onChange(digits ? String(Math.min(MAX, Number(digits))) : "");
@@ -45,10 +47,10 @@ const MaxBuyersField = ({ id, value, onChange }: Props) => {
         className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
       <div className="flex h-8 w-6 shrink-0 flex-col overflow-hidden rounded-md bg-muted">
-        <button type="button" className={arrowClass} onClick={() => step(1)} disabled={current >= MAX} aria-label="Больше">
+        <button type="button" className={arrowClass} onClick={() => step(1)} disabled={current >= MAX} aria-label={t("countMore")}>
           <ChevronUp className="h-3.5 w-3.5" />
         </button>
-        <button type="button" className={arrowClass} onClick={() => step(-1)} disabled={current <= 1} aria-label="Меньше">
+        <button type="button" className={arrowClass} onClick={() => step(-1)} disabled={current <= 1} aria-label={t("countLess")}>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -56,8 +58,8 @@ const MaxBuyersField = ({ id, value, onChange }: Props) => {
         type="button"
         onClick={() => onChange(unlimited ? "" : "inf")}
         aria-pressed={unlimited}
-        title="Без ограничений"
-        aria-label="Без ограничений"
+        title={t("noLimit")}
+        aria-label={t("noLimit")}
         className={cn(
           "flex h-8 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
           unlimited ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-foreground",

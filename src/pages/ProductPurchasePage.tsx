@@ -19,6 +19,7 @@ import { formatPriceTenge } from "@/lib/catalog";
 import ReceiptUploadCard, { ReceiptSubmission } from "@/components/checkout/ReceiptUploadCard";
 import { cn } from "@/lib/utils";
 import { resolvePaymentMethods, formatCardNumber } from "@/lib/paymentMethods";
+import { localizeServerMessage } from "@/lib/serverMessages";
 
 function getOptionDisplay(opt: any) {
   const priceStr = formatPriceTenge(Number(opt.price));
@@ -298,7 +299,7 @@ const ProductPurchasePage = () => {
       const message = err instanceof Error && err.message ? err.message : "";
       console.error("create_purchase failed", err);
       // "Мест нет", "Оплата откроется после разрешения продавца" and the like are shown as is.
-      toast.error(message || "Ошибка создания заказа");
+      toast.error(message ? localizeServerMessage(message, t) : "Ошибка создания заказа");
     }
     setIsProcessing(false);
   };

@@ -174,7 +174,7 @@ export function trialDecision(s: BuyerProductState): { ok: true } | { ok: false;
 export async function notify(
   supabase: SupabaseClient,
   to: { buyerProfileId?: string; creatorAccountId?: string },
-  input: { productId?: string | null; kind: string; title: string; body?: string },
+  input: { productId?: string | null; kind: string; title: string; body?: string; params?: Record<string, string | number> },
 ) {
   const { error } = await supabase.from('app_notifications').insert({
     buyer_profile_id: to.buyerProfileId ?? null,
@@ -183,6 +183,8 @@ export async function notify(
     kind: input.kind,
     title: input.title,
     body: input.body ?? '',
+    // The app builds the text in the person's language from kind + params.
+    params: input.params ?? {},
   })
   if (error) console.error('notification insert failed', error)
   // Seller push tokens carry no account id (a push to "creator" reaches every seller), so
@@ -345,6 +347,7 @@ export async function releaseSeats(
         kind: 'seat_opened',
         title: 'Место освободилось!',
         body: `Теперь вы можете оплатить ${title} в разделе "Покупки"`,
+        params: { product: title },
       })
     }
     if (product.creator_account_id) {
@@ -353,6 +356,7 @@ export async function releaseSeats(
         kind: 'seats_auto_opened',
         title: 'Места освободились',
         body: `Оплата автоматически открыта ${count} покупателям из листа ожидания`,
+        params: { count, product: title },
       })
     }
     return
@@ -364,6 +368,7 @@ export async function releaseSeats(
       kind: 'seats_free',
       title: 'Места освободились',
       body: `Вы можете разрешить оплату ${count} людям, стоящих в листе ожидания`,
+      params: { count, product: title },
     })
   }
 }
@@ -385,12 +390,16 @@ export async function processTrialsAndWaitlists(supabase: SupabaseClient) {
     .lte('trial_ends_at', now)
     .is('trial_end_notified_at', null)
     .limit(500)
-  for (const t of (endedTrials ?? []) as { id: string; product_id: string; buyer_profile_id: string | null }[]) {
+  const ended = (endedTrials ?? []) as { id: string; product_id: string; buyer_profile_id: string | null }[]
+  const titles = await productTitles(supabase, ended.map((t) => t.product_id))
+  for (const t of ended) {
     if (t.buyer_profile_id) {
       await notify(supabase, { buyerProfileId: t.buyer_profile_id }, {
         productId: t.product_id,
         kind: 'trial_ended',
         title: 'Пробный доступ окончен',
+        body: titles.get(t.product_id) ?? '',
+        params: { product: titles.get(t.product_id) ?? '' },
       })
     }
     await supabase.from('simple_purchases').update({ trial_end_notified_at: now }).eq('id', t.id)
@@ -580,9 +589,25 @@ export async function answerTrialLessonCheck(
     .eq('buyer_profile_id', input.buyerProfileId)
     .eq('is_trial', true)
     .is('trial_ends_at', null)
+  const titles = await productTitles(supabase, [input.productId])
   await notify(supabase, { buyerProfileId: input.buyerProfileId }, {
     productId: input.productId,
     kind: 'trial_ended',
     title: 'Пробный доступ окончен',
+    body: titles.get(input.productId) ?? '',
+    params: { product: titles.get(input.productId) ?? '' },
   })
+}
+
+async function productTitles(supabase: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)]
+  if (!unique.length) return new Map()
+  const { data } = await supabase.from('products').select('id, title').in('id', unique)
+  return new Map(((data ?? []) as { id: string; title: string }[]).map((p) => [p.id, p.title]))
+}
+
+/** The automatic message from the seller once a trial opens, in the buyer's language. */
+export const TRIAL_OPEN_MESSAGE: Record<'ru' | 'kk', string> = {
+  ru: 'Здравствуйте! Пробный доступ открыт. Если будут вопросы, пишите',
+  kk: 'Сәлеметсіз бе! Сынақ қолжетімділігі ашылды. Сұрақтарыңыз болса, жазыңыз',
 }

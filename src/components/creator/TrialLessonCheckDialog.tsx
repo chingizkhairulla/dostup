@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { ru } from "date-fns/locale";
+import { kk, ru } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { creatorCreds, invokeApi } from "@/lib/sessionApi";
 
 interface Check {
@@ -24,6 +25,7 @@ interface Check {
  * the question comes back after that slot.
  */
 const TrialLessonCheckDialog = () => {
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<"yes" | "no" | null>(null);
   const { data: checks = [] } = useQuery({
@@ -49,7 +51,7 @@ const TrialLessonCheckDialog = () => {
       await queryClient.invalidateQueries({ queryKey: ["trial-lesson-checks"] });
       void queryClient.invalidateQueries({ queryKey: ["creator-purchases"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось сохранить");
+      toast.error(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -66,19 +68,19 @@ const TrialLessonCheckDialog = () => {
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogTitle className="text-lg">Пробный урок прошел?</DialogTitle>
+        <DialogTitle className="text-lg">{t("trialLessonHeldQuestion")}</DialogTitle>
         {check && (
           <DialogDescription>
             {check.buyer_name} · {check.product_title} ·{" "}
-            {format(parseISO(check.date), "d MMMM", { locale: ru })}, {check.start_time.slice(0, 5)}–{check.end_time.slice(0, 5)}
+            {format(parseISO(check.date), "d MMMM", { locale: language === "kk" ? kk : ru })}, {check.start_time.slice(0, 5)}–{check.end_time.slice(0, 5)}
           </DialogDescription>
         )}
         <div className="flex gap-2">
           <button type="button" className={button} disabled={busy !== null} onClick={() => void answer(true)}>
-            {busy === "yes" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Да"}
+            {busy === "yes" ? <Loader2 className="h-4 w-4 animate-spin" /> : t("yes")}
           </button>
           <button type="button" className={button} disabled={busy !== null} onClick={() => void answer(false)}>
-            {busy === "no" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Нет"}
+            {busy === "no" ? <Loader2 className="h-4 w-4 animate-spin" /> : t("no")}
           </button>
         </div>
       </DialogContent>

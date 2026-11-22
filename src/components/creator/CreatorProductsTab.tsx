@@ -18,7 +18,7 @@ import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/
 import ShareProductButton from "@/components/share/ShareProductButton";
 import DeleteProductDialog from "@/components/creator/DeleteProductDialog";
 import MaxBuyersField from "@/components/creator/MaxBuyersField";
-import TrialSettings, { emptyTrial, TRIAL_DEFAULT_TEXT, type TrialMode, type TrialValue } from "@/components/creator/TrialSettings";
+import TrialSettings, { emptyTrial, isDefaultTrialText, type TrialMode, type TrialValue } from "@/components/creator/TrialSettings";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import PaymentMethodFields from "./PaymentMethodFields";
 import {
@@ -224,7 +224,8 @@ function trialPayload(formData: FormData) {
     has_free_trial: on,
     trial_mode: on ? trial.mode : null,
     trial_days: on && trial.mode === "period" ? trial.days : null,
-    trial_button_text: on ? trial.texts[trial.mode].trim() || TRIAL_DEFAULT_TEXT[trial.mode] : null,
+    // The default text is not stored: each visitor then sees it in their own language.
+    trial_button_text: on && !isDefaultTrialText(trial.texts[trial.mode]) ? trial.texts[trial.mode].trim() || null : null,
   };
 }
 

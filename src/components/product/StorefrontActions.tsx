@@ -7,10 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { rememberAuthNext } from "@/lib/creatorAuth";
 import { loginPath, loginState } from "@/lib/loginModal";
+import { daysLabel, localizeServerMessage } from "@/lib/serverMessages";
 import { invokeApi } from "@/lib/sessionApi";
+import type { TranslationKey } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
 export type TrialMode = "lesson" | "period";
@@ -43,21 +46,14 @@ export interface StorefrontProduct {
   is_paused?: boolean;
 }
 
-const DEFAULT_TRIAL_TEXT: Record<TrialMode, string> = {
-  lesson: "Записаться на пробный урок",
-  period: "Получить пробный доступ",
+/** The trial button when the seller kept the default text: shown in the visitor's language. */
+const DEFAULT_TRIAL_KEY: Record<TrialMode, TranslationKey> = {
+  lesson: "trialDefaultLesson",
+  period: "trialDefaultPeriod",
 };
 
 export const productTrialMode = (p: StorefrontProduct): TrialMode | null =>
   p.trial_mode === "lesson" || p.trial_mode === "period" ? p.trial_mode : p.has_free_trial && p.trial_days ? "period" : null;
-
-const daysWord = (n: number) => {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
-  return "дней";
-};
 
 /** The buyer's state for this product (trial, application, seats); only for a signed-in buyer. */
 export function useStorefrontState(productId: string | undefined, enabled: boolean) {
@@ -84,9 +80,14 @@ type Kind =
   | { type: "loading" };
 
 /** Which single button the storefront shows (see the rules in _shared/trial.ts on the server). */
-export function storefrontButton(product: StorefrontProduct, state: StorefrontState | undefined, guest: boolean): Kind {
+export function storefrontButton(
+  product: StorefrontProduct,
+  state: StorefrontState | undefined,
+  guest: boolean,
+  t: (key: TranslationKey) => string,
+): Kind {
   const mode = productTrialMode(product);
-  const trialText = mode ? product.trial_button_text?.trim() || DEFAULT_TRIAL_TEXT[mode] : "";
+  const trialText = mode ? product.trial_button_text?.trim() || t(DEFAULT_TRIAL_KEY[mode]) : "";
   if (product.sales_closed) return { type: "no_seats" };
   if (guest || !state) {
     if (!guest) return { type: "loading" };
@@ -129,10 +130,11 @@ const StorefrontActions = ({ product, onBuy, buyLabel, noSeatsLabel, className }
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { t } = useLanguage();
   const { user, profileType } = useSimpleAuth();
   const isBuyer = Boolean(user) && profileType === "buyer";
   const { data: state } = useStorefrontState(product.id, isBuyer);
-  const kind = storefrontButton(product, state, !user || !isBuyer);
+  const kind = storefrontButton(product, state, !user || !isBuyer, t);
 
   const [trialOpen, setTrialOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
@@ -175,7 +177,7 @@ const StorefrontActions = ({ product, onBuy, buyLabel, noSeatsLabel, className }
     case "apply":
       button = (
         <button type="button" onClick={() => setApplyOpen(true)} className={ORANGE}>
-          Подать заявку
+          {t("storefrontApply")}
         </button>
       );
       break;
@@ -187,27 +189,27 @@ const StorefrontActions = ({ product, onBuy, buyLabel, noSeatsLabel, className }
             <button
               type="button"
               aria-disabled
-              onClick={() => toast.info("Доступно после пробного урока")}
+              onClick={() => toast.info(t("storefrontApplyAfterLesson"))}
               className={cn(GREY, "cursor-not-allowed")}
             >
-              Подать заявку
+              {t("storefrontApply")}
             </button>
           </TooltipTrigger>
-          <TooltipContent>Доступно после пробного урока</TooltipContent>
+          <TooltipContent>{t("storefrontApplyAfterLesson")}</TooltipContent>
         </Tooltip>
       );
       break;
     case "waiting":
       button = (
         <button type="button" disabled className={GREY}>
-          Ожидайте ответа
+          {t("storefrontWaiting")}
         </button>
       );
       break;
     case "in_waitlist":
       button = (
         <button type="button" onClick={() => setLeaveOpen(true)} className={GREY}>
-          В листе ожидания
+          {t("storefrontInWaitlist")}
         </button>
       );
       break;
@@ -275,17 +277,19 @@ const TrialStartDialog = ({
   initialName: string;
   onDone: () => void;
 }) => {
+  const { t, language } = useLanguage();
   const [name, setName] = useState(initialName);
   const [busy, setBusy] = useState(false);
-  const consultation = /консультац/i.test(buttonText ?? "");
+  // The seller's own button text tells a consultation from a lesson.
+  const consultation = /консультац|кеңес/i.test(buttonText ?? "");
   const info =
     mode === "lesson"
-      ? `После пробного ${consultation ? "консультации" : "урока"} пробный доступ закроется`
-      : `Пробный доступ продлится ${days} ${daysWord(days)}`;
+      ? t(consultation ? "trialClosesAfterConsultation" : "trialClosesAfterLesson")
+      : t("trialWillLast", { days: daysLabel(days, language) });
 
   const start = async () => {
     if (!name.trim()) {
-      toast.error("Укажите имя и фамилию");
+      toast.error(t("trialNameRequired"));
       return;
     }
     setBusy(true);
@@ -294,12 +298,14 @@ const TrialStartDialog = ({
         action: "activate_trial",
         productId,
         displayName: name.trim(),
+        // The automatic "trial is open" message from the seller comes in this language.
+        lang: language,
         sessionToken: localStorage.getItem("creator_token") || "",
       });
       onOpenChange(false);
       onDone();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось открыть пробный доступ");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("trialStartError"));
     } finally {
       setBusy(false);
     }
@@ -308,12 +314,12 @@ const TrialStartDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent hideCloseButton className="max-w-md gap-4 rounded-2xl">
-        <DialogTitle className="text-lg">Имя и фамилия</DialogTitle>
+        <DialogTitle className="text-lg">{t("trialNameTitle")}</DialogTitle>
         <DialogDescription className="sr-only">{info}</DialogDescription>
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} autoFocus className="h-11" />
         <p className="text-sm text-muted-foreground">{info}</p>
         <button type="button" onClick={() => void start()} disabled={busy} className={ORANGE}>
-          {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : "Продолжить"}
+          {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : t("continue")}
         </button>
       </DialogContent>
     </Dialog>
@@ -334,6 +340,7 @@ const ApplyDialog = ({
   waitlist: boolean;
   onDone: () => void;
 }) => {
+  const { t } = useLanguage();
   const [want, setWant] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -350,7 +357,7 @@ const ApplyDialog = ({
       setWant(false);
       onDone();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось подать заявку");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("applyError"));
     } finally {
       setBusy(false);
     }
@@ -359,11 +366,11 @@ const ApplyDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent hideCloseButton className="max-w-md gap-3 rounded-2xl">
-        <DialogTitle className="text-lg">Подать заявку</DialogTitle>
+        <DialogTitle className="text-lg">{t("storefrontApply")}</DialogTitle>
         <div className="flex items-center justify-between gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
             <Checkbox checked={want} onCheckedChange={(v) => setWant(v === true)} />
-            Я хочу оплатить
+            {t("applyWantToPay")}
           </label>
           <button
             type="button"
@@ -371,13 +378,11 @@ const ApplyDialog = ({
             disabled={!want || busy}
             className="h-10 shrink-0 rounded-xl bg-[#FF6B00] px-4 text-sm font-semibold text-white hover:bg-[#E86000] disabled:bg-muted disabled:text-muted-foreground"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Подтвердить"}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t("applyConfirm")}
           </button>
         </div>
         <DialogDescription>
-          {waitlist
-            ? "К сожалению, места закончились. Вы можете подать заявку, чтобы встать в лист ожидания. Если место появится, вам придёт уведомление"
-            : "После “Подтвердить” ваша заявка будет отправлена на рассмотрение"}
+          {waitlist ? t("applyWaitlistNote") : t("applyPendingNote")}
         </DialogDescription>
       </DialogContent>
     </Dialog>
@@ -395,6 +400,7 @@ const LeaveWaitlistDialog = ({
   productId: string;
   onDone: () => void;
 }) => {
+  const { t } = useLanguage();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -409,7 +415,7 @@ const LeaveWaitlistDialog = ({
       onOpenChange(false);
       onDone();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Не удалось выйти");
+      toast.error(e instanceof Error ? localizeServerMessage(e.message, t) : t("leaveWaitlistError"));
     } finally {
       setBusy(false);
     }
@@ -426,16 +432,13 @@ const LeaveWaitlistDialog = ({
       <DialogContent hideCloseButton className="max-w-md gap-4 rounded-2xl">
         {confirming ? (
           <>
-            <DialogTitle className="text-lg">Точно выйти?</DialogTitle>
-            <DialogDescription className="sr-only">Выйти из листа ожидания</DialogDescription>
+            <DialogTitle className="text-lg">{t("leaveWaitlistConfirm")}</DialogTitle>
+            <DialogDescription className="sr-only">{t("waitlistTitle")}</DialogDescription>
           </>
         ) : (
           <>
-            <DialogTitle className="sr-only">Лист ожидания</DialogTitle>
-            <DialogDescription className="text-sm text-foreground">
-              Пока вы в “Листе ожидания”, вам могут открыть оплату. Если вы выйдете, то возможности получить новый
-              пробный или оплатить у вас не будет
-            </DialogDescription>
+            <DialogTitle className="sr-only">{t("waitlistTitle")}</DialogTitle>
+            <DialogDescription className="text-sm text-foreground">{t("leaveWaitlistText")}</DialogDescription>
           </>
         )}
         <div className="flex justify-end">
@@ -445,7 +448,7 @@ const LeaveWaitlistDialog = ({
             onClick={() => (confirming ? void leave() : setConfirming(true))}
             className="flex h-10 min-w-24 items-center justify-center rounded-xl px-5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-ring disabled:opacity-60"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Выйти"}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t("leaveWaitlistAction")}
           </button>
         </div>
       </DialogContent>
