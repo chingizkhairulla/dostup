@@ -2,8 +2,8 @@ import type { SVGProps } from "react";
 
 /**
  * Support: a plain headset — one band over the top, the microphone boom running from the right
- * ear cup down to the mouthpiece. Drawn on the same 24×24 grid with round strokes as the lucide
- * icons beside it in the header.
+ * ear cup down to the mouthpiece. Fills the 24×24 grid edge to edge (2.5–22), like the bell and
+ * the gear beside it in the header, so it reads the same size.
  */
 const SupportIcon = ({ strokeWidth = 1.75, ...props }: SVGProps<SVGSVGElement>) => (
   <svg
@@ -17,11 +17,14 @@ const SupportIcon = ({ strokeWidth = 1.75, ...props }: SVGProps<SVGSVGElement>) 
     aria-hidden
     {...props}
   >
-    {/* Left ear cup, the headband over the top, the right ear cup */}
-    <path d="M3.2 11.1C2.5 11.4 2 12 2 12.8v1.9c0 .8.6 1.4 1.4 1.4h1v-2.5a7.6 7.6 0 0 1 15.2 0v2.5h1c.8 0 1.4-.6 1.4-1.4v-1.9c0-.8-.5-1.4-1.2-1.7" />
+    {/* Headband over the top, from ear to ear */}
+    <path d="M3 13v-1.5a9 9 0 0 1 18 0V13" />
+    {/* Ear cups */}
+    <path d="M3 13a1.5 1.5 0 0 1 1.5-1.5h1A1.5 1.5 0 0 1 7 13v3.5A1.5 1.5 0 0 1 5.5 18h-1A1.5 1.5 0 0 1 3 16.5Z" />
+    <path d="M21 13a1.5 1.5 0 0 0-1.5-1.5h-1A1.5 1.5 0 0 0 17 13v3.5a1.5 1.5 0 0 0 1.5 1.5h1a1.5 1.5 0 0 0 1.5-1.5Z" />
     {/* Microphone boom and mouthpiece */}
-    <path d="M19.6 16.1v.3a4.2 4.2 0 0 1-4.2 4.2h-1" />
-    <rect x="9.2" y="19.4" width="5.2" height="2.4" rx="1.2" />
+    <path d="M21 16.5v.5a4 4 0 0 1-4 4h-2.6" />
+    <rect x="9.4" y="19.9" width="5" height="2.2" rx="1.1" />
   </svg>
 );
 

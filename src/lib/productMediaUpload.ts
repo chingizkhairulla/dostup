@@ -26,6 +26,39 @@ export async function getVideoDuration(file: File): Promise<number> {
 
 export type UploadProgressCallback = (percent: number) => void;
 
+/**
+ * Asks for a video upload address before minutes of compressing, so a server that cannot take
+ * videos (e.g. no AWS keys) says so at once. The address itself is not kept: it is asked for
+ * again once the file is ready.
+ */
+export async function ensureVideoUploadReady(productId: string, file: File): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("upload-product-media", {
+    body: {
+      action: "get_upload_url",
+      productId,
+      creatorName: localStorage.getItem("creator_name") || "",
+      creatorToken: localStorage.getItem("creator_token") || "",
+      kind: "video",
+      fileName: file.name,
+      fileType: file.type || "video/mp4",
+    },
+  });
+  if (!error) {
+    if (data?.error) throw new Error(String(data.error));
+    return;
+  }
+  let msg = error.message || "Upload failed";
+  try {
+    const body = await (error as { context?: { json?: () => Promise<{ error?: unknown }> } }).context?.json?.();
+    if (body?.error) msg = String(body.error);
+  } catch {
+    // ignore
+  }
+  // A dropped connection is left to the upload itself, which retries.
+  if (msg.includes("Failed to send a request")) return;
+  throw new Error(msg);
+}
+
 export async function uploadProductMedia(
   file: File,
   productId: string,

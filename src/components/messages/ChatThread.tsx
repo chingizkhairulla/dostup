@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MediaViewer from "@/components/media/MediaViewer";
+import LocalVideoThumb from "@/components/media/LocalVideoThumb";
 import { formatFileSize } from "@/lib/announcementHtml";
 import { ChatUploadError, isVideoFileName, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -388,9 +389,7 @@ const ChatThread = ({
                     {p.previewUrl && p.kind === "image" && (
                       <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                     )}
-                    {p.previewUrl && p.kind === "video" && (
-                      <video src={`${p.previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                    )}
+                    {p.previewUrl && p.kind === "video" && <LocalVideoThumb src={p.previewUrl} />}
                     {p.kind === "file" && (
                       <span className="flex h-full w-full items-center justify-center">
                         <FileText className="h-6 w-6 text-muted-foreground" />
@@ -602,7 +601,7 @@ const AttachmentTile = ({
       <div className="relative h-20 w-20 overflow-hidden rounded-xl border bg-muted">
         {kind === "video" ? (
           <>
-            <video src={`${previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+            <LocalVideoThumb src={previewUrl} />
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
                 <Play className="h-3.5 w-3.5 fill-current" />

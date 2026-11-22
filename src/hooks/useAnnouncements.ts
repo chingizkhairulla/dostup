@@ -100,11 +100,13 @@ export const uploadAnnouncementMedia = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   if (kind === "video") {
-    // Heavy clips are shrunk in the browser first, then go straight to AWS S3.
-    const [{ compressVideoIfNeeded }, { uploadProductMedia }] = await Promise.all([
+    // The server is asked first, so a refusal shows at once; then heavy clips are shrunk in the
+    // browser and go straight to AWS S3.
+    const [{ compressVideoIfNeeded }, { ensureVideoUploadReady, uploadProductMedia }] = await Promise.all([
       import("@/lib/videoCompressor"),
       import("@/lib/productMediaUpload"),
     ]);
+    await ensureVideoUploadReady(productId, file);
     const ready = await compressVideoIfNeeded(file, undefined, signal);
     return uploadProductMedia(ready, productId, "video", undefined, 1, signal);
   }

@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import LocalVideoThumb from "@/components/media/LocalVideoThumb";
 import { uploadAnnouncementMedia } from "@/hooks/useAnnouncements";
 import { isVideoFileName } from "@/lib/chatUpload";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -255,9 +256,7 @@ const AnnouncementComposer = ({ productId, editing, onCancelEdit, onSubmit, savi
                 {p.previewUrl && p.kind === "image" && (
                   <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                 )}
-                {p.previewUrl && p.kind === "video" && (
-                  <video src={`${p.previewUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                )}
+                {p.previewUrl && p.kind === "video" && <LocalVideoThumb src={p.previewUrl} />}
                 {p.kind === "file" && (
                   <span className="flex h-full w-full items-center justify-center">
                     <FileText className="h-6 w-6 text-muted-foreground" />
