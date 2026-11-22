@@ -230,9 +230,9 @@ export async function creatorProductIds(
 }
 
 export const CATALOG_COLUMNS =
-  'id, created_at, updated_at, creator_id, creator_account_id, title, headline, description, price, image_url, video_url, media, has_schedule, is_active, is_paused, paused_message, slug, telegram_link, group_link_label, faq, access_duration_days, category_id, subcategory_id, lesson_format, event_starts_at, capacity, billing_period, payment_type, recurring_interval, has_free_trial, trial_days, pricing_options, topic'
+  'id, created_at, updated_at, creator_id, creator_account_id, title, headline, description, price, image_url, video_url, media, has_schedule, is_active, is_paused, paused_message, slug, telegram_link, group_link_label, faq, access_duration_days, category_id, subcategory_id, lesson_format, event_starts_at, capacity, billing_period, payment_type, recurring_interval, has_free_trial, trial_days, pricing_options, topic, sales_closed, max_buyers, trial_mode, trial_button_text'
 
 export const CHECKOUT_COLUMNS = `${CATALOG_COLUMNS}, kaspi_link, kaspi_phone`
 
 // Seller-only view of a product: adds the marketplace visibility flag.
-export const CREATOR_PRODUCT_COLUMNS = `${CHECKOUT_COLUMNS}, is_published`
+export const CREATOR_PRODUCT_COLUMNS = `${CHECKOUT_COLUMNS}, is_published, waitlist_auto_open, waitlist_pay_days`

@@ -27,8 +27,11 @@ export interface ChatCategory {
   icon: LucideIcon;
   items: ChatListItem[];
   emptyText?: string;
-  /** Second row of chips inside the category; the first one is selected by default. `full` keeps the whole label. */
-  filters?: { key: string; label: string; full?: boolean }[];
+  /**
+   * Second row of chips inside the category; the first one is selected by default. `full` keeps
+   * the whole label; `unread` puts a badge on the chip.
+   */
+  filters?: { key: string; label: string; full?: boolean; unread?: number }[];
 }
 
 interface Props {
@@ -110,6 +113,17 @@ const MessengerLayout = ({
 
   useEffect(() => {
     if (!selectedId) setMobilePane("list");
+  }, [selectedId]);
+
+  // A chat opened from outside (e.g. "Чат" on a storefront) brings its own category into view.
+  useEffect(() => {
+    if (!selectedId || active?.items.some((item) => item.id === selectedId)) return;
+    const owner = categories.find((category) => category.items.some((item) => item.id === selectedId));
+    if (owner) {
+      setActiveKey(owner.key);
+      setFilterKey(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
   // A hidden pane has no height, so the feed's own scroll-to-bottom does nothing while the
@@ -194,15 +208,24 @@ const MessengerLayout = ({
                     onClick={() => setFilterKey(filter.key)}
                     title={filter.label}
                     className={cn(
-                      // About as wide as the word "Продукты"; longer product names are cut short.
-                      "shrink-0 truncate rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                      !filter.full && "max-w-[5.5rem]",
+                      "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                     )}
                   >
-                    {filter.label}
+                    {/* About as wide as the word "Продукты"; longer product names are cut short. */}
+                    <span className={cn("truncate", !filter.full && "max-w-[5.5rem]")}>{filter.label}</span>
+                    {filter.unread ? (
+                      <span
+                        className={cn(
+                          "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                          isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+                        )}
+                      >
+                        {filter.unread > 9 ? "9+" : filter.unread}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

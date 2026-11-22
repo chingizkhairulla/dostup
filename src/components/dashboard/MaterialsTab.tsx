@@ -341,7 +341,10 @@ const MaterialsTab = () => {
     const isVideo = material.type === "video" && material.file_url;
     const isExpanded = expandedVideos.has(material.id);
     const canPlay = isVideo && canPlayInline(material.file_url!);
-    const isLocked = material.available_at && new Date(material.available_at) > new Date();
+    // On a trial the materials the seller did not mark for it are dimmed, locked and do not open.
+    const trialLocked = Boolean((material as { locked?: boolean }).locked);
+    const timeLocked = Boolean(material.available_at && new Date(material.available_at) > new Date());
+    const isLocked = trialLocked || timeLocked;
     const isFolder = material.type === "folder";
     const isFolderExpanded = expandedFolders.has(material.id);
     const children = isFolder ? getChildren(material.id) : [];
@@ -410,7 +413,7 @@ const MaterialsTab = () => {
     return (
       <Card 
         key={material.id} 
-        className={`animate-fade-in transition-colors hover:bg-muted/70 ${isChild ? 'ml-2' : ''}`}
+        className={`animate-fade-in transition-colors ${trialLocked ? 'opacity-50' : 'hover:bg-muted/70'} ${isChild ? 'ml-2' : ''}`}
         style={{ animationDelay: `${index * 50}ms` }}
       >
         <CardContent className="p-4">
@@ -533,9 +536,11 @@ const MaterialsTab = () => {
             {isLocked && (
               <div className="flex items-center gap-1.5 text-muted-foreground flex-shrink-0">
                 <Lock className="w-4 h-4" />
-                <span className="text-xs whitespace-nowrap">
-                  {formatAvailableDate(material.available_at!)}
-                </span>
+                {timeLocked && !trialLocked && (
+                  <span className="text-xs whitespace-nowrap">
+                    {formatAvailableDate(material.available_at!)}
+                  </span>
+                )}
               </div>
             )}
           </div>

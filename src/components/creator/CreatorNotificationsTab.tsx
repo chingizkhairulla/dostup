@@ -15,6 +15,7 @@ import CreatorPendingPayments, { useCreatorPendingPurchases } from "@/components
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CancellationReasonDialog from "@/components/CancellationReasonDialog";
 import RejectRescheduleDialog from "@/components/RejectRescheduleDialog";
+import { AppNotificationCard, useAppNotifications } from "@/components/notifications/AppNotificationsList";
 
 interface BookingCancellation {
   id: string;
@@ -373,6 +374,8 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt, onOpenUsers }: Cre
     return format(created, "d MMM", { locale: dateLocale });
   };
 
+  const { data: appNotifications = [] } = useAppNotifications("creator");
+
   const isLoading = bookingsLoading || purchasesLoading || cancellationsLoading || rescheduleLoading;
 
   if (isLoading) {
@@ -389,10 +392,14 @@ const CreatorNotificationsTab = ({ creatorName, lastViewedAt, onOpenUsers }: Cre
     );
   }
 
-  const hasNotifications = sortedBookings.length > 0 || pendingPurchases.length > 0 || cancellations.length > 0 || rescheduleRequests.length > 0;
+  const hasNotifications = sortedBookings.length > 0 || pendingPurchases.length > 0 || cancellations.length > 0 || rescheduleRequests.length > 0 || appNotifications.length > 0;
 
   return (
     <div className="space-y-4">
+      {/* Platform notifications: freed seats, someone left the waiting list. */}
+      {appNotifications.map((item) => (
+        <AppNotificationCard key={`app-${item.id}`} item={item} />
+      ))}
       {/* Reschedule Requests Section */}
       {rescheduleRequests.length > 0 && (
         <Card className="border-primary/30">

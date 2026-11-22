@@ -31,6 +31,8 @@ import { touchRecentProduct } from "@/lib/buyerActivity";
 import { sellerInitial } from "@/lib/productCover";
 import { invokeApi } from "@/lib/sessionApi";
 import { rememberAuthNext } from "@/lib/creatorAuth";
+import StorefrontChatButton from "@/components/share/StorefrontChatButton";
+import StorefrontActions from "@/components/product/StorefrontActions";
 import { loginPath, loginState } from "@/lib/loginModal";
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -182,8 +184,6 @@ const ProductPage = () => {
   }, [product?.pricing_options, selectedOptionId]);
 
   const effectivePrice = activeOption ? Number(activeOption.price) : Number(product?.price || 0);
-  const effectiveHasTrial = activeOption ? Boolean(activeOption.has_free_trial) : Boolean(product?.has_free_trial);
-  const effectiveTrialDays = activeOption ? activeOption.trial_days : product?.trial_days;
 
   const checkoutUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -220,61 +220,8 @@ const ProductPage = () => {
     navigate(checkoutUrl);
   };
 
-  const [activatingTrial, setActivatingTrial] = useState(false);
   const queryClient = useQueryClient();
   const location = useLocation();
-
-  const { data: trialInfo } = useQuery({
-    queryKey: ["check-trial", product?.id, user?.id],
-    queryFn: async () => {
-      if (!user || !product?.id) return null;
-      return invokeApi<{
-        hasFreeTrial: boolean;
-        hasUsedTrial: boolean;
-        canUseTrial: boolean;
-        trialDays: number | null;
-        trialEndsAt: string | null;
-      }>("checkout", {
-        action: "check_trial",
-        productId: product.id,
-        sessionToken: localStorage.getItem("creator_token") || "",
-      });
-    },
-    enabled: Boolean(user && product?.id && (effectiveHasTrial || product?.has_free_trial)),
-  });
-
-  const handleActivateTrial = async () => {
-    if (!user) {
-      toast.error(t("loginRequiredCheckout") || "Для активации необходимо войти");
-      const next = `/p/${product?.slug || product?.id}`;
-      rememberAuthNext(next);
-      navigate(loginPath(next), { state: loginState(location) });
-      return;
-    }
-    if (isSellerProfile) {
-      toast.info("Переключитесь на профиль покупателя");
-      setSwitchBuyerOpen(true);
-      return;
-    }
-    setActivatingTrial(true);
-    try {
-      const res = await invokeApi<{ ok: boolean; trialEndsAt: string; message?: string }>("checkout", {
-        action: "activate_trial",
-        productId: product?.id,
-        sessionToken: localStorage.getItem("creator_token") || "",
-      });
-      if (res.ok) {
-        toast.success(`Пробный период на ${effectiveTrialDays || product?.trial_days} дн. активирован!`);
-        queryClient.invalidateQueries({ queryKey: ["simple-purchases"] });
-        queryClient.invalidateQueries({ queryKey: ["check-trial", product?.id] });
-        navigate("/dashboard");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Пробный период уже был использован");
-    } finally {
-      setActivatingTrial(false);
-    }
-  };
 
   useEffect(() => {
     if (!product?.slug || !productId) return;
@@ -414,6 +361,8 @@ const ProductPage = () => {
   const faq = Array.isArray(product.faq)
     ? product.faq.filter((it) => it && (it.question || it.answer))
     : [];
+  // Ended sales read as "no seats": no buy button and no trial, just the note in their place.
+  // "Мест нет", the trial, applications and the waiting list are decided by StorefrontActions.
   const isPaused = Boolean(product.is_paused);
   const pausedMessage: string =
     (product.paused_message && String(product.paused_message).trim()) || t("productPausedDefault");
@@ -480,11 +429,6 @@ const ProductPage = () => {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-semibold text-foreground truncate">{summary}</span>
-                    {opt.has_free_trial && (
-                      <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium shrink-0">
-                        {opt.trial_days} дн. триал
-                      </span>
-                    )}
                   </div>
                   <div
                     className={cn(
@@ -511,30 +455,16 @@ const ProductPage = () => {
       <p className="public-meta mt-2">{effectiveAccessLabel}</p>
       <div className="mt-6 border-t border-border pt-6">{sellerBlock}</div>
       <div className="mt-6">
-        {effectiveHasTrial && effectiveTrialDays && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full mb-3 rounded-2xl border-primary/40 text-primary hover:bg-primary/10 font-semibold h-12 text-sm"
-            disabled={isPaused || activatingTrial || trialInfo?.hasUsedTrial}
-            onClick={handleActivateTrial}
-          >
-            {activatingTrial ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : trialInfo?.hasUsedTrial ? (
-              "Пробный период уже использован"
-            ) : (
-              `Попробовать бесплатно (${effectiveTrialDays} ${effectiveTrialDays === 3 ? "дня" : "дней"})`
-            )}
-          </Button>
+        {isPaused ? (
+          <BuyButton disabled pausedMessage={pausedMessage} onClick={handleBuy} label={t("buy")} />
+        ) : (
+          <StorefrontActions
+            product={product}
+            onBuy={handleBuy}
+            buyLabel={t("buy")}
+            noSeatsLabel={t("productNoSeats")}
+          />
         )}
-        <BuyButton
-          disabled={isPaused}
-          pausedMessage={pausedMessage}
-          onClick={handleBuy}
-          label={t("buy")}
-        />
       </div>
     </>
   );
@@ -635,11 +565,12 @@ const ProductPage = () => {
               )}
             </div>
 
-            <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
-              <h1 className="public-display text-foreground text-balance min-w-0 flex-1 whitespace-pre-wrap break-words">
+            <div className="mt-6 flex flex-col gap-3">
+              <h1 className="public-display text-foreground text-balance min-w-0 whitespace-pre-wrap break-words">
                 {renderSafeFormattedContent(product.title)}
               </h1>
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Wraps on a narrow phone rather than pushing "Пожаловаться" off the screen. */}
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <ShareProductButton
                   title={product.title}
                   id={product.id}
@@ -649,6 +580,7 @@ const ProductPage = () => {
                   size="sm"
                   className="shrink-0"
                 />
+                <StorefrontChatButton productId={product.id} className="shrink-0" />
                 <ReportProductDialog
                   productId={product.id}
                   productTitle={product.title}
@@ -840,33 +772,17 @@ const ProductPage = () => {
             </div>
           ) : (
             <>
-              {product.has_free_trial && product.trial_days && !trialInfo?.hasUsedTrial && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full rounded-xl border-primary/40 text-primary font-medium"
-                  disabled={activatingTrial}
-                  onClick={handleActivateTrial}
-                >
-                  {activatingTrial ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    `Попробовать бесплатно (${product.trial_days} ${product.trial_days === 3 ? "дня" : "дней"})`
-                  )}
-                </Button>
-              )}
               <div className="flex items-center gap-4">
                 <p className="shrink-0 text-lg font-bold tabular-nums text-foreground">
                   {formatPriceTenge(Number(product.price))}
                 </p>
-                <button
-                  type="button"
-                  onClick={handleBuy}
-                  className="h-12 min-w-0 flex-1 rounded-2xl bg-[#FF6B00] px-6 text-base font-semibold text-white focus-ring hover:bg-[#E86000]"
-                >
-                  {t("buy")}
-                </button>
+                <StorefrontActions
+                  product={product}
+                  onBuy={handleBuy}
+                  buyLabel={t("buy")}
+                  noSeatsLabel={t("productNoSeats")}
+                  className="min-w-0 flex-1"
+                />
               </div>
             </>
           )}

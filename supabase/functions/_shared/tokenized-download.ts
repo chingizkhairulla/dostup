@@ -1,7 +1,7 @@
 import { corsHeaders, json, optionsResponse } from './http.ts'
 import { authorizeDownload, mimeForKey, parseS3Path, presignGet } from './s3.ts'
 import { serviceClient } from './session.ts'
-import { buyerHasProductAccess } from './subscription.ts'
+import { buyerCanOpenMaterial } from './subscription.ts'
 
 async function consumeAccessToken(token: string): Promise<string | null> {
   const supabase = serviceClient()
@@ -99,7 +99,7 @@ export async function handleTokenizedDownload(req: Request): Promise<Response> {
             .eq('id', userId)
             .maybeSingle()
           const hasAccess = profile
-            ? await buyerHasProductAccess(supabase, profile.id, productId)
+            ? await buyerCanOpenMaterial(supabase, profile.id, productId, { path })
             : false
           if (!hasAccess) {
             const { data: purchase } = await supabase
@@ -152,7 +152,7 @@ export async function handleTokenizedDownload(req: Request): Promise<Response> {
         const supabase = serviceClient()
         const profileId = typeof body.userId === 'string' ? body.userId : ''
         const hasAccess = profileId
-          ? await buyerHasProductAccess(supabase, profileId, productId)
+          ? await buyerCanOpenMaterial(supabase, profileId, productId, { path })
           : false
         if (!hasAccess) {
           const { data: purchase } = await supabase

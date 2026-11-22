@@ -2,6 +2,7 @@ import { json, optionsResponse } from '../_shared/http.ts'
 import { serviceClient } from '../_shared/session.ts'
 import { subscriptionGrantsAccess, type SubscriptionRow } from '../_shared/subscription.ts'
 import { appBaseUrl, sendTransactionalEmail } from '../_shared/transactional-email.ts'
+import { processTrialsAndWaitlists, releaseSeats } from '../_shared/trial.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,7 +122,7 @@ Deno.serve(async (req) => {
 
     const { data: expiring, error: expireError } = await supabase
       .from('subscriptions')
-      .select('id')
+      .select('id, product_id')
       .eq('status', 'active')
       .lte('current_period_end', now.toISOString())
 
@@ -134,13 +135,20 @@ Deno.serve(async (req) => {
         .in('id', expiring.map((r: { id: string }) => r.id))
       if (updateError) throw updateError
       expired = expiring.length
+      // Seats of subscriptions that ran out go to the waiting lists.
+      for (const productId of new Set(expiring.map((r: { product_id: string }) => r.product_id))) {
+        await releaseSeats(supabase, productId)
+      }
     }
+
+    const trials = await processTrialsAndWaitlists(supabase)
 
     return new Response(
       JSON.stringify({
         ok: true,
         remindersSent,
         expired,
+        ...trials,
         processedAt: now.toISOString(),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

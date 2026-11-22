@@ -1,5 +1,6 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { CATALOG_COLUMNS, serviceClient } from '../_shared/session.ts'
+import { seatsFull } from '../_shared/productBuyers.ts'
 
 type CatalogRow = Record<string, unknown> & {
   creator_account_id?: string | null
@@ -147,7 +148,10 @@ Deno.serve(async (req) => {
       if (!data) return json({ product: null })
       const [withSlug] = await withCategorySlugs(supabase, [data])
       const [product] = await withAuthors(supabase, [withSlug])
-      return json({ product })
+      // The storefront shows "Мест нет" when every seat is taken (the buyer's own exemption is
+      // asked separately with checkout "seat_status").
+      const full = await seatsFull(supabase, data as unknown as { id: string; max_buyers?: number | null })
+      return json({ product: { ...product, seats_full: full } })
     }
 
     if (action === 'list_program') {

@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,9 +59,18 @@ interface CreatorPendingPaymentsProps {
   /** "actions" — кнопки ✓/✗ (раздел «Пользователи»); "link" — только список, клик ведёт в «Пользователи». */
   mode?: "actions" | "link";
   onOpenUsers?: () => void;
+  /** Requests to pay after a trial, shown in the same "Ожидающие" list under the payments. */
+  extra?: React.ReactNode;
+  extraCount?: number;
 }
 
-export default function CreatorPendingPayments({ creatorName, mode = "actions", onOpenUsers }: CreatorPendingPaymentsProps) {
+export default function CreatorPendingPayments({
+  creatorName,
+  mode = "actions",
+  onOpenUsers,
+  extra,
+  extraCount = 0,
+}: CreatorPendingPaymentsProps) {
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: pendingPurchases = [], isLoading } = useCreatorPendingPurchases(creatorName);
@@ -134,14 +144,14 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
     onError: () => toast.error(language === "ru" ? "Ошибка при отклонении" : "Қабылдамау қатесі"),
   });
 
-  if (isLoading || pendingPurchases.length === 0) return null;
+  if ((isLoading || pendingPurchases.length === 0) && extraCount === 0) return null;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Clock className="w-5 h-5 text-warning" />
         <h2 className="text-base font-semibold text-foreground">
-          {t("pendingPayments")} ({pendingPurchases.length})
+          {t("pendingPayments")} ({pendingPurchases.length + extraCount})
         </h2>
       </div>
 
@@ -279,6 +289,7 @@ export default function CreatorPendingPayments({ creatorName, mode = "actions", 
           </Button>
         }
       />
+      {extra}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { resolveUser, serviceClient } from '../_shared/session.ts'
 import { latestSubmissionForPurchase, recordVerificationEvent } from '../_shared/purchase.ts'
+import { buyerProductState, paymentDecision, TRIAL_PRODUCT_COLUMNS } from '../_shared/trial.ts'
 
 const MAX_BYTES = 4_194_304
 const ALLOWED_MIME = new Set([
@@ -76,9 +77,15 @@ Deno.serve(async (req) => {
 
     const { data: product } = await supabase
       .from('products')
-      .select('id, title, creator_account_id')
+      .select(TRIAL_PRODUCT_COLUMNS)
       .eq('id', purchase.product_id)
       .maybeSingle()
+    // The same payment rules as the storefront (ended sales, seats, the seller's permission),
+    // checked again in case they changed after this order was started.
+    if (product) {
+      const decision = paymentDecision(await buyerProductState(supabase, product, user.userId))
+      if (!decision.ok) return fail('product_status', decision.code.toUpperCase(), decision.error, 409)
+    }
 
     const fileSha = await sha256Hex(parsed.bytes)
     const fingerprint = `sha256:${fileSha}`

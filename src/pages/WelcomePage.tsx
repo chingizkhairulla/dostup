@@ -9,13 +9,13 @@ import SellerProfileSetupScreen from "@/components/auth/SellerProfileSetupScreen
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { invalidateAvatarQueries, uploadProfileAvatar } from "@/lib/avatarUpload";
-import { consumeAuthNext, isPurchaseIntentPath, peekAuthNext, profileHomePath, type ProfileType } from "@/lib/creatorAuth";
+import { consumeAuthNext, profileHomePath, type ProfileType } from "@/lib/creatorAuth";
 
 const NAME_TAKEN_MESSAGE = "Это название уже используется. Выберите другое.";
 
 /**
- * First screen for a signed-in identity without profiles: pick a role,
- * create that profile and open it.
+ * First screen for a signed-in identity without profiles: the buyer profile is created at once
+ * and opened. Picking a role here is only a fallback when that fails.
  */
 const WelcomePage = () => {
   const navigate = useNavigate();
@@ -68,15 +68,12 @@ const WelcomePage = () => {
     }
   };
 
-  // Came from a product or its checkout: this person is buying, so skip the role picker.
+  // Every new account starts with a buyer profile, made right away; a seller profile is added
+  // later with "Create new". The role picker shows only if that fails, so the person is not stuck.
   const autoBuyer = useRef(false);
-  const [autoCreating, setAutoCreating] = useState(() => isPurchaseIntentPath(peekAuthNext()));
+  const [autoCreating, setAutoCreating] = useState(true);
   useEffect(() => {
     if (status !== "authenticated" || !needsOnboarding || autoBuyer.current) return;
-    if (!isPurchaseIntentPath(peekAuthNext())) {
-      setAutoCreating(false);
-      return;
-    }
     autoBuyer.current = true;
     void handleRole("buyer").finally(() => setAutoCreating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

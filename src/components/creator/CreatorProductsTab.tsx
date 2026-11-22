@@ -3,20 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { AutoResizeTextarea } from "@/components/ui/AutoResizeTextarea";
 
-import { useCreatorProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
+import { useCreatorProducts, useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatPriceTenge, categoryLabel, subcategoryLabel, type BillingPeriod, type CatalogCategory, type LessonFormat } from "@/lib/catalog";
 import { useCatalogTaxonomy } from "@/hooks/useCatalogTaxonomy";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, Check, Globe, Lock, DollarSign, PauseCircle, PlayCircle, Sparkles, Wand2, ArrowRight } from "lucide-react";
+import { Plus, Package, Loader2, Edit, Trash2, ChevronDown, ChevronRight, ChevronLeft, Check, Globe, Lock, DollarSign, Sparkles, Wand2, ArrowRight } from "lucide-react";
 import { predictProductCategory, isTopicMatch, isExactTopicMatch, type CategoryPrediction, suggestCustomTopicWithEmoji } from "@/lib/aiCategory";
 import { getPresetTopics, getPresetTopicsForCategory, TAXONOMY_DEFINITIONS } from "@/lib/taxonomyData";
 import { validateNewTopic, parseTopicsList, serializeTopicsList } from "@/utils/normalizeTopic";
 import ShareProductButton from "@/components/share/ShareProductButton";
+import DeleteProductDialog from "@/components/creator/DeleteProductDialog";
+import MaxBuyersField from "@/components/creator/MaxBuyersField";
+import TrialSettings, { emptyTrial, isDefaultTrialText, type TrialMode, type TrialValue } from "@/components/creator/TrialSettings";
 import ProductVisibilityDialog from "./ProductVisibilityDialog";
 import PaymentMethodFields from "./PaymentMethodFields";
 import {
@@ -26,17 +28,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import ProductMaterialsManager from "./ProductMaterialsManager";
 import CreatorPendingPayments from "./CreatorPendingPayments";
@@ -113,6 +104,11 @@ interface Product {
   access_duration_days?: number | null;
   is_paused?: boolean;
   paused_message?: string | null;
+  sales_closed?: boolean;
+  /** Paid buyers allowed at once; null means no limit. */
+  max_buyers?: number | null;
+  trial_mode?: "lesson" | "period" | null;
+  trial_button_text?: string | null;
   billing_period?: string | null;
   payment_type?: string | null;
   recurring_interval?: string | null;
@@ -144,6 +140,10 @@ interface FormData {
   lessonFormat: LessonFormat | "";
   eventStartsAt: string;
   capacity: string;
+  /** "Максимальное число покупателей": digits, "inf" for no limit, "" while not chosen. */
+  maxBuyers: string;
+  /** "Бесплатный пробный" for the whole product (no longer per payment option). */
+  trial: TrialValue;
   billingPeriod: "month" | "quarter" | "year" | "";
   title: string;
   headline: string;
@@ -214,6 +214,42 @@ function validateTaxonomyFields(formData: FormData, _categories: CatalogCategory
     return "Выберите категорию и подкатегорию";
   }
   return null;
+}
+
+/** Product fields of "Бесплатный пробный"; a free product has no trial. */
+function trialPayload(formData: FormData) {
+  const { trial } = formData;
+  const on = formData.isPaid && trial.enabled;
+  return {
+    has_free_trial: on,
+    trial_mode: on ? trial.mode : null,
+    trial_days: on && trial.mode === "period" ? trial.days : null,
+    // The default text is not stored: each visitor then sees it in their own language.
+    trial_button_text: on && !isDefaultTrialText(trial.texts[trial.mode]) ? trial.texts[trial.mode].trim() || null : null,
+  };
+}
+
+/** The form's trial block from a saved product (an old trial in days reads as "Период времени"). */
+function trialFromProduct(product: Product): TrialValue {
+  const base = emptyTrial();
+  const mode: TrialMode = product.trial_mode === "lesson" ? "lesson" : "period";
+  const enabled = Boolean(product.trial_mode || product.has_free_trial);
+  return {
+    enabled,
+    mode: enabled ? mode : base.mode,
+    days: product.trial_days || base.days,
+    texts: {
+      ...base.texts,
+      ...(enabled && product.trial_button_text ? { [mode]: product.trial_button_text } : {}),
+    },
+  };
+}
+
+/** null = no limit, a number = the limit, undefined = not chosen yet (the field is required). */
+function parseMaxBuyers(value: string): number | null | undefined {
+  if (value === "inf") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
 }
 
 function stripHtml(html: string): string {
@@ -1144,6 +1180,7 @@ const ProductForm = ({
 
   /** Первая незаполненная настройка оплаты: id поля, вариант тарифа и (если нужно) свой текст ошибки. */
   const findPaymentIssue = (): { id: string; optId?: string; message?: string } | null => {
+    if (parseMaxBuyers(formData.maxBuyers) === undefined) return { id: "field-max-buyers" };
     if (!formData.isPaid) return null;
     if (!formData.pricingOptions || formData.pricingOptions.length === 0) {
       return { id: "field-pricing-options" };
@@ -2013,12 +2050,24 @@ const ProductForm = ({
         </div>
     </FormSection>
 
-    {/* ============ ОПЛАТА ============ */}
-    <FormSection label="Оплата" open={paymentOpen} onOpenChange={setPaymentOpen}>
+    {/* ============ ДОСТУП ============ */}
+    <FormSection label="Доступ" open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <div className="space-y-2">
+          <Label className="text-sm sm:text-base font-semibold text-foreground flex items-center">
+            Сколько людей его получат? <ReqStar />
+          </Label>
+          <p className="text-sm text-muted-foreground">Максимальное число покупателей:</p>
+          <MaxBuyersField
+            id="field-max-buyers"
+            value={formData.maxBuyers}
+            onChange={(maxBuyers) => setFormData((prev) => ({ ...prev, maxBuyers }))}
+          />
+        </div>
+
         {/* Choice between Free access and Paid access (Whop style) */}
         <div className="space-y-2">
           <Label className="text-sm sm:text-base font-semibold text-foreground flex items-center">
-            Как люди получат доступ? <ReqStar />
+            Как люди его получат? <ReqStar />
           </Label>
           <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-1">
             {/* Карточка 1: Бесплатно */}
@@ -2130,11 +2179,6 @@ const ProductForm = ({
                             <span className="font-semibold text-sm sm:text-base text-foreground">
                               {summaryText}
                             </span>
-                            {opt.hasFreeTrial && (
-                              <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                                Пробный {opt.trialPreset === "custom" ? opt.trialCustomDays : opt.trialPreset} дн.
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -2263,67 +2307,6 @@ const ProductForm = ({
                             </div>
                           )}
 
-                          {/* Бесплатный пробный период */}
-                          <div className="rounded-xl border border-border p-3 sm:p-4 space-y-3 bg-muted/20">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Label className="text-sm sm:text-base font-medium cursor-pointer">
-                                  Бесплатный пробный период
-                                </Label>
-                                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                                  Дать покупателям доступ на несколько дней перед оплатой
-                                </p>
-                              </div>
-                              <Switch
-                                checked={opt.hasFreeTrial}
-                                onCheckedChange={(checked) =>
-                                  updateOption(opt.id, { hasFreeTrial: checked })
-                                }
-                              />
-                            </div>
-
-                            {opt.hasFreeTrial && (
-                              <div className="space-y-2 pt-2 border-t border-border/60">
-                                <Label className="text-xs sm:text-sm text-muted-foreground">Длительность пробного периода</Label>
-                                <div className="grid grid-cols-4 gap-2">
-                                  {(["3", "7", "30", "custom"] as const).map((preset) => (
-                                    <Button
-                                      key={preset}
-                                      type="button"
-                                      size="sm"
-                                      variant={opt.trialPreset === preset ? "default" : "toggle"}
-                                      onClick={() => updateOption(opt.id, { trialPreset: preset })}
-                                      className="text-xs sm:text-sm h-9"
-                                    >
-                                      {preset === "custom" ? "Выбрать" : `${preset} ${preset === "3" ? "дня" : "дней"}`}
-                                    </Button>
-                                  ))}
-                                </div>
-
-                                {opt.trialPreset === "custom" && (
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <Label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                                      Число дней:
-                                    </Label>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      className="h-10 w-32 text-base"
-                                      placeholder="14"
-                                      value={opt.trialCustomDays || ""}
-                                      onChange={(e) =>
-                                        updateOption(opt.id, {
-                                          trialCustomDays: Number(e.target.value) || 0,
-                                        })
-                                      }
-                                    />
-                                    <span className="text-xs sm:text-sm text-muted-foreground">дн.</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
                           <PaymentMethodFields
                             value={opt}
                             onChange={(updates) => updateOption(opt.id, updates)}
@@ -2371,6 +2354,11 @@ const ProductForm = ({
                 <Plus className="w-4 h-4" />
                 Добавить вариант оплаты
               </Button>
+
+              <TrialSettings
+                value={formData.trial}
+                onChange={(trial) => setFormData((prev) => ({ ...prev, trial }))}
+              />
             </div>
           </div>
         )}
@@ -2448,7 +2436,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const sellerHandle = typeof window !== "undefined" ? localStorage.getItem("profile_handle") : null;
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
-  const deleteProduct = useDeleteProduct();
   
   const [isCreating, setIsCreating] = useState(false);
   const [isCroppingMedia, setIsCroppingMedia] = useState(false);
@@ -2460,12 +2447,10 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [materialsProduct, setMaterialsProduct] = useState<{ id: string; title: string } | null>(null);
   const [visibilityProductId, setVisibilityProductId] = useState<string | null>(null);
-  const [pausingProduct, setPausingProduct] = useState<Product | null>(null);
   // Read from the live list so the dialog reflects the saved value after refetch.
   const visibilityProduct = visibilityProductId
     ? (products.find((p) => p.id === visibilityProductId) as Product | undefined) ?? null
     : null;
-  const [pauseMessage, setPauseMessage] = useState<string>("");
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null);
   
@@ -2476,6 +2461,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     lessonFormat: "",
     eventStartsAt: "",
     capacity: "",
+    maxBuyers: "",
+    trial: emptyTrial(),
     billingPeriod: "",
     title: "",
     headline: "",
@@ -2511,6 +2498,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       lessonFormat: "",
       eventStartsAt: "",
       capacity: "",
+      maxBuyers: "",
+      trial: emptyTrial(),
       billingPeriod: "",
       title: "",
       headline: "",
@@ -2560,6 +2549,16 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       return;
     }
 
+    const maxBuyers = parseMaxBuyers(formData.maxBuyers);
+    if (maxBuyers === undefined) {
+      toast.error("Укажите максимальное число покупателей");
+      return;
+    }
+    if (formData.isPaid && formData.trial.enabled && formData.trial.mode === "period" && !(formData.trial.days >= 1)) {
+      toast.error("Укажите длительность пробного");
+      return;
+    }
+
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
     let primaryBillingPeriod: string | null = null;
@@ -2581,14 +2580,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
     }
 
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
     const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
@@ -2603,9 +2594,9 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
+        ...trialPayload(formData),
         pricing_options: serializedOptions,
+        max_buyers: maxBuyers,
         has_schedule: false,
         is_active: true,
         faq: (formData.faq || [])
@@ -2773,6 +2764,8 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       lessonFormat: (product.lesson_format as LessonFormat) || "",
       eventStartsAt: eventLocal,
       capacity: product.capacity != null ? String(product.capacity) : "",
+      maxBuyers: product.max_buyers != null ? String(product.max_buyers) : "inf",
+      trial: trialFromProduct(product),
       billingPeriod: (product.billing_period as BillingPeriod) || "",
       title: product.title,
       headline: product.headline || "",
@@ -2819,6 +2812,16 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       return;
     }
 
+    const maxBuyers = parseMaxBuyers(formData.maxBuyers);
+    if (maxBuyers === undefined) {
+      toast.error("Укажите максимальное число покупателей");
+      return;
+    }
+    if (formData.isPaid && formData.trial.enabled && formData.trial.mode === "period" && !(formData.trial.days >= 1)) {
+      toast.error("Укажите длительность пробного");
+      return;
+    }
+
     const primaryOpt = options[0];
     let primaryAccessDays: number | null = null;
     let primaryBillingPeriod: string | null = null;
@@ -2840,14 +2843,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       else if (primaryOpt.recurringInterval === "custom") primaryAccessDays = primaryOpt.recurringCustomDays || 30;
     }
 
-    let primaryTrialDays: number | null = null;
-    if (formData.isPaid && primaryOpt.hasFreeTrial) {
-      if (primaryOpt.trialPreset === "3") primaryTrialDays = 3;
-      else if (primaryOpt.trialPreset === "7") primaryTrialDays = 7;
-      else if (primaryOpt.trialPreset === "30") primaryTrialDays = 30;
-      else if (primaryOpt.trialPreset === "custom") primaryTrialDays = primaryOpt.trialCustomDays || 7;
-    }
-
     const serializedOptions = formData.isPaid ? options.map(serializePricingOption) : [];
 
     try {
@@ -2862,9 +2857,9 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         payment_type: formData.isPaid ? primaryOpt.paymentType : "one_time",
         recurring_interval: formData.isPaid && primaryOpt.paymentType === "recurring" ? primaryOpt.recurringInterval : null,
         access_duration_days: primaryAccessDays,
-        has_free_trial: formData.isPaid ? primaryOpt.hasFreeTrial : false,
-        trial_days: primaryTrialDays,
+        ...trialPayload(formData),
         pricing_options: serializedOptions,
+        max_buyers: maxBuyers,
         image_url: (formData.media || []).find((m) => m.type === "image")?.url || null,
         video_url: (formData.media || []).find((m) => m.type === "video")?.url || null,
         media: (formData.media || []).map((m) => ({ type: m.type, url: m.url, objectPosition: m.objectPosition })),
@@ -2900,19 +2895,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
     } finally {
       closingEdit.current = false;
       setSavingPaymentDetails(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deletingProduct) return;
-
-    try {
-      await deleteProduct.mutateAsync(deletingProduct.id);
-      toast.success("Продукт удалён!");
-      setDeletingProduct(null);
-    } catch (error: any) {
-      console.error("Delete product error:", error);
-      toast.error(error?.message || "Ошибка при удалении продукта");
     }
   };
 
@@ -3032,30 +3014,7 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingProduct} onOpenChange={(open) => { if (!open) setDeletingProduct(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить продукт?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Вы уверены, что хотите удалить "{deletingProduct?.title}"? Это действие нельзя отменить.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteProduct.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                t("delete")
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteProductDialog product={deletingProduct} onClose={() => setDeletingProduct(null)} />
 
       {/* Products List */}
       <div className="space-y-3">
@@ -3113,6 +3072,11 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                         {language === "ru" ? "Приватный" : "Жабық"}
                       </span>
                     )}
+                    {(product as Product).sales_closed && (
+                      <span className={`bg-muted text-muted-foreground px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                        {language === "ru" ? "Продажи завершены" : "Сатылым аяқталды"}
+                      </span>
+                    )}
                     {product.billing_period && (
                       <span className={`bg-primary/10 text-primary px-2 py-0.5 rounded-full ${isMobile ? "text-[10px]" : "text-xs"}`}>
                         {t("activeSubscribers")}: {subscriberCounts[product.id] ?? 0}
@@ -3163,37 +3127,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    if ((product as any).is_paused) {
-                      updateProduct.mutate(
-                        { id: product.id, is_paused: false } as any,
-                        {
-                          onSuccess: () => toast.success(language === "ru" ? "Продукт возобновлён" : "Өнім қайта іске қосылды"),
-                          onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                        }
-                      );
-                    } else {
-                      setPauseMessage(
-                        (product as any).paused_message ||
-                          (language === "ru"
-                            ? "Автор отключил ссылку. Мы набрали достаточное количество учеников — ждите новый поток."
-                            : "Автор сілтемені өшірді. Жаңа ағымды күтіңіз.")
-                      );
-                      setPausingProduct(product as Product);
-                    }
-                  }}
-                  className={isMobile ? "h-8 px-2 text-xs" : "h-9"}
-                >
-                  {(product as any).is_paused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
-                  <span className="ml-1">
-                    {(product as any).is_paused
-                      ? (language === "ru" ? "Возобновить" : "Қайта қосу")
-                      : (language === "ru" ? "Приостановить" : "Тоқтату")}
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => setDeletingProduct(product)}
                   className={`text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30 ${isMobile ? "h-8 px-2 text-xs" : "h-9"}`}
                 >
@@ -3228,72 +3161,6 @@ const CreatorProductsTab = ({ creatorName, onOpenUsers }: CreatorProductsTabProp
       product={visibilityProduct}
       onOpenChange={(open) => { if (!open) setVisibilityProductId(null); }}
     />
-
-    {/* Pause Dialog */}
-    <Dialog open={!!pausingProduct} onOpenChange={(open) => { if (!open) setPausingProduct(null); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {language === "ru" ? "Приостановить продукт" : "Өнімді тоқтату"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            {language === "ru"
-              ? "По ссылке на продукт можно будет перейти, но вместо кнопки покупки посетители увидят сообщение ниже."
-              : "Сілтеме ашылады, бірақ сатып алу батырмасының орнына төмендегі хабарлама көрсетіледі."}
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="pause-message">
-              {language === "ru" ? "Сообщение для посетителей" : "Хабарлама"}
-            </Label>
-            <Textarea
-              id="pause-message"
-              rows={4}
-              value={pauseMessage}
-              onChange={(e) => setPauseMessage(e.target.value)}
-              placeholder={language === "ru" ? "Автор отключил ссылку." : "Автор сілтемені өшірді."}
-            />
-            <p className="text-xs text-muted-foreground">
-              {language === "ru"
-                ? "Никто не сможет купить и получить доступ к продукту, пока вы не возобновите его."
-                : "Сіз оны қайта іске қосқанға дейін ешкім сатып ала алмайды және өнімге қол жеткізе алмайды."}
-            </p>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setPausingProduct(null)}>
-            {t("cancel")}
-          </Button>
-          <Button
-            onClick={() => {
-              if (!pausingProduct) return;
-              updateProduct.mutate(
-                {
-                  id: pausingProduct.id,
-                  is_paused: true,
-                  paused_message: pauseMessage.trim() || null,
-                } as any,
-                {
-                  onSuccess: () => {
-                    toast.success(language === "ru" ? "Продукт приостановлен" : "Өнім тоқтатылды");
-                    setPausingProduct(null);
-                  },
-                  onError: () => toast.error(language === "ru" ? "Ошибка" : "Қате"),
-                }
-              );
-            }}
-            disabled={updateProduct.isPending}
-          >
-            {updateProduct.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              language === "ru" ? "Приостановить" : "Тоқтату"
-            )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
 
   </div>
   );

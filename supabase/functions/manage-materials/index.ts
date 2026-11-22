@@ -8,7 +8,13 @@ import {
   unauthorized,
   forbidden,
 } from '../_shared/session.ts'
-import { buyerAccessibleProductIds, buyerHasProductAccess } from '../_shared/subscription.ts'
+import { buyerAccessibleProductIds, buyerHasProductAccess, buyerTrialOnly } from '../_shared/subscription.ts'
+
+/** A material the trial does not open: still listed (dimmed, with a lock), its content withheld. */
+function lockForTrial<T extends { trial_open?: boolean }>(m: T): T {
+  if (m.trial_open) return m
+  return { ...m, locked: true, file_url: null, content: null, cover_url: (m as { cover_url?: string | null }).cover_url ?? null }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return optionsResponse()
@@ -40,7 +46,9 @@ Deno.serve(async (req) => {
       if (body.teacherId) q = q.eq('teacher_id', body.teacherId)
       const { data, error } = await q.order('order_index', { ascending: true })
       if (error) return json({ error: error.message }, 500)
-      return json({ materials: data ?? [] })
+      const onTrial = caller.kind === 'user' && !(await assertCanManageProduct(supabase, caller, productId)) &&
+        (await buyerTrialOnly(supabase, caller.userId, productId))
+      return json({ materials: onTrial ? (data ?? []).map(lockForTrial) : data ?? [] })
     }
 
     if (action === 'list_student') {
@@ -83,7 +91,14 @@ Deno.serve(async (req) => {
           .is('deleted_at', null)
         teacherMaterials = teacherMaterials.concat(data ?? [])
       }
-      return json({ materials: [...(creatorMaterials ?? []), ...teacherMaterials], purchases: purchasesList })
+      // On a trial the materials not marked for it are listed locked, without their content.
+      const trialOnly = new Set<string>()
+      for (const id of productIds) if (await buyerTrialOnly(supabase, caller.userId, id)) trialOnly.add(id)
+      const all = [...(creatorMaterials ?? []), ...teacherMaterials] as { product_id: string; trial_open?: boolean }[]
+      return json({
+        materials: all.map((m) => (trialOnly.has(m.product_id) ? lockForTrial(m) : m)),
+        purchases: purchasesList,
+      })
     }
 
     if (action === 'list_all_creator') {

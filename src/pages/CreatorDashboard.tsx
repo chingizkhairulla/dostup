@@ -36,6 +36,7 @@ import { useAppResume } from "@/hooks/useAppResume";
 import { readAuthEmail } from "@/lib/creatorAuth";
 import { needsDisplayNamePrompt } from "@/lib/displayName";
 import { cn } from "@/lib/utils";
+import TrialLessonCheckDialog from "@/components/creator/TrialLessonCheckDialog";
 
 const CreatorDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -267,6 +268,8 @@ const CreatorDashboard = () => {
         isMobile && (isMessages ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : "pb-20"),
       )}
     >
+      {/* "Пробный урок прошёл?" pops up wherever the seller is once a trial lesson is over. */}
+      <TrialLessonCheckDialog />
       <AppHeader>
         <HeaderSupportButton
           mobileNav={(close) => <CreatorMobileNav activeTab={activeTab} onTabChange={handleTabChange} onNavigate={close} />}

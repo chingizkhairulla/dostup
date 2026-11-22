@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
 import MessengerLayout, { type ChatCategory } from "@/components/messages/MessengerLayout";
-import DirectChat, { useDirectContacts } from "@/components/messages/DirectChat";
+import DirectChat, { useDirectContacts, type DirectContact } from "@/components/messages/DirectChat";
 import NoProductsEmptyState from "./NoProductsEmptyState";
 import AnnouncementComposer from "./AnnouncementComposer";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
@@ -35,6 +35,14 @@ import {
 } from "@/hooks/useAnnouncements";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+/** Tabs a personal chat shows under: the products it still has access to, else the product
+ * whose storefront it was opened from, else "Inactive". */
+const contactTabs = (c: DirectContact): string[] => {
+  if (c.active) return c.product_ids;
+  if (c.origin_product_id) return [c.origin_product_id];
+  return ["inactive"];
+};
 
 const errorMessage = (e: unknown) => (e instanceof Error && e.message ? e.message : null);
 
@@ -87,6 +95,31 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
     [products],
   );
 
+  const directFilters = useMemo(() => {
+    const tabs = [
+      ...products.map((p) => ({ key: p.id, label: p.title, full: false })),
+      { key: "inactive", label: t("messagesFilterInactive"), full: true },
+    ]
+      .map((tab, order) => {
+        const inTab = contacts.filter((c) => contactTabs(c).includes(tab.key));
+        const unreadChats = inTab.filter((c) => c.unread > 0);
+        return {
+          ...tab,
+          order,
+          present: inTab.length > 0,
+          unread: unreadChats.reduce((sum, c) => sum + c.unread, 0),
+          freshest: unreadChats.reduce((latest, c) => ((c.last_message_at ?? "") > latest ? c.last_message_at ?? "" : latest), ""),
+        };
+      })
+      .filter((tab) => tab.present);
+    tabs.sort((a, b) => {
+      if (!!a.unread !== !!b.unread) return a.unread ? -1 : 1;
+      if (a.unread && b.unread && a.freshest !== b.freshest) return b.freshest.localeCompare(a.freshest);
+      return a.order - b.order;
+    });
+    return tabs.map(({ key, label, full, unread }) => ({ key, label, full, unread }));
+  }, [products, contacts, t]);
+
   const categories: ChatCategory[] = useMemo(
     () => [
       {
@@ -105,13 +138,10 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
         key: "direct",
         label: t("messagesDirect"),
         icon: UserRound,
-        // Each product shows its buyers who still have access; lapsed ones sit under "Inactive".
-        filters: [
-          ...products
-            .filter((p) => contacts.some((c) => c.active && c.product_ids.includes(p.id)))
-            .map((p) => ({ key: p.id, label: p.title })),
-          ...(contacts.some((c) => !c.active) ? [{ key: "inactive", label: t("messagesFilterInactive"), full: true }] : []),
-        ],
+        // Each product shows its buyers who still have access and the people who wrote from its
+        // storefront; everyone else sits under "Inactive". A tab with unread chats moves to the
+        // front (the freshest first) and carries a badge until those chats are opened.
+        filters: directFilters,
         items: [...contacts]
           .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
           .map((c) => ({
@@ -121,12 +151,12 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
             timestamp: c.last_message_at ? new Date(c.last_message_at).getTime() : undefined,
             unread: c.unread,
             avatarUrl: c.avatar_url,
-            filterKeys: c.active ? c.product_ids : ["inactive"],
+            filterKeys: contactTabs(c),
           })),
         emptyText: t("messagesNoDirect"),
       },
     ],
-    [channels, t, contacts, products, productTitles],
+    [channels, t, contacts, productTitles, directFilters],
   );
 
   useEffect(() => {
@@ -234,7 +264,11 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-foreground">{openContact?.name}</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {openContact && !openContact.active ? t("messagesFilterInactive") : productTitles(openContact?.product_ids ?? [])}
+          {openContact && !openContact.active
+            ? openContact.origin_product_id
+              ? productTitles([openContact.origin_product_id])
+              : t("messagesFilterInactive")
+            : productTitles(openContact?.product_ids ?? [])}
         </span>
       </span>
     </div>

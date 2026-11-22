@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buyerHasProductAccess } from "../_shared/subscription.ts";
+import { buyerCanOpenMaterial } from "../_shared/subscription.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (profile?.type === 'buyer') {
-          if (await buyerHasProductAccess(supabase, profile.id, productId)) {
+          if (await buyerCanOpenMaterial(supabase, profile.id, productId, { path })) {
             authorized = true;
           }
         }

@@ -91,10 +91,6 @@ export async function buyerHasProductAccess(
   buyerProfileId: string,
   productId: string,
 ): Promise<boolean> {
-  if (await isSubscriptionProduct(supabase, productId)) {
-    return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
-  }
-
   const { data } = await supabase
     .from('simple_purchases')
     .select('id, is_trial, trial_ends_at, access_expires_at')
@@ -103,11 +99,21 @@ export async function buyerHasProductAccess(
     .eq('status', 'completed')
     .maybeSingle()
 
-  if (!data) return false
-  if (data.is_trial) {
-    return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
+  // A trial opens the product whatever its payment options are (one-time or recurring).
+  if (data?.is_trial) return trialOpen(data)
+  if (await isSubscriptionProduct(supabase, productId)) {
+    return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
   }
+  if (!data) return false
   return purchaseAccessOpen(data)
+}
+
+/**
+ * A trial is open until trial_ends_at. A "lesson" trial has no end date: it stays open until the
+ * seller answers that the trial lesson took place (then trial_ends_at is set to that moment).
+ */
+export function trialOpen(row: { trial_ends_at?: string | null }, now = new Date()): boolean {
+  return !row.trial_ends_at || new Date(row.trial_ends_at) > now
 }
 
 /** A seller-set end date closes a one-time purchase; NULL keeps it open for good. */
@@ -131,9 +137,7 @@ export async function buyerAccessibleProductIds(
   for (const row of purchases ?? []) {
     const productId = row.product_id as string
     if (row.is_trial) {
-      if (row.trial_ends_at && new Date(row.trial_ends_at) > now) {
-        ids.add(productId)
-      }
+      if (trialOpen(row, now)) ids.add(productId)
       continue
     }
     if (!purchaseAccessOpen(row, now)) continue
@@ -292,4 +296,36 @@ export async function buyerUsableScheduleIds(
       return !s.teacher_id && !!creator && creators.has(creator)
     })
     .map((s) => s.id)
+}
+
+/** Every completed row of this buyer for the product is a trial: they have no paid access. */
+export async function buyerTrialOnly(supabase: SupabaseClient, buyerProfileId: string, productId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('simple_purchases')
+    .select('is_trial')
+    .eq('buyer_profile_id', buyerProfileId)
+    .eq('product_id', productId)
+    .eq('status', 'completed')
+  const rows = (data ?? []) as { is_trial: boolean | null }[]
+  return rows.length > 0 && rows.every((r) => r.is_trial)
+}
+
+/**
+ * A material file may be opened: with paid access any of them; on a trial only those the seller
+ * marked "for the trial" (the rest are listed, dimmed with a lock, and do not open).
+ */
+export async function buyerCanOpenMaterial(
+  supabase: SupabaseClient,
+  buyerProfileId: string,
+  productId: string,
+  ref: { path?: string; materialId?: string },
+): Promise<boolean> {
+  if (!(await buyerHasProductAccess(supabase, buyerProfileId, productId))) return false
+  if (!(await buyerTrialOnly(supabase, buyerProfileId, productId))) return true
+  let q = supabase.from('materials').select('trial_open').eq('product_id', productId)
+  if (ref.materialId) q = q.eq('id', ref.materialId)
+  else if (ref.path) q = q.eq('file_url', ref.path)
+  else return false
+  const { data } = await q.limit(1)
+  return Boolean((data?.[0] as { trial_open?: boolean } | undefined)?.trial_open)
 }

@@ -99,8 +99,8 @@ export const AccountSettingsView = ({
 
   const activeProfileId = typeof window !== "undefined" ? localStorage.getItem("profile_id") : null;
   const isSeller = profileType === "creator" || profileType === "school" || role === "creator" || role === "school";
-  // An account keeps at least one profile; teachers have no deletable profile here.
-  const canManageProfileDeletion = role !== "teacher" && profiles.length > 0;
+  // Only a seller profile can be deleted: the buyer profile stays with the account for good.
+  const canManageProfileDeletion = isSeller && role !== "teacher" && profiles.length > 0;
   const canDeleteProfile = canManageProfileDeletion && profiles.length > 1;
   const lastProfileText = language === "ru"
     ? "Это единственный профиль аккаунта — его нельзя удалить."

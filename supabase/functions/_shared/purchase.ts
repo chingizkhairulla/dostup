@@ -1,5 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { onPurchaseCompleted } from './subscription.ts'
+import { afterPaidPurchase } from './trial.ts'
 
 export type CompletePurchaseResult =
   | { ok: true; already: boolean }
@@ -22,10 +23,13 @@ export async function completePurchase(
   if (data) {
     const { data: purchase } = await supabase
       .from('simple_purchases')
-      .select('product_id, buyer_profile_id, simple_user_id, amount')
+      .select('product_id, buyer_profile_id, simple_user_id, amount, is_trial')
       .eq('id', purchaseId)
       .maybeSingle()
-    if (purchase) await onPurchaseCompleted(supabase, purchase)
+    if (purchase) {
+      await onPurchaseCompleted(supabase, purchase)
+      if (!purchase.is_trial) await afterPaidPurchase(supabase, { id: purchaseId, ...purchase })
+    }
     return { ok: true, already: false }
   }
 

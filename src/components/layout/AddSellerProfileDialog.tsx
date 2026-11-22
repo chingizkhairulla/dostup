@@ -6,6 +6,7 @@ import SellerProfileSetupScreen from "@/components/auth/SellerProfileSetupScreen
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { type ProfileType } from "@/lib/creatorAuth";
+import { cn } from "@/lib/utils";
 
 type AddSellerProfileDialogProps = {
   open: boolean;
@@ -86,7 +87,13 @@ const AddSellerProfileDialog = ({
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-stretch justify-center sm:items-center sm:p-6">
+    // The role step is a card even on a phone, so a tap around it closes the window.
+    <div
+      className={cn(
+        "fixed inset-0 z-[80] flex justify-center sm:items-center sm:p-6",
+        step === "setup" ? "items-stretch" : "items-center p-4",
+      )}
+    >
       <div
         className="login-modal-backdrop absolute inset-0"
         onClick={close}
@@ -96,17 +103,23 @@ const AddSellerProfileDialog = ({
         role="dialog"
         aria-modal="true"
         aria-label={t("addSellerProfile")}
-        className="relative z-10 flex h-full w-full flex-col motion-safe:animate-fade-in sm:h-auto sm:max-w-md"
+        className={cn(
+          "relative z-10 flex w-full flex-col motion-safe:animate-fade-in sm:h-auto sm:max-w-md",
+          step === "setup" ? "h-full" : "max-w-md",
+        )}
       >
-        <button
-          type="button"
-          onClick={goBack}
-          disabled={creating}
-          className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex h-9 w-9 items-center justify-center rounded-xl text-[#1F2328] transition-colors hover:bg-[#F6F7F8] focus-ring disabled:opacity-50"
-          aria-label={t("back")}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        {/* The role step closes with a tap outside; only the profile step has a way back. */}
+        {step === "setup" && (
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={creating}
+            className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex h-9 w-9 items-center justify-center rounded-xl text-[#1F2328] transition-colors hover:bg-[#F6F7F8] focus-ring disabled:opacity-50"
+            aria-label={t("back")}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         {step === "setup" && pendingType ? (
           <SellerProfileSetupScreen
             saving={creating}
@@ -121,6 +134,7 @@ const AddSellerProfileDialog = ({
           />
         ) : (
           <RoleSelectionScreen
+            compact
             types={availableTypes}
             onSelect={async (type) => {
               if (type === "buyer") {
