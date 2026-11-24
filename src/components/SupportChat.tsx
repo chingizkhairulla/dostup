@@ -4,6 +4,9 @@ import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { supportUnreadKey } from "@/hooks/useSupportUnread";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 
+import MessengerInstallHint from "@/components/messages/MessengerInstallHint";
+import { useConversationVisible } from "@/components/messages/ConversationVisibility";
+
 interface Message {
   id: string;
   sender: "user" | "moderator";
@@ -31,6 +34,10 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | undefined>(initialThreadId);
   const [loading, setLoading] = useState(true);
+  const visible = useConversationVisible();
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const wasVisible = useRef(visible);
   // Each refresh signs the files again; keeping the first link stops photos and videos re-downloading.
   const links = useRef(new Map<string, { url: string; at: number }>());
 
@@ -58,7 +65,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       const resp = await fetch(`${baseUrl}/functions/v1/moderator-api`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ action: "support_get_messages", token: moderatorToken, thread_id: initialThreadId, mark_read: true }),
+        body: JSON.stringify({ action: "support_get_messages", token: moderatorToken, thread_id: initialThreadId, mark_read: visibleRef.current }),
       });
       const data = await resp.json();
       if (data?.success) setMessages(withStableLinks(data.messages));
@@ -66,14 +73,17 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       const resp = await fetch(`${baseUrl}/functions/v1/support-api`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ action: "get_thread", user_type: userType, user_ref: userRef, display_name: displayName }),
+        body: JSON.stringify({ action: "get_thread", user_type: userType, user_ref: userRef, display_name: displayName, mark_read: visibleRef.current }),
       });
       const data = await resp.json();
       if (data?.success) {
         setThreadId(data.thread.id);
         setMessages(withStableLinks(data.messages));
         // Opening the thread marks the replies as read: the header badge goes out right away.
-        queryClient.setQueryData(supportUnreadKey(userType, userRef), 0);
+        if (visibleRef.current) {
+          queryClient.setQueryData(supportUnreadKey(userType, userRef), 0);
+          queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
+        }
       }
     }
     if (!quiet) setLoading(false);
@@ -84,10 +94,16 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
     void load().catch(() => setLoading(false));
     const timer = window.setInterval(() => {
       // A missed refresh is simply retried on the next tick.
-      if (document.visibilityState === "visible") void load(true).catch(() => undefined);
+      if (visibleRef.current) void load(true).catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    const becameVisible = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (becameVisible) void load(true).catch(() => undefined);
+  }, [visible, load]);
 
   const who = { user_type: userType, user_ref: userRef, display_name: displayName };
 
@@ -152,6 +168,8 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
   }));
 
   return (
+    <>
+    {!asModerator && variant === "card" && <MessengerInstallHint />}
     <ChatThread
       messages={chatMessages}
       loading={loading}
@@ -161,6 +179,7 @@ const SupportChat = ({ userType, userRef, displayName, asModerator, threadId: in
       uploadFile={uploadFile}
       send={send}
     />
+    </>
   );
 };
 

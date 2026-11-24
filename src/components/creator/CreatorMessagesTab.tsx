@@ -20,7 +20,6 @@ import {
 import AnnouncementFeed from "@/components/announcements/AnnouncementFeed";
 import MessengerLayout, { type ChatCategory } from "@/components/messages/MessengerLayout";
 import DirectChat, { useDirectContacts } from "@/components/messages/DirectChat";
-import NoProductsEmptyState from "./NoProductsEmptyState";
 import AnnouncementComposer from "./AnnouncementComposer";
 import { parseAnnouncement } from "@/components/announcements/parseAnnouncement";
 import { DIRECT_PREFIX, previewOf } from "@/components/messages/chatPreview";
@@ -46,7 +45,7 @@ interface Props {
  * Author's messenger: one channel per product and the personal chats with buyers on the left,
  * the open chat with its composer on the right. Support lives behind its own header button.
  */
-const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
+const CreatorMessagesTab = (_props: Props) => {
   const { t } = useLanguage();
   const { data: products = [], isLoading: productsLoading } = useCreatorProducts();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -55,7 +54,7 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
   const productIds = useMemo(() => products.map((p) => p.id), [products]);
   const { data: allPosts = [] } = useAnnouncementsForProducts(productIds);
 
-  const { data: contacts = [] } = useDirectContacts("creator", !productsLoading && products.length > 0);
+  const { data: contacts = [] } = useDirectContacts("creator");
 
   const directPeer = selectedId?.startsWith(DIRECT_PREFIX) ? selectedId.slice(DIRECT_PREFIX.length) : null;
   const isChannel = !directPeer;
@@ -105,12 +104,13 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
         key: "direct",
         label: t("messagesDirect"),
         icon: UserRound,
-        // Each product shows its buyers who still have access; lapsed ones sit under "Inactive".
+        // "All" and each product show active buyers; expired access stays under "Inactive".
         filters: [
+          { key: "all", label: t("messagesFilterAll"), full: true },
           ...products
             .filter((p) => contacts.some((c) => c.active && c.product_ids.includes(p.id)))
             .map((p) => ({ key: p.id, label: p.title })),
-          ...(contacts.some((c) => !c.active) ? [{ key: "inactive", label: t("messagesFilterInactive"), full: true }] : []),
+          { key: "inactive", label: t("messagesFilterInactive"), full: true },
         ],
         items: [...contacts]
           .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || a.name.localeCompare(b.name))
@@ -121,7 +121,7 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
             timestamp: c.last_message_at ? new Date(c.last_message_at).getTime() : undefined,
             unread: c.unread,
             avatarUrl: c.avatar_url,
-            filterKeys: c.active ? c.product_ids : ["inactive"],
+            filterKeys: c.active ? ["all", ...c.product_ids] : ["inactive"],
           })),
         emptyText: t("messagesNoDirect"),
       },
@@ -207,18 +207,6 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
     );
   };
 
-  if (!productsLoading && products.length === 0) {
-    return (
-      <div className="space-y-3 px-4 py-6 md:px-6">
-        <div className="flex items-center gap-2">
-          <Megaphone className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">{t("messages")}</h2>
-        </div>
-        <NoProductsEmptyState section="announcements" onGoToProducts={onGoToProducts} />
-      </div>
-    );
-  }
-
   const openChannel = channels.find((c) => c.id === selectedId);
   const openContact = directPeer ? contacts.find((c) => c.peer_id === directPeer) : undefined;
 
@@ -260,6 +248,7 @@ const CreatorMessagesTab = ({ onGoToProducts }: Props) => {
         footer={
           !isChannel || !productId ? undefined : (
             <AnnouncementComposer
+              key={productId}
               productId={productId}
               editing={editing ? { id: editing.id, html: editing.content_html } : null}
               onCancelEdit={() => setEditing(null)}

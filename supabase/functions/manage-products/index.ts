@@ -12,6 +12,7 @@ import {
 } from '../_shared/session.ts'
 import { latestSubmissionsForPurchases, recordVerificationEvent } from '../_shared/purchase.ts'
 import { subscriptionGrantsAccess } from '../_shared/subscription.ts'
+import { normalizeGroupLink } from '../_shared/groupLink.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return optionsResponse()
@@ -51,9 +52,9 @@ Deno.serve(async (req) => {
     if (action === 'get') {
       const id = String(body.id || body.productId || '')
       if (!id) return json({ error: 'Missing id' }, 400)
-      const { data } = await supabase.from('products').select(CHECKOUT_COLUMNS).eq('id', id).maybeSingle()
+      if (caller.kind === 'creator' && !(await creatorOwnsProduct(supabase, caller.accountId, id))) return forbidden()
+      const { data } = await supabase.from('products').select(caller.kind === 'creator' ? CREATOR_PRODUCT_COLUMNS : CHECKOUT_COLUMNS).eq('id', id).maybeSingle()
       if (!data) return json({ error: 'Not found' }, 404)
-      if (caller.kind === 'creator' && data.creator_account_id !== caller.accountId) return forbidden()
       return json({ product: data })
     }
 
@@ -62,9 +63,12 @@ Deno.serve(async (req) => {
       if (denied) return denied
       const product = body.product && typeof body.product === 'object' ? body.product as Record<string, unknown> : null
       if (!product?.title) return json({ error: 'Missing title' }, 400)
+      if (product.after_access_enabled !== undefined && typeof product.after_access_enabled !== 'boolean') return json({ error: 'Bad after_access_enabled' }, 400)
       if (!product.category_id || !product.subcategory_id) {
         return json({ error: 'Missing category' }, 400)
       }
+      const groupUrl = normalizeGroupLink(product.after_access_url)
+      if (product.after_access_enabled && !groupUrl) return json({ error: 'Добавьте корректную https:// ссылку на группу' }, 400)
       const { data, error } = await supabase
         .from('products')
         .insert({
@@ -74,6 +78,8 @@ Deno.serve(async (req) => {
           price: product.price || 0,
           kaspi_link: product.kaspi_link || null,
           telegram_link: product.telegram_link || null,
+          after_access_enabled: product.after_access_enabled === true,
+          after_access_url: product.after_access_enabled ? groupUrl : null,
           has_schedule: product.has_schedule || false,
           is_active: product.is_active ?? true,
           // New products are always private; publishing is a separate, explicit step.
@@ -116,6 +122,15 @@ Deno.serve(async (req) => {
       delete updates.id
       delete updates.creator_account_id
       delete updates.creator_id
+      if ('after_access_enabled' in updates || 'after_access_url' in updates) {
+        const { data: existing } = await supabase.from('products').select('after_access_enabled, after_access_url').eq('id', id).single()
+        const enabled = updates.after_access_enabled ?? existing?.after_access_enabled ?? false
+        if (typeof enabled !== 'boolean') return json({ error: 'Bad after_access_enabled' }, 400)
+        const url = normalizeGroupLink(updates.after_access_url ?? existing?.after_access_url)
+        if (enabled && !url) return json({ error: 'Добавьте корректную https:// ссылку на группу' }, 400)
+        updates.after_access_enabled = enabled
+        updates.after_access_url = enabled ? url : null
+      }
       const { data, error } = await supabase.from('products').update(updates).eq('id', id).select().single()
       if (error) return json({ error: error.message }, 500)
       return json({ product: data })

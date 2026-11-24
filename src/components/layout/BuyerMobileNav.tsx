@@ -6,6 +6,8 @@ import { buyerSectionFromPath, type BuyerSectionKey } from "@/lib/navigation";
 import { useBuyerMobileNavItems } from "@/lib/mobileNavPreferences";
 import { ActiveProfileAvatar } from "@/components/layout/HeaderControls";
 import BuyerAccountSheet from "@/components/layout/BuyerAccountSheet";
+import { useMessengerUnread } from "@/hooks/useMessengerUnread";
+import MessageUnreadBadge from "@/components/messages/MessageUnreadBadge";
 
 export type BuyerMobileTab = BuyerSectionKey | "account";
 
@@ -18,6 +20,7 @@ interface BuyerMobileNavProps {
 
 const BuyerMobileNav = ({ activeTab, onTabChange, onNavigate }: BuyerMobileNavProps) => {
   const { t } = useLanguage();
+  const { total: unread } = useMessengerUnread();
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
   const resolved = activeTab ?? buyerSectionFromPath(location.pathname) ?? "home";
@@ -52,6 +55,7 @@ const BuyerMobileNav = ({ activeTab, onTabChange, onNavigate }: BuyerMobileNavPr
                   )}
                 >
                   <Icon className="h-6 w-6" strokeWidth={1.75} />
+                  {key === "announcements" && <MessageUnreadBadge count={unread} />}
                 </span>
               </Link>
             );

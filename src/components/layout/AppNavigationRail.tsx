@@ -18,6 +18,8 @@ import {
   ProfileAccountRows,
   useProfileAccountActions,
 } from "@/components/layout/ProfileAccountRows";
+import { useMessengerUnread } from "@/hooks/useMessengerUnread";
+import MessageUnreadBadge from "@/components/messages/MessageUnreadBadge";
 
 const RAIL_COLLAPSED = 64;
 const RAIL_EXPANDED = 240;
@@ -35,6 +37,7 @@ const AppNavigationRail = ({ activeSection, sellerTab }: AppNavigationRailProps)
   const location = useLocation();
   const navigate = useNavigate();
   const { profileType } = useSimpleAuth();
+  const { total: unread } = useMessengerUnread();
   const { profiles, runSwitch, createSeller } = useProfileAccountActions();
   const [expanded, setExpanded] = useState(() => {
     try {
@@ -94,6 +97,7 @@ const AppNavigationRail = ({ activeSection, sellerTab }: AppNavigationRailProps)
       )}
       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
         <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} />
+        {key === "announcements" && <MessageUnreadBadge count={unread} />}
       </div>
       {expanded && <span className="truncate text-[15px] leading-tight">{label}</span>}
     </Link>

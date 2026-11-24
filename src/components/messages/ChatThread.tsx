@@ -40,6 +40,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
 import { cn } from "@/lib/utils";
 
+import { FileDropZone } from "./FileDropZone";
+import { chatFileError, MAX_CHAT_ATTACHMENTS } from "@/lib/chatFiles";
+
 export interface ChatMessage {
   id: string;
   mine: boolean;
@@ -79,7 +82,7 @@ interface Props {
   composerNotice?: ReactNode;
 }
 
-const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS = MAX_CHAT_ATTACHMENTS;
 const newId = () => `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const kindOf = (file: File, source: "media" | "documents"): ChatAttachmentKind => {
@@ -122,6 +125,7 @@ const ChatThread = ({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const draft = useRef<string | null>(null);
+  const sendingRef = useRef(false);
 
   // Opens on the newest message and follows new ones while their photos load; a background
   // refresh with nothing new leaves the view alone.
@@ -167,15 +171,17 @@ const ChatThread = ({
       return prev.filter((a) => a.localId !== localId);
     });
 
-  const handleFiles = async (files: FileList | null, source: "media" | "documents") => {
-    if (!files?.length || !uploadFile) return;
-    const room = MAX_ATTACHMENTS - attachments.length - pending.length;
+  const handleFiles = async (files: FileList | File[] | null, source: "media" | "documents") => {
+    if (!files?.length || !uploadFile || !canAttach || composerNotice || sendingRef.current) return;
+    const room = MAX_ATTACHMENTS - attachmentsRef.current.length - pendingRef.current.length;
     const list = Array.from(files).slice(0, Math.max(room, 0));
     if (list.length < files.length) toast.error(t("announcementTooManyFiles", { count: MAX_ATTACHMENTS }));
     if (!list.length) return;
 
     await Promise.all(
       list.map(async (file) => {
+        const error = chatFileError(file);
+        if (error) { toast.error(`${file.name}: ${error}`); return; }
         const kind = kindOf(file, source);
         const entry: PendingUpload = {
           id: newId(),
@@ -184,13 +190,15 @@ const ChatThread = ({
           previewUrl: kind === "file" ? undefined : URL.createObjectURL(file),
           controller: new AbortController(),
         };
-        setPending((prev) => [...prev, entry]);
+        pendingRef.current = [...pendingRef.current, entry];
+        setPending(pendingRef.current);
         let kept = false;
         try {
           const attachment = await uploadFile(file, kind, entry.controller.signal);
           if (entry.controller.signal.aborted) return;
           // The uploaded tile keeps the local preview, so the picture never blinks to an icon.
-          setAttachments((prev) => [...prev, { ...attachment, localId: newId(), previewUrl: entry.previewUrl }]);
+          attachmentsRef.current = [...attachmentsRef.current, { ...attachment, localId: newId(), previewUrl: entry.previewUrl }];
+          setAttachments(attachmentsRef.current);
           kept = true;
         } catch (e) {
           // Cancelling is not a failure — the tile simply disappears.
@@ -202,7 +210,8 @@ const ChatThread = ({
             toast.error(t("announcementUploadError", { name: file.name }), { description: reason });
           }
         } finally {
-          setPending((prev) => prev.filter((p) => p.id !== entry.id));
+          pendingRef.current = pendingRef.current.filter(p => p.id !== entry.id);
+          setPending(pendingRef.current);
           if (!kept && entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
         }
       }),
@@ -227,7 +236,8 @@ const ChatThread = ({
     : !sending && pending.length === 0 && (text.trim().length > 0 || attachments.length > 0);
 
   const submit = async () => {
-    if (!canSend) return;
+    if (!canSend || sendingRef.current || pendingRef.current.length) return;
+    sendingRef.current = true;
     setSending(true);
     try {
       if (editing && onEdit) {
@@ -243,6 +253,7 @@ const ChatThread = ({
       console.error(e);
       toast.error(t(editing ? "chatEditError" : "chatSendError"));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -280,7 +291,8 @@ const ChatThread = ({
           : "flex flex-col h-[70vh] max-h-[70vh] border rounded-lg bg-card"
       }
     >
-      {variant === "card" && title && <div className="px-4 py-3 border-b font-semibold">{title}</div>}
+      {variant === "card" && title && <div className="shrink-0 px-4 py-3 border-b font-semibold">{title}</div>}
+      <FileDropZone enabled={canAttach && !!uploadFile && !composerNotice && !sending} onFiles={files => void handleFiles(files, "media")} className="flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
         <div>
           {loading ? (
@@ -324,7 +336,7 @@ const ChatThread = ({
                           onOpen={() => openMedia(m.attachments ?? [], a)}
                         />
                       ))}
-                      {m.text && <div>{m.text}</div>}
+                      {m.text && <div><MessageText text={m.text} /></div>}
                       <div
                         className={cn(
                           "flex justify-end gap-1.5 text-[11px] leading-none",
@@ -525,6 +537,7 @@ const ChatThread = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </FileDropZone>
     </div>
   );
 };
@@ -677,3 +690,9 @@ const MessageAttachment = ({
 };
 
 export default ChatThread;
+
+function MessageText({ text }: { text: string }) {
+  return <>{text.split(/(https:\/\/[^\s<>]+)/g).map((part, index) => part.startsWith("https://")
+    ? <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all">{part}</a>
+    : part)}</>;
+}

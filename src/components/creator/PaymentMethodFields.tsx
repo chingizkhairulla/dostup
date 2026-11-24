@@ -33,7 +33,7 @@ export default function PaymentMethodFields({ value, onChange, formatPhone, link
     <div className="space-y-3 border-t border-border/60 pt-4">
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground sm:text-base">Способ оплаты <span className="text-primary">*</span></p>
-        <p className="text-base leading-relaxed text-muted-foreground">Можно вписать несколько</p>
+        <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">Можно вписать несколько</p>
       </div>
       <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ оплаты">
         <Button type="button" variant={hasLink ? "default" : "toggle"} aria-pressed={hasLink}

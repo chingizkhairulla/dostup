@@ -5,6 +5,10 @@ import ChatThread, { type ChatMessage } from "@/components/messages/ChatThread";
 import { creatorCreds, invokeApi, studentCreds } from "@/lib/sessionApi";
 import { uploadChatVideo, type ChatAttachment, type ChatAttachmentKind } from "@/lib/chatUpload";
 
+import { toast } from "sonner";
+import { useConversationVisible } from "./ConversationVisibility";
+import { directUnreadIds } from "@/lib/directRead";
+
 export type DirectSide = "creator" | "buyer";
 
 export interface DirectContact {
@@ -29,10 +33,10 @@ export const directApi = <T,>(side: DirectSide, body: Record<string, unknown>) =
 /** Seller's buyers or buyer's sellers, with the last message and unread count per chat. */
 export function useDirectContacts(side: DirectSide, enabled = true) {
   return useQuery({
-    queryKey: ["direct-contacts", side],
+    queryKey: ["direct-contacts", side, localStorage.getItem("profile_id")],
     queryFn: async () => (await directApi<{ contacts: DirectContact[] }>(side, { action: "list_contacts" })).contacts ?? [],
     enabled,
-    refetchInterval: 20_000,
+    refetchInterval: 5_000,
   });
 }
 
@@ -42,6 +46,7 @@ interface StoredMessage {
   text: string;
   created_at: string;
   edited_at?: string | null;
+  read_at?: string | null;
   attachments?: ChatAttachment[];
 }
 
@@ -53,6 +58,11 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const visible = useConversationVisible();
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const acknowledged = useRef(new Set<string>());
+  const wasVisible = useRef(visible);
   // Every refresh comes back with freshly signed links. Swapping them in would make the browser
   // fetch each photo and video again every few seconds, so a file keeps the link it first got.
   const links = useRef(new Map<string, { url: string; at: number }>());
@@ -61,7 +71,7 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
     async (quiet = false) => {
       if (!quiet) setLoading(true);
       try {
-        const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId });
+        const data = await directApi<{ messages: StoredMessage[] }>(side, { action: "get_thread", peerId, markRead: false });
         const now = Date.now();
         const withStableLinks = (data.messages ?? []).map((m) => ({
           ...m,
@@ -74,8 +84,11 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
           }),
         }));
         setMessages(withStableLinks);
-        // The server has marked them read; refresh the list (the badge is already out, see below).
+        // Refresh counts without acknowledging messages in a hidden pane.
         queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
+        queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
+      } catch (error) {
+        if (!quiet) toast.error(error instanceof Error ? error.message : "Не удалось загрузить чат");
       } finally {
         if (!quiet) setLoading(false);
       }
@@ -85,16 +98,31 @@ const DirectChat = ({ side, peerId }: { side: DirectSide; peerId: string }) => {
 
   useEffect(() => {
     setMessages([]);
-    // Opening the chat reads it: the count beside it goes out at once, not after the round trip.
-    queryClient.setQueryData<DirectContact[]>(["direct-contacts", side], (list) =>
-      list?.map((c) => (c.peer_id === peerId && c.unread ? { ...c, unread: 0 } : c)),
-    );
+    acknowledged.current.clear();
+    links.current.clear();
     void load();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
+      if (visibleRef.current) void load(true);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [load, queryClient, side, peerId]);
+  }, [load]);
+
+  useEffect(() => {
+    const becameVisible = visible && !wasVisible.current;
+    wasVisible.current = visible;
+    if (becameVisible) void load(true);
+  }, [visible, load]);
+
+  useEffect(() => {
+    if (!visible || !messages.length) return;
+    const messageIds = directUnreadIds(messages, side, visible, acknowledged.current);
+    if (!messageIds.length) return;
+    void directApi(side, { action: "mark_read", peerId, messageIds }).then(() => {
+      messageIds.forEach(id => acknowledged.current.add(id));
+      queryClient.invalidateQueries({ queryKey: ["direct-contacts", side] });
+      queryClient.invalidateQueries({ queryKey: ["messenger-unread"] });
+    }).catch(() => { /* Retry after the next successful poll. */ });
+  }, [visible, messages, side, peerId, queryClient]);
 
   const uploadFile = async (file: File, kind: ChatAttachmentKind, signal: AbortSignal): Promise<ChatAttachment> => {
     if (kind === "video") {
