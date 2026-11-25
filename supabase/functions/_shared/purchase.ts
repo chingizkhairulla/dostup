@@ -1,5 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { onPurchaseCompleted } from './subscription.ts'
+import { applyAccessPeriod } from './accessPeriod.ts'
 
 export type CompletePurchaseResult =
   | { ok: true; already: boolean }
@@ -26,6 +27,7 @@ export async function completePurchase(
       .eq('id', purchaseId)
       .maybeSingle()
     if (purchase) await onPurchaseCompleted(supabase, purchase)
+    await applyAccessPeriod(supabase, purchaseId)
     return { ok: true, already: false }
   }
 

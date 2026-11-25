@@ -1,6 +1,6 @@
 import { json, optionsResponse } from '../_shared/http.ts'
 import { resolveUser, serviceClient } from '../_shared/session.ts'
-import { buyerHasProductAccess } from '../_shared/subscription.ts'
+import { buyerCanReviewProduct } from '../_shared/subscription.ts'
 
 const MAX_COMMENT_LENGTH = 2000
 
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
             .eq('buyer_profile_id', caller.userId)
             .maybeSingle()
           myReview = mine ?? null
-          canReview = await buyerHasProductAccess(supabase, caller.userId, productId)
+          canReview = await buyerCanReviewProduct(supabase, caller.userId, productId)
         }
       }
 
@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
       }
       const comment = String(body.comment || '').trim().slice(0, MAX_COMMENT_LENGTH) || null
 
-      const hasAccess = await buyerHasProductAccess(supabase, caller.userId, productId)
-      if (!hasAccess) return json({ error: 'Purchase required to leave a review' }, 403)
+      const canReview = await buyerCanReviewProduct(supabase, caller.userId, productId)
+      if (!canReview) return json({ error: 'Purchase required to leave a review' }, 403)
 
       const { error: upsertError } = await supabase
         .from('product_reviews')

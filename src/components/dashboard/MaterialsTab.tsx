@@ -565,9 +565,6 @@ const MaterialsTab = () => {
         <div className="text-center py-12">
           <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
           <p className="text-muted-foreground">{t("noMaterials")}</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t("purchaseToAccess")}
-          </p>
         </div>
       ) : (() => {
         const q = searchQuery.trim().toLowerCase();

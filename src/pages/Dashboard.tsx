@@ -250,7 +250,7 @@ const Dashboard = () => {
           ) : buyerSection === "materials" ? (
             <MaterialsTab />
           ) : (
-            <HomeTab onBrowseCourses={() => navigate("/")} />
+            <HomeTab />
           )}
         </main>
       </div>
@@ -263,7 +263,8 @@ const Dashboard = () => {
         <NotificationsTab lastViewedAt={lastViewedAt} purchasedProductIds={purchasedProductIds} />
       </NotificationsDialog>
 
-      {buyerSection === "materials" && (
+      {/* Shown once for each product the buyer gets access to, when they open «Материалы». */}
+      {!isAccountView && buyerSection === "materials" && (
         <MaterialsProtectionNotice buyerId={user.id} />
       )}
     </BuyerAppShell>

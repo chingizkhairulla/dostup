@@ -1,6 +1,6 @@
 import { Link, useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ShareProductButton from "@/components/share/ShareProductButton";
 import { ReportProductDialog } from "@/components/marketplace/ReportProductDialog";
 import { isUuid } from "@/lib/productShare";
@@ -9,6 +9,7 @@ import ProductCover from "@/components/marketplace/ProductCover";
 import PublicContainer from "@/components/marketplace/PublicContainer";
 import PublicFooter from "@/components/layout/PublicFooter";
 import ProductVideoPlayer, { preloadVideoBlob } from "@/components/media/ProductVideoPlayer";
+import ProductReviewsSection from "@/components/reviews/ProductReviewsSection";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ import { sellerInitial } from "@/lib/productCover";
 import { invokeApi } from "@/lib/sessionApi";
 import { rememberAuthNext } from "@/lib/creatorAuth";
 import { loginPath, loginState } from "@/lib/loginModal";
-import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play, Star } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, Folder, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
@@ -309,58 +310,6 @@ const ProductPage = () => {
       }
     });
   }, [productMedia]);
-
-  const buyerSessionToken = localStorage.getItem("creator_token") || "";
-
-  const reviewsQuery = useQuery({
-    queryKey: ["product-reviews", product?.id, buyerSessionToken],
-    queryFn: () =>
-      invokeApi<{
-        reviews: Array<{
-          id: string;
-          rating: number;
-          comment: string | null;
-          created_at: string;
-          buyer_display_name: string | null;
-          buyer_avatar_url: string | null;
-        }>;
-        avgRating: number;
-        reviewCount: number;
-        myReview: { rating: number; comment: string | null } | null;
-        canReview: boolean;
-      }>("manage-reviews", { action: "list", productId: product?.id ?? "", sessionToken: buyerSessionToken }),
-    enabled: Boolean(product?.id),
-  });
-
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewFormTouched, setReviewFormTouched] = useState(false);
-
-  useEffect(() => {
-    if (reviewsQuery.data?.myReview && !reviewFormTouched) {
-      setReviewRating(reviewsQuery.data.myReview.rating);
-      setReviewComment(reviewsQuery.data.myReview.comment || "");
-    }
-  }, [reviewsQuery.data?.myReview, reviewFormTouched]);
-
-  const submitReview = useMutation({
-    mutationFn: () =>
-      invokeApi("manage-reviews", {
-        action: "upsert",
-        productId: product?.id ?? "",
-        rating: reviewRating,
-        comment: reviewComment,
-        sessionToken: buyerSessionToken,
-      }),
-    onSuccess: () => {
-      toast.success(t("reviewsThanks"));
-      setReviewFormTouched(false);
-      queryClient.invalidateQueries({ queryKey: ["product-reviews", product?.id] });
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || t("reviewsError"));
-    },
-  });
 
   if (isLoading) {
     return (
@@ -714,110 +663,7 @@ const ProductPage = () => {
               </div>
             )}
 
-            <div className="mt-8">
-              <h2 className="mb-4 text-lg font-semibold text-foreground">{t("reviewsTitle")}</h2>
-
-              {(reviewsQuery.data?.reviewCount ?? 0) > 0 && (
-                <div className="mb-4 flex items-center gap-2">
-                  <Star className="h-5 w-5 fill-[#FFB020] text-[#FFB020]" />
-                  <span className="text-lg font-bold text-foreground">
-                    {reviewsQuery.data!.avgRating.toFixed(1)}
-                  </span>
-                  <span className="public-meta">
-                    {t("reviewsCount", { count: reviewsQuery.data!.reviewCount })}
-                  </span>
-                </div>
-              )}
-
-              {reviewsQuery.data?.canReview && (
-                <div className="mb-6 rounded-2xl border border-border p-4">
-                  <p className="mb-2 text-sm font-medium text-foreground">
-                    {reviewsQuery.data.myReview ? t("reviewsEdit") : t("reviewsWrite")}
-                  </p>
-                  <div className="mb-3 flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => {
-                          setReviewFormTouched(true);
-                          setReviewRating(star);
-                        }}
-                        className="focus-ring rounded"
-                        aria-label={String(star)}
-                      >
-                        <Star
-                          className={cn(
-                            "h-6 w-6",
-                            star <= reviewRating ? "fill-[#FFB020] text-[#FFB020]" : "text-muted-foreground/40",
-                          )}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={reviewComment}
-                    onChange={(e) => {
-                      setReviewFormTouched(true);
-                      setReviewComment(e.target.value);
-                    }}
-                    placeholder={t("reviewsCommentPlaceholder")}
-                    className="mb-3 min-h-[88px] w-full rounded-xl border border-border bg-transparent p-3 text-sm text-foreground placeholder:text-muted-foreground focus-ring"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={reviewRating === 0 || submitReview.isPending}
-                    onClick={() => submitReview.mutate()}
-                  >
-                    {submitReview.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t("reviewsSubmit")}
-                  </Button>
-                </div>
-              )}
-
-              {reviewsQuery.data && !reviewsQuery.data.canReview && user && profileType === "buyer" && (
-                <p className="mb-6 public-meta">{t("reviewsPurchaseRequired")}</p>
-              )}
-
-              {reviewsQuery.data && reviewsQuery.data.reviews.length === 0 ? (
-                <p className="public-meta">{t("reviewsEmpty")}</p>
-              ) : (
-                <div className="space-y-4">
-                  {reviewsQuery.data?.reviews.map((review) => (
-                    <div key={review.id} className="border-b border-border pb-4 last:border-0">
-                      <div className="mb-1 flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          {review.buyer_avatar_url && <AvatarImage src={review.buyer_avatar_url} alt="" />}
-                          <AvatarFallback className="text-[10px]">
-                            {sellerInitial(review.buyer_display_name || "")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm font-medium text-foreground">
-                          {review.buyer_display_name || t("author")}
-                        </span>
-                      </div>
-                      <div className="mb-1 flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            className={cn(
-                              "h-3.5 w-3.5",
-                              star <= review.rating ? "fill-[#FFB020] text-[#FFB020]" : "text-muted-foreground/30",
-                            )}
-                          />
-                        ))}
-                      </div>
-                      {review.comment && (
-                        <p className="public-body whitespace-pre-wrap break-words text-foreground/90">
-                          {review.comment}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ProductReviewsSection productId={product.id} />
 
             <div className="mt-8 lg:hidden">{sellerBlock}</div>
           </div>

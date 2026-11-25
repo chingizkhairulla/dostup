@@ -95,19 +95,44 @@ export async function buyerHasProductAccess(
     return buyerHasActiveSubscription(supabase, buyerProfileId, productId)
   }
 
+  // A product paid by period has one row per paid period; any open row gives access.
   const { data } = await supabase
     .from('simple_purchases')
     .select('id, is_trial, trial_ends_at, access_expires_at')
     .eq('buyer_profile_id', buyerProfileId)
     .eq('product_id', productId)
     .eq('status', 'completed')
-    .maybeSingle()
 
-  if (!data) return false
-  if (data.is_trial) {
-    return !!(data.trial_ends_at && new Date(data.trial_ends_at) > new Date())
-  }
-  return purchaseAccessOpen(data)
+  const now = new Date()
+  return (data ?? []).some((row) =>
+    row.is_trial
+      ? !!(row.trial_ends_at && new Date(row.trial_ends_at) > now)
+      : purchaseAccessOpen(row, now),
+  )
+}
+
+/**
+ * The buyer may review a product they can open now or once paid for, even if that paid time
+ * has run out (an overdue subscription or period product). Access the seller closed
+ * (status 'revoked') does not count.
+ */
+export async function buyerCanReviewProduct(
+  supabase: SupabaseClient,
+  buyerProfileId: string,
+  productId: string,
+): Promise<boolean> {
+  if (await buyerHasProductAccess(supabase, buyerProfileId, productId)) return true
+
+  const { count: paid } = await supabase
+    .from('simple_purchases')
+    .select('id', { count: 'exact', head: true })
+    .eq('buyer_profile_id', buyerProfileId)
+    .eq('product_id', productId)
+    .eq('status', 'completed')
+  if ((paid ?? 0) > 0) return true
+
+  const sub = await getSubscription(supabase, buyerProfileId, productId)
+  return Boolean(sub)
 }
 
 /** A seller-set end date closes a one-time purchase; NULL keeps it open for good. */

@@ -4,6 +4,9 @@
  * Запуск:
  *   npm run seed:preview   — наполнить базу тестовыми покупателями, товарами и чеками
  *   npm run clean:preview  — удалить все тестовые данные одной командой
+ *   npx tsx scripts/manage-preview-data.ts --variety-only [--clean]
+ *                          — только разнообразные покупки, подписки и отзывы (scripts/preview-variety.ts),
+ *                            без supabase db query: хватает service role ключа
  */
 
 import { readFileSync, existsSync } from "node:fs";
@@ -11,9 +14,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { cleanVariety, seedVariety } from "./preview-variety.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isClean = process.argv.includes("--clean");
+const varietyOnly = process.argv.includes("--variety-only");
 const sqlFile = isClean ? "clean-preview.sql" : "seed-preview.sql";
 const sqlPath = join(__dirname, sqlFile);
 
@@ -77,15 +82,26 @@ async function syncStorageReceipts(clean: boolean) {
   console.log(`[Preview Storage] Чеки успешно синхронизированы!`);
 }
 
+function serviceClient() {
+  return createClient(`https://${projectRef}.supabase.co`, getServiceRoleKey(), {
+    auth: { persistSession: false },
+  });
+}
+
 async function main() {
   console.log(`[Preview DB] ${isClean ? "Очистка" : "Наполнение"} тестовых данных для проекта ${projectRef}...`);
 
   try {
-    execSync(`npx supabase db query --project-ref "${projectRef}" --file "${sqlPath}"`, {
-      stdio: "inherit",
-      cwd: join(__dirname, ".."),
-    });
-    await syncStorageReceipts(isClean);
+    // The variety rows reference seed-preview.sql rows, so they go in after it and out before it.
+    if (isClean) await cleanVariety(serviceClient());
+    if (!varietyOnly) {
+      execSync(`npx supabase db query --project-ref "${projectRef}" --file "${sqlPath}"`, {
+        stdio: "inherit",
+        cwd: join(__dirname, ".."),
+      });
+      await syncStorageReceipts(isClean);
+    }
+    if (!isClean) await seedVariety(serviceClient());
     console.log(`[Preview DB] Все операции успешно завершены!`);
   } catch (e: any) {
     console.error(`[Preview DB] Ошибка выполнения:`, e?.message || e);

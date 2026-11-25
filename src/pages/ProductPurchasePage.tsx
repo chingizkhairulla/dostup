@@ -74,6 +74,8 @@ const ProductPurchasePage = () => {
   const effectiveTrialDays = activeOption ? activeOption.trial_days : product?.trial_days;
 
   const teacherParam = searchParams.get("teacher");
+  // Opened from «Покупки» to pay the next subscription period ahead of time.
+  const renew = searchParams.get("renew") === "1";
   const canChoose = teacherParam === "choice";
   
   const [teacherId, setTeacherId] = useState<string | null>(null);
@@ -176,7 +178,8 @@ const ProductPurchasePage = () => {
         });
         const data = result.purchase;
 
-        if (data) {
+        // Paying the next period: the last paid row stays as it is and a new one is made on submit.
+        if (data && !(renew && data.status === "completed")) {
           setPurchaseId(data.id);
           setReceiptSubmission(data.latest_submission ?? null);
           if (data.status === "completed") {
@@ -190,7 +193,7 @@ const ProductPurchasePage = () => {
     };
 
     checkExistingPurchase();
-  }, [user, productId, navigate]);
+  }, [user, productId, navigate, renew]);
 
   // Poll pending purchase until the creator confirms (realtime is closed after RLS lockdown)
   useEffect(() => {

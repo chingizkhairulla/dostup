@@ -34,7 +34,7 @@ const MaterialsProtectionNotice = ({ buyerId }: MaterialsProtectionNoticeProps) 
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-2xl sm:rounded-2xl">
+      <DialogContent hideCloseButton className="w-[calc(100%-2rem)] max-w-md rounded-2xl sm:rounded-2xl">
         <DialogHeader>
           <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
             <AlertTriangle className="w-6 h-6 text-destructive" />
@@ -44,8 +44,8 @@ const MaterialsProtectionNotice = ({ buyerId }: MaterialsProtectionNoticeProps) 
           </DialogTitle>
           <DialogDescription className="text-center leading-relaxed">
             {isKk
-              ? "Материалдарды скриншот жасау, экранды жазу және үшінші тарапқа жіберуге тыйым салынады. Барлық материалдарда сіздің деректеріңізбен су таңбасы бар. Бұзу қол жеткізуді бұғаттауға әкеледі."
-              : "Скриншоты, запись экрана и пересылка материалов третьим лицам запрещены. Все материалы содержат водяной знак с вашими данными. Нарушение повлечёт блокировку доступа."}
+              ? "Материалдарды скриншот жасау, экранды жазу және үшінші тарапқа жіберуге тыйым салынады. Бұзу қол жеткізуді бұғаттауға әкеледі."
+              : "Скриншоты, запись экрана и пересылка материалов третьим лицам запрещены. Нарушение повлечёт блокировку доступа."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

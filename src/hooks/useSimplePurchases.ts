@@ -4,12 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSimpleAuth } from "@/contexts/SimpleAuthContext";
 import { creatorCreds, sessionCreds, studentCreds, invokeApi } from "@/lib/sessionApi";
 
-interface SimplePurchase {
+export interface SimplePurchase {
   id: string;
   product_id: string;
   status: string;
   amount: number;
   created_at: string;
+  confirmed_at?: string | null;
+  access_expires_at?: string | null;
+  is_trial?: boolean | null;
+  trial_ends_at?: string | null;
+  has_access?: boolean;
+  period_days?: number | null;
+  period_interval?: string | null;
   can_choose_teacher: boolean | null;
   assigned_teacher_id: string | null;
   product: {
@@ -132,9 +139,34 @@ export const useSimplePurchases = () => {
   });
 };
 
+/**
+ * Purchases for the «Покупки» tab: also returns a period product whose paid time ran out
+ * (has_access false), so the buyer can pay for the next period.
+ */
+export const usePurchaseHistory = () => {
+  const { user } = useSimpleAuth();
+
+  return useQuery({
+    queryKey: ["purchase-history", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as SimplePurchase[];
+      const data = await invokeApi<{ purchases: SimplePurchase[] }>("checkout", {
+        action: "list_my_purchases",
+        ...studentCreds(),
+        status: "completed",
+        includeRenewable: true,
+      });
+      return data.purchases ?? [];
+    },
+    enabled: !!user,
+  });
+};
+
 export interface BuyerSubscription {
   id: string;
   product_id: string;
+  created_at?: string | null;
+  price: number;
   status: string;
   current_period_end: string;
   current_period_start: string;
