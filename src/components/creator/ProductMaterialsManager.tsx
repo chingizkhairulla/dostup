@@ -1,5 +1,6 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
-import { Progress } from "@/components/ui/progress";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import MaterialAddForm from "@/components/materials/MaterialAddForm";
+import MaterialScheduleControl from "@/components/materials/MaterialScheduleControl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,17 +22,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useProductMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial, uploadMaterialFile } from "@/hooks/useMaterials";
+import { useProductMaterials, useUpdateMaterial, useDeleteMaterial } from "@/hooks/useMaterials";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Plus, FileText, Folder, Trash2, Edit, Loader2, Upload, GripVertical, ChevronLeft, FolderOpen, Download, X, Clock, Link as LinkIcon, Type, Clipboard, ImagePlus } from "lucide-react";
+import { Plus, FileText, Folder, Trash2, Edit, Loader2, GripVertical, ChevronLeft, FolderOpen, Download, X, Link as LinkIcon, Type } from "lucide-react";
 import { ExternalLink } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { requestMaterialToken, buildProxyUrl } from "@/lib/materialToken";
 import { isS3Path, isOfficeDocument, buildS3RedirectUrl, buildStorageRedirectUrl, parseStoragePath } from "@/lib/fileRedirect";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { localMaterialDateTime, scheduledMaterialDate } from "@/lib/materialDraft";
   import MaterialsSearchBar from "@/components/materials/MaterialsSearchBar";
   import {
     ContextMenu,
@@ -69,38 +71,20 @@ import { Switch } from "@/components/ui/switch";
     teacher_allow_download?: boolean;
   }
  
-interface FilePermission {
-  allow_download: boolean;
-  teacher_allow_download: boolean;
-}
-
-interface FileEntry {
-  file: File;
-  customName: string;
-  permissions: FilePermission;
-}
-
 interface FormData {
    title: string;
    itemType: ItemType;
-   files: File[];
-   filePermissions: FilePermission[];
-   fileEntries: FileEntry[];
    allow_download: boolean;
    teacher_allow_download: boolean;
    scheduleAccess: boolean;
    availableAt: string;
    linkUrl: string;
    content: string;
-   coverEnabled: boolean;
-   coverFile: File | null;
-   coverUrl: string;
  }
  
  const ProductMaterialsManager = ({ productId, productTitle, isOpen, onClose, mode = "edit", initialFolderId = null }: ProductMaterialsManagerProps) => {
    const { t, language } = useLanguage();
    const { data: allMaterials = [], isLoading } = useProductMaterials(productId, { creatorOnly: true });
-   const createMaterial = useCreateMaterial();
    const updateMaterial = useUpdateMaterial();
    const deleteMaterial = useDeleteMaterial();
    
@@ -108,11 +92,7 @@ interface FormData {
    const [editingId, setEditingId] = useState<string | null>(null);
    const [deletingMaterial, setDeletingMaterial] = useState<{ id: string; title: string; file_url?: string | null } | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
-   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-   const fileInputRef = useRef<HTMLInputElement>(null);
-   const coverInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState(false);
   const [folderRenameValue, setFolderRenameValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,66 +101,13 @@ interface FormData {
     const [formData, setFormData] = useState<FormData>({
       title: "",
       itemType: "file",
-      files: [],
-      filePermissions: [],
-      fileEntries: [],
       allow_download: true,
       teacher_allow_download: false,
       scheduleAccess: false,
       availableAt: "",
       linkUrl: "",
       content: "",
-      coverEnabled: false,
-      coverFile: null,
-      coverUrl: "",
     });
-
-  const addFilesToForm = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files);
-    if (arr.length === 0) return;
-    const newEntries: FileEntry[] = arr.map(file => ({
-      file,
-      customName: "",
-      permissions: { allow_download: true, teacher_allow_download: false }
-    }));
-    setFormData(prev => ({
-      ...prev,
-      fileEntries: [...prev.fileEntries, ...newEntries]
-    }));
-    toast.success(arr.length > 1 ? `Добавлено файлов: ${arr.length}` : "Файл добавлен");
-  }, []);
-
-  const getFilesFromClipboard = useCallback((clipboardData: DataTransfer | null): File[] => {
-    if (!clipboardData) return [];
-    const directFiles = Array.from(clipboardData.files || []).filter(file => file.size > 0 || file.type);
-    if (directFiles.length > 0) return directFiles;
-
-    return Array.from(clipboardData.items || []).reduce<File[]>((acc, item) => {
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file) acc.push(file);
-      }
-      return acc;
-    }, []);
-  }, []);
-
-  // Global paste listener: when the add form is open and a file/folder is being created,
-  // pasting a file anywhere in the dialog adds it to the form.
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: ClipboardEvent) => {
-      if (!isAdding) return;
-      if (formData.itemType !== "file" && formData.itemType !== "folder") return;
-      const files = getFilesFromClipboard(e.clipboardData);
-      if (files.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        addFilesToForm(files);
-      }
-    };
-    window.addEventListener("paste", handler, true);
-    return () => window.removeEventListener("paste", handler, true);
-  }, [isOpen, isAdding, addFilesToForm, getFilesFromClipboard, formData.itemType]);
 
   // Auto-open add form when in "add" mode
   useEffect(() => {
@@ -241,188 +168,7 @@ interface FormData {
    };
  
     const resetForm = () => {
-      setFormData({ title: "", itemType: "file", files: [], filePermissions: [], fileEntries: [], allow_download: true, teacher_allow_download: false, scheduleAccess: false, availableAt: "", linkUrl: "", content: "", coverEnabled: false, coverFile: null, coverUrl: "" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      if (coverInputRef.current) coverInputRef.current.value = "";
-    };
- 
-    const handleAdd = async (e: React.FormEvent) => {
-      e.preventDefault();
-      
-      if (formData.itemType === "folder" && !formData.title) {
-        toast.error("Введите название папки");
-        return;
-      }
-      
-      if (formData.itemType === "file" && formData.fileEntries.length === 0) {
-        toast.error("Выберите файл(ы)");
-        return;
-      }
-
-      if (formData.itemType === "link" && !formData.linkUrl.trim()) {
-        toast.error("Введите ссылку или текст");
-        return;
-      }
-
-      if (formData.itemType === "text" && !formData.content) {
-        toast.error("Введите текст");
-        return;
-      }
-
-      if (
-        (formData.itemType === "file" || formData.itemType === "link") &&
-        formData.coverEnabled &&
-        !formData.coverFile &&
-        !formData.coverUrl
-      ) {
-        toast.error(language === "kk" ? "Мұқаба суретін таңдаңыз" : "Выберите изображение для обложки");
-        return;
-      }
-
-      try {
-        setIsUploading(true);
-        setUploadProgress(0);
-        const coverUrl =
-          (formData.itemType === "file" || formData.itemType === "link") && formData.coverEnabled
-            ? formData.coverFile
-              ? await uploadMaterialFile(formData.coverFile, productId)
-              : formData.coverUrl || null
-            : null;
-        // Новые материалы вставляются в самый верх текущей папки/корня.
-        // Берём минимальный order_index среди соседей и опускаемся ниже него.
-        const siblingsHere = (allMaterials as Material[]).filter(
-          (m) => (m.parent_id ?? null) === (addTargetFolderId ?? null)
-        );
-        const minSiblingIdx = siblingsHere.length
-          ? Math.min(...siblingsHere.map((s) => s.order_index ?? 0))
-          : 0;
-        const topIndex = siblingsHere.length ? minSiblingIdx - 1 : 0;
-        if (formData.itemType === "link") {
-          const raw = formData.linkUrl.trim();
-          // Поле принимает и URL, и обычный текст. Если это URL — создаём ссылку,
-          // иначе сохраняем как текстовый материал.
-          const isUrl = /^(https?:\/\/|\/\/)/i.test(raw) || /^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(raw);
-          if (isUrl) {
-            const normalized = /^(https?:\/\/|\/\/)/i.test(raw) ? raw : `https://${raw}`;
-            await createMaterial.mutateAsync({
-              product_id: productId,
-              title: formData.title.trim() || normalized,
-              type: "link",
-              content: null,
-              file_url: normalized,
-              cover_url: coverUrl,
-              order_index: topIndex,
-              parent_id: addTargetFolderId,
-              available_at: formData.scheduleAccess && formData.availableAt
-                ? new Date(formData.availableAt).toISOString()
-                : null,
-            });
-            toast.success("Ссылка добавлена!");
-          } else {
-            await createMaterial.mutateAsync({
-              product_id: productId,
-              title: formData.title.trim() || raw.slice(0, 80),
-              type: "text",
-              content: raw,
-              file_url: null,
-              cover_url: coverUrl,
-              order_index: topIndex,
-              parent_id: addTargetFolderId,
-              available_at: formData.scheduleAccess && formData.availableAt
-                ? new Date(formData.availableAt).toISOString()
-                : null,
-            });
-            toast.success("Текст добавлен!");
-          }
-        } else if (formData.itemType === "text") {
-          await createMaterial.mutateAsync({
-            product_id: productId,
-            title: formData.title.trim() || formData.content.slice(0, 80),
-            type: "text",
-            content: formData.content,
-            file_url: null,
-            order_index: topIndex,
-            parent_id: addTargetFolderId,
-            available_at: formData.scheduleAccess && formData.availableAt 
-              ? new Date(formData.availableAt).toISOString() 
-              : null,
-          });
-          toast.success("Текст добавлен!");
-        } else if (formData.itemType === "folder") {
-          // Create folder
-          const folder = await createMaterial.mutateAsync({
-            product_id: productId,
-            title: formData.title,
-            type: "folder",
-            content: null,
-            file_url: null,
-            order_index: topIndex,
-            parent_id: addTargetFolderId,
-          });
-
-          // If files selected, add them to the folder
-          if (formData.fileEntries.length > 0) {
-            for (let i = 0; i < formData.fileEntries.length; i++) {
-              const entry = formData.fileEntries[i];
-               const fileUrl = await uploadMaterialFile(entry.file, productId, (p) => setUploadProgress(p));
-              await createMaterial.mutateAsync({
-                product_id: productId,
-                title: entry.customName || entry.file.name,
-                 type: "file",
-                 content: null,
-                 file_url: fileUrl,
-                 cover_url: coverUrl,
-                 order_index: i,
-                 parent_id: folder.id,
-                 allow_view: true,
-                 allow_download: entry.permissions.allow_download,
-                 teacher_allow_download: entry.permissions.teacher_allow_download,
-                file_size: entry.file.size,
-               });
-            }
-          }
-
-          toast.success(`Папка "${formData.title}" создана!`);
-        } else {
-          // Upload files
-           for (let i = 0; i < formData.fileEntries.length; i++) {
-             const entry = formData.fileEntries[i];
-             const fileUrl = await uploadMaterialFile(entry.file, productId, (p) => setUploadProgress(p));
-             await createMaterial.mutateAsync({
-               product_id: productId,
-               title: entry.customName || entry.file.name,
-               type: "file",
-               content: null,
-               file_url: fileUrl,
-               cover_url: coverUrl,
-                // Сохраняем порядок выбора: первый файл оказывается сверху,
-                // остальные — ниже него, но всё ещё выше существующих материалов.
-                order_index: topIndex - (formData.fileEntries.length - 1 - i),
-                parent_id: addTargetFolderId,
-                allow_view: true,
-                allow_download: entry.permissions.allow_download,
-                teacher_allow_download: entry.permissions.teacher_allow_download,
-                available_at: formData.scheduleAccess && formData.availableAt 
-                  ? new Date(formData.availableAt).toISOString() 
-                  : null,
-                file_size: entry.file.size,
-              });
-           }
-          toast.success(formData.fileEntries.length > 1 ? "Файлы добавлены!" : "Файл добавлен!");
-        }
-
-        setIsAdding(false);
-        resetForm();
-        if (mode === "add") {
-          onClose();
-        }
-      } catch (err) {
-        console.error(err);
-        const detail = err instanceof Error && err.message ? err.message : "";
-        toast.error(detail ? `Ошибка при добавлении: ${detail}` : "Ошибка при добавлении");
-      } finally {
-        setIsUploading(false);
-      }
+      setFormData({ title: "", itemType: "file", allow_download: true, teacher_allow_download: false, scheduleAccess: false, availableAt: "", linkUrl: "", content: "" });
     };
  
      const handleEdit = (material: Material) => {
@@ -430,34 +176,18 @@ interface FormData {
         setFormData({
           title: material.title,
           itemType: (material.type === "folder" || material.type === "link" || material.type === "text") ? material.type as ItemType : "file",
-          files: [],
-          filePermissions: [],
-          fileEntries: [],
           allow_download: material.allow_download !== false,
           teacher_allow_download: material.teacher_allow_download !== false,
           scheduleAccess: !!material.available_at,
-          availableAt: material.available_at ? new Date(material.available_at).toISOString().slice(0, 16) : "",
+          availableAt: material.available_at ? localMaterialDateTime(new Date(material.available_at)) : "",
           linkUrl: material.type === "link" ? (material.file_url || "") : "",
           content: material.type === "text" ? (material.content || "") : "",
-          coverEnabled: !!material.cover_url,
-          coverFile: null,
-          coverUrl: material.cover_url || "",
         });
      };
  
     const handleUpdate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!editingId || !formData.title) return;
-      if (
-        (formData.itemType === "file" || formData.itemType === "link") &&
-        formData.coverEnabled &&
-        !formData.coverFile &&
-        !formData.coverUrl
-      ) {
-        toast.error(language === "kk" ? "Мұқаба суретін таңдаңыз" : "Выберите изображение для обложки");
-        return;
-      }
-  
        try {
           const updateData: Partial<Material> & { id: string; productId: string } = {
             id: editingId,
@@ -466,20 +196,11 @@ interface FormData {
             allow_view: true,
             allow_download: formData.allow_download,
             teacher_allow_download: false,
-            available_at: formData.scheduleAccess && formData.availableAt 
-              ? new Date(formData.availableAt).toISOString() 
-              : null,
+            ...((formData.itemType === "file" || formData.itemType === "link") ? { available_at: scheduledMaterialDate(formData.scheduleAccess, formData.availableAt) } : {}),
           };
 
           if (formData.itemType === "link") {
             updateData.file_url = formData.linkUrl;
-          }
-          if (formData.itemType === "file" || formData.itemType === "link") {
-            updateData.cover_url = formData.coverEnabled
-              ? formData.coverFile
-                ? await uploadMaterialFile(formData.coverFile, productId)
-                : formData.coverUrl || null
-              : null;
           }
           if (formData.itemType === "text") {
             updateData.content = formData.content;
@@ -555,319 +276,12 @@ interface FormData {
     }
   }, []);
 
-   const renderCoverControl = () => (
-     <div className="space-y-2">
-       <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-         <input
-           ref={coverInputRef}
-           type="file"
-           accept="image/*"
-           className="hidden"
-           onChange={(event) => {
-             const file = event.target.files?.[0] ?? null;
-             if (!file) return;
-             if (!file.type.startsWith("image/")) {
-               toast.error(language === "kk" ? "Сурет файлын таңдаңыз" : "Выберите файл изображения");
-               event.target.value = "";
-               return;
-             }
-             setFormData((prev) => ({
-               ...prev,
-               coverEnabled: true,
-               coverFile: file,
-             }));
-           }}
-         />
-         <Button
-           type="button"
-           variant="outline"
-           size="sm"
-           className="min-w-0 gap-2"
-           onClick={() => coverInputRef.current?.click()}
-         >
-           <ImagePlus className="h-4 w-4" />
-           <span className="truncate">
-             {language === "kk" ? "Мұқаба қосу" : "Добавить обложку"}
-           </span>
-         </Button>
-         <Switch
-           checked={formData.coverEnabled}
-           onCheckedChange={(checked) =>
-             setFormData((prev) => ({ ...prev, coverEnabled: checked }))
-           }
-           aria-label={language === "kk" ? "Мұқабаны пайдалану" : "Использовать обложку"}
-         />
-       </div>
-       {formData.coverEnabled && (formData.coverFile || formData.coverUrl) && (
-         <p className="truncate px-1 text-xs text-muted-foreground">
-           {formData.coverFile?.name || (language === "kk" ? "Мұқаба қосылды" : "Обложка добавлена")}
-         </p>
-       )}
-     </div>
-   );
-
-   const renderAddForm = () => (
-     <form onSubmit={handleAdd} className="space-y-4">
-       <div className="space-y-3">
-          <RadioGroup
-            value={formData.itemType}
-            onValueChange={(value: ItemType) => setFormData(prev => ({ ...prev, itemType: value, files: [], fileEntries: [] }))}
-            className="flex flex-wrap gap-4"
-            aria-label={language === "kk" ? "Қосу түрі" : "Тип добавления"}
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="file" id="type-file" />
-              <Label htmlFor="type-file" className="cursor-pointer flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Файл
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="folder" id="type-folder" />
-              <Label htmlFor="type-folder" className="cursor-pointer flex items-center gap-2">
-                <Folder className="w-4 h-4" />
-                Папка
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="link" id="type-link" />
-              <Label htmlFor="type-link" className="cursor-pointer flex items-center gap-2">
-                <LinkIcon className="w-4 h-4" />
-                {language === "kk" ? "Сілтеме" : "Ссылка"}
-              </Label>
-            </div>
-          </RadioGroup>
-        </div>
-  
-        {formData.itemType === "folder" && (
-          <div className="space-y-2">
-            <Label>Название папки *</Label>
-            <Input
-              placeholder="Введите название папки"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              required
-            />
-          </div>
-        )}
-
-        {formData.itemType === "link" && (
-          <>
-          <div className="space-y-2">
-              <Label>Название (необязательно)</Label>
-              <Input
-                placeholder={language === "kk" ? "Бос болса — сілтеменің өзі көрсетіледі" : "Если пусто — показывается сама ссылка"}
-                value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{language === "kk" ? "Сілтеме *" : "Ссылка *"}</Label>
-              <Textarea
-                placeholder="https://..."
-                value={formData.linkUrl}
-                onChange={(e) => setFormData(prev => ({ ...prev, linkUrl: e.target.value }))}
-                rows={4}
-                required
-              />
-            </div>
-          </>
-        )}
- 
-        {(formData.itemType === "file" || formData.itemType === "folder") && <div className="space-y-2">
-          <Label>
-            {formData.itemType === "folder" 
-              ? "Файлы в папку (опционально)" 
-              : "Выберите файл(ы) *"}
-          </Label>
-         {/* Selected files list */}
-         {formData.fileEntries.length > 0 && (
-             <div className="space-y-2 mb-3">
-               {formData.fileEntries.map((entry, index) => (
-                <div key={index} className="bg-muted/50 rounded-md px-3 py-2 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <FileText className="w-4 h-4 text-primary flex-shrink-0" />
-                    <Input
-                      placeholder={language === "kk" ? "Файл атауын енгізіңіз" : "Введите название файла"}
-                      value={entry.customName}
-                      onChange={(e) => {
-                        setFormData(prev => {
-                          const newEntries = [...prev.fileEntries];
-                          newEntries[index] = { ...newEntries[index], customName: e.target.value };
-                          return { ...prev, fileEntries: newEntries };
-                        });
-                      }}
-                      className="flex-1 h-8 text-sm"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0"
-                      onClick={() => {
-                        setFormData(prev => ({
-                          ...prev,
-                          fileEntries: prev.fileEntries.filter((_, i) => i !== index)
-                        }));
-                      }}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                   </div>
-                   <div className="pl-6 space-y-2">
-                     <p className="text-xs font-medium text-muted-foreground">Для ученика:</p>
-                     <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <Checkbox
-                        checked={entry.permissions.allow_download}
-                        onCheckedChange={(checked) => {
-                          setFormData(prev => {
-                            const newEntries = [...prev.fileEntries];
-                            newEntries[index] = { 
-                              ...newEntries[index], 
-                              permissions: { ...newEntries[index].permissions, allow_download: !!checked }
-                            };
-                            return { ...prev, fileEntries: newEntries };
-                          });
-                        }}
-                      />
-                      <Download className="w-3 h-3" />
-                      Скачивание
-                    </label>
-                  </div>
-                 </div>
-               ))}
-             </div>
-         )}
-
-           {/* Drop zone with custom right-click menu (Выбрать / Вставить). */}
-           <ContextMenu>
-             <ContextMenuTrigger asChild>
-               <div
-                 className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragging ? 'border-primary bg-primary/5' : 'border-border'}`}
-                 onClick={() => fileInputRef.current?.click()}
-                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-                 onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-                 onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
-                 onDrop={(e) => {
-                   e.preventDefault();
-                   e.stopPropagation();
-                   setIsDragging(false);
-                   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                     addFilesToForm(e.dataTransfer.files);
-                   }
-                 }}
-               >
-                 <input
-                   ref={fileInputRef}
-                   type="file"
-                   multiple
-                   onChange={(e) => {
-                     if (e.target.files && e.target.files.length > 0) {
-                       addFilesToForm(e.target.files);
-                     }
-                     if (fileInputRef.current) fileInputRef.current.value = "";
-                   }}
-                   className="hidden"
-                   id="file-upload"
-                 />
-                 <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                 <p className="text-sm text-muted-foreground">
-                   {formData.fileEntries.length > 0 ? "Добавить ещё файл(ы) — нажмите, перетащите или вставьте (Ctrl+V)" : "Нажмите, перетащите или вставьте (Ctrl+V) файл(ы)"}
-                 </p>
-               </div>
-             </ContextMenuTrigger>
-             <ContextMenuContent>
-               <ContextMenuItem onSelect={() => fileInputRef.current?.click()}>
-                 <FolderOpen className="w-4 h-4 mr-2" />
-                 Выбрать (из компьютера)
-               </ContextMenuItem>
-               <ContextMenuItem
-                 onSelect={async () => {
-                   try {
-                     const anyNav = navigator as unknown as { clipboard?: { read?: () => Promise<Array<{ types: string[]; getType: (t: string) => Promise<Blob> }>> } };
-                     const items = await anyNav.clipboard?.read?.();
-                     if (!items) { toast.error("Буфер обмена недоступен"); return; }
-                     const files: File[] = [];
-                     for (const item of items) {
-                       const type = item.types.find((t) => t !== "text/plain" && t !== "text/html") || item.types[0];
-                       if (!type) continue;
-                       const blob = await item.getType(type);
-                       const ext = type.split("/")[1] || "bin";
-                       files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
-                     }
-                     if (files.length > 0) addFilesToForm(files);
-                     else toast.error("В буфере обмена нет файлов");
-                   } catch {
-                     toast.error("Не удалось прочитать буфер. Используйте Cmd+V");
-                   }
-                 }}
-               >
-                 <Clipboard className="w-4 h-4 mr-2" />
-                 Вставить
-               </ContextMenuItem>
-             </ContextMenuContent>
-           </ContextMenu>
-        </div>}
-
-        {(formData.itemType === "file" || formData.itemType === "link") && renderCoverControl()}
-
-        {/* Schedule access */}
-        <div className="space-y-3">
-          <label className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm cursor-pointer">
-            <span className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              {language === "kk" ? "Қолжетімділікті ашуды жоспарлау" : "Запланировать открытие доступа"}
-            </span>
-            <Switch
-              checked={formData.scheduleAccess}
-              onCheckedChange={(checked) => {
-                const now = new Date();
-                const pad = (n: number) => String(n).padStart(2, '0');
-                const defaultTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                setFormData(prev => ({ ...prev, scheduleAccess: checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
-              }}
-            />
-          </label>
-          {formData.scheduleAccess && (
-            <Input
-              type="datetime-local"
-              value={formData.availableAt}
-              onChange={(e) => setFormData(prev => ({ ...prev, availableAt: e.target.value }))}
-              min={(() => { const n = new Date(); const p = (v: number) => String(v).padStart(2,'0'); return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())}T${p(n.getHours())}:${p(n.getMinutes())}`; })()}
-              required={formData.scheduleAccess}
-            />
-          )}
-        </div>
-  
-        <div className="flex pt-2">
-         <Button
-           type="submit"
-           variant="cta"
-           className="w-full"
-           disabled={isUploading || createMaterial.isPending}
-         >
-            {(isUploading || createMaterial.isPending) ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {isUploading && uploadProgress > 0 ? `${uploadProgress}%` : 'Загрузка...'}
-              </span>
-            ) : (
-             t("add")
-           )}
-         </Button>
-        </div>
-        {isUploading && uploadProgress > 0 && (
-          <Progress value={uploadProgress} className="h-2" />
-        )}
-     </form>
-   );
- 
    const renderEditForm = () => (
      <form onSubmit={handleUpdate} className="space-y-4">
        <div className="space-y-2">
-         <Label>Название *</Label>
+         <Label>Название <span className="text-primary">*</span></Label>
          <Input
-           placeholder="Введите название"
+           placeholder={formData.title || "Введите название"}
            value={formData.title}
            onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
            required
@@ -878,14 +292,10 @@ interface FormData {
         <div className="space-y-3">
           <Label>Доступ</Label>
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-muted-foreground">Для ученика:</p>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox
-                checked={formData.allow_download}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, allow_download: !!checked }))}
-              />
-              <Download className="w-4 h-4" />
-              Скачивание файла
+            <p className="text-xs font-medium text-muted-foreground">Для покупателя</p>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Возможность скачать</span>
+              <Switch checked={formData.allow_download} onCheckedChange={checked => setFormData(prev => ({ ...prev, allow_download: checked }))} />
             </label>
            </div>
          </div>
@@ -893,7 +303,7 @@ interface FormData {
 
       {formData.itemType === "link" && editingId && (
         <div className="space-y-2">
-          <Label>URL ссылки *</Label>
+          <Label>URL ссылки <span className="text-primary">*</span></Label>
           <Input
             placeholder="https://..."
             value={formData.linkUrl}
@@ -916,36 +326,10 @@ interface FormData {
         </div>
       )}
 
-      {(formData.itemType === "file" || formData.itemType === "link") && renderCoverControl()}
 
-       {/* Schedule access in edit form */}
        {(formData.itemType === "file" || formData.itemType === "link") && (
-         <div className="space-y-3">
-           <label className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm cursor-pointer">
-             <span className="flex items-center gap-2">
-               <Clock className="w-4 h-4" />
-               {language === "kk" ? "Қолжетімділікті ашуды жоспарлау" : "Запланировать открытие доступа"}
-             </span>
-             <Switch
-               checked={formData.scheduleAccess}
-                onCheckedChange={(checked) => {
-                   const now = new Date();
-                   const pad = (n: number) => String(n).padStart(2, '0');
-                   const defaultTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                  setFormData(prev => ({ ...prev, scheduleAccess: checked, availableAt: checked ? (prev.availableAt || defaultTime) : prev.availableAt }));
-                }}
-             />
-           </label>
-           {formData.scheduleAccess && (
-             <Input
-               type="datetime-local"
-               value={formData.availableAt}
-               onChange={(e) => setFormData(prev => ({ ...prev, availableAt: e.target.value }))}
-               min={(() => { const n = new Date(); const p = (v: number) => String(v).padStart(2,'0'); return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())}T${p(n.getHours())}:${p(n.getMinutes())}`; })()}
-               required={formData.scheduleAccess}
-             />
-           )}
-         </div>
+         <MaterialScheduleControl enabled={formData.scheduleAccess} value={formData.availableAt}
+           onChange={(scheduleAccess, availableAt) => setFormData(previous => ({ ...previous, scheduleAccess, availableAt }))} />
        )}
 
         <div className="flex gap-2 pt-2">
@@ -976,25 +360,43 @@ interface FormData {
      </form>
    );
  
+   const closeWindow = () => {
+     if (isUploading) return;
+     resetForm();
+     setIsAdding(false);
+     setEditingId(null);
+     setCurrentFolderId(null);
+     onClose();
+   };
+
+   const addingMode = mode === "add" || isAdding;
+
    return (
+    <TooltipProvider delayDuration={250}>
      <>
-        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); setCurrentFolderId(null); setRenamingFolder(false); } }}>
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeWindow(); }}>
         <DialogContent
-          mobileFullScreen={mode !== "add"}
-          hideCloseButton={mode === "add"}
-          className={mode === "add"
-            ? "max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-lg sm:w-[95vw]"
+          mobileFullScreen={!addingMode}
+          hideCloseButton
+          onPointerDownOutside={event => event.preventDefault()}
+          onInteractOutside={event => event.preventDefault()}
+          onEscapeKeyDown={event => event.preventDefault()}
+          className={addingMode
+            ? "flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl min-w-0 flex-col overflow-hidden rounded-lg p-4 sm:w-[95vw] sm:p-6"
             : "max-w-3xl sm:w-[95vw]"}
         >
+           <Tooltip><TooltipTrigger asChild>
+             <Button type="button" variant="ghost" size="icon" aria-label="Закрыть окно" disabled={isUploading} onClick={closeWindow} className="absolute right-3 top-3 h-8 w-8 min-h-0"><X className="h-4 w-4" /></Button>
+           </TooltipTrigger><TooltipContent side="left" align="start" sideOffset={8}>Изменения не сохранятся</TooltipContent></Tooltip>
            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {mode === "add"
+              <DialogTitle className="flex items-center gap-2 pr-8">
+                {addingMode
                   ? (language === "kk" ? "Материал қосу" : "Добавить материалы")
                   : (language === "kk" ? "Материалдарды өңдеу" : "Редактировать материалы")}
               </DialogTitle>
            </DialogHeader>
  
-           <div className="space-y-4 mt-4">
+           <div className={isAdding ? "flex min-h-0 min-w-0 flex-col" : "min-w-0 space-y-4 mt-4"}>
               {/* Breadcrumb navigation — hidden when adding to avoid duplicate "Home" label */}
               {!isAdding && (
                 <>
@@ -1081,7 +483,7 @@ interface FormData {
                   ) : (
                     <div className="flex items-center gap-2 text-sm">
                       <FolderOpen className="w-4 h-4 text-primary" />
-                      <span className="font-medium">{language === "kk" ? "Үй" : "Дом"}</span>
+                      <span className="font-medium">{language === "kk" ? "Үй" : "Главная"}</span>
                     </div>
                   )}
                 </>
@@ -1093,24 +495,21 @@ interface FormData {
                   <Plus className="w-4 h-4 mr-2" />
                   {currentFolder
                     ? (language === "kk" ? `«${currentFolder.title}» қалтасына қосу` : `Добавить в «${currentFolder.title}»`)
-                    : (language === "kk" ? "Үйге қосу" : "Добавить в дом")}
+                    : (language === "kk" ? "Үйге қосу" : "Добавить на главную")}
                 </Button>
               )}
  
              {/* Add form */}
              {isAdding && (
-               <Card>
-                 <CardContent className="pt-4">
-                   {renderAddForm()}
-                 </CardContent>
-               </Card>
+               <MaterialAddForm productId={productId} parentId={addTargetFolderId} materials={allMaterials}
+                 onBusyChange={setIsUploading} onComplete={() => { setIsAdding(false); if (mode === "add") onClose(); }} />
              )}
  
              {/* Materials list */}
-              {mode === "add" ? null : (
+              {addingMode ? null : (
                 <MaterialsSearchBar value={searchQuery} onChange={setSearchQuery} resultCount={materials.length} />
               )}
-              {mode === "add" ? null : isLoading ? (
+              {addingMode ? null : isLoading ? (
                <div className="flex justify-center py-8">
                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
                </div>
@@ -1270,6 +669,7 @@ interface FormData {
        </AlertDialog>
 
      </>
+    </TooltipProvider>
    );
  };
  

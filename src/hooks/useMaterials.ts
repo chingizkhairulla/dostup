@@ -92,6 +92,7 @@ export const useCreateMaterial = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["materials", variables.product_id] });
       queryClient.invalidateQueries({ queryKey: ["user-materials"] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };
@@ -112,6 +113,7 @@ export const useUpdateMaterial = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["materials", data.productId] });
       queryClient.invalidateQueries({ queryKey: ["user-materials"] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };
@@ -132,6 +134,7 @@ export const useDeleteMaterial = () => {
       queryClient.invalidateQueries({ queryKey: ["materials", data.productId] });
       queryClient.invalidateQueries({ queryKey: ["user-materials"] });
       queryClient.invalidateQueries({ queryKey: ["deleted-materials", data.productId] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };
@@ -180,6 +183,7 @@ export const useRestoreMaterial = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["materials", data.productId] });
       queryClient.invalidateQueries({ queryKey: ["deleted-materials", data.productId] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };
@@ -198,6 +202,7 @@ export const usePermanentlyDeleteMaterial = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["deleted-materials", data.productId] });
       queryClient.invalidateQueries({ queryKey: ["materials", data.productId] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };
@@ -215,6 +220,7 @@ export const useEmptyTrash = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["deleted-materials", data.productId] });
+      queryClient.invalidateQueries({ queryKey: ["all-creator-materials"] });
     },
   });
 };

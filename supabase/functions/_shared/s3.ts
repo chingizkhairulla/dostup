@@ -41,7 +41,7 @@ function awsConfig() {
   return { accessKeyId, secretAccessKey, bucket, region }
 }
 
-function buildPresignedUrl(request: HttpRequest): string {
+function buildPresignedUrl(request: Pick<HttpRequest, 'protocol' | 'hostname' | 'path'> & { query?: HttpRequest['query'] }): string {
   const url = new URL(`${request.protocol}//${request.hostname}${request.path}`)
   if (request.query) {
     for (const [key, value] of Object.entries(request.query)) {
@@ -83,7 +83,7 @@ export async function setBucketCors(): Promise<{ ok: boolean; status: number; te
   if (!cfg) return { ok: false, status: 500, text: 'AWS config missing' }
 
   try {
-    const { default: md5 } = await import('https://esm.sh/js-md5@0.8.3')
+    const { md5 } = await import('https://esm.sh/js-md5@0.8.3')
     const hostname = `${cfg.bucket}.s3.${cfg.region}.amazonaws.com`
     const corsXml = `<?xml version="1.0" encoding="UTF-8"?>
 <CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">

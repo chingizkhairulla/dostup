@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSignedUrl } from "https://deno.land/x/aws_s3_presign@2.2.1/mod.ts";
 
+import { materialResponseSize } from "../_shared/materialSize.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
 
     // Materials missing size in either the current S3 storage or legacy
     // Supabase Storage.
-    const { data: rows } = await supabase
+    const { data: rows, error: rowsError } = await supabase
       .from("materials")
       .select("id, file_url")
       .in("product_id", productIds)
@@ -73,24 +75,14 @@ Deno.serve(async (req) => {
       .not("file_url", "is", null)
       .limit(500);
 
+    if (rowsError) throw rowsError;
+
     const accessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID") || "";
     const secretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY") || "";
     const region = Deno.env.get("AWS_S3_REGION") || "";
 
     let updated = 0;
     const list = rows ?? [];
-
-    const sizeFromResponse = (resp: Response): number | null => {
-      if (resp.status === 206) {
-        const contentRange = resp.headers.get("content-range");
-        const total = Number(contentRange?.split("/")[1]);
-        if (Number.isFinite(total)) return total;
-      }
-      const rawContentLength = resp.headers.get("content-length");
-      if (!rawContentLength) return null;
-      const contentLength = Number(rawContentLength);
-      return Number.isFinite(contentLength) ? contentLength : null;
-    };
 
     const head = async (file_url: string): Promise<number | null> => {
       const withoutPrefix = file_url.substring(5);
@@ -112,8 +104,9 @@ Deno.serve(async (req) => {
           method: "GET",
           headers: { Range: "bytes=0-0" },
         });
-        if (resp.ok) return sizeFromResponse(resp);
-        try { resp.body?.cancel(); } catch (_) { /* ignore */ }
+        const size = materialResponseSize(resp);
+        try { await resp.body?.cancel(); } catch (_) { /* ignore */ }
+        return size;
       } catch (e) {
         console.error("head failed", file_url, e);
       }
@@ -135,6 +128,9 @@ Deno.serve(async (req) => {
     const legacySize = async (fileUrl: string): Promise<number | null> => {
       const path = legacyStoragePath(fileUrl);
       if (!path) return null;
+      const info = await supabase.storage.from("materials").info(path);
+      const knownSize = Number(info.data?.size);
+      if (!info.error && info.data && Number.isSafeInteger(knownSize) && knownSize >= 0) return knownSize;
       const { data, error } = await supabase.storage.from("materials").createSignedUrl(path, 60);
       if (error || !data?.signedUrl) return null;
       try {
@@ -142,7 +138,7 @@ Deno.serve(async (req) => {
           method: "GET",
           headers: { Range: "bytes=0-0" },
         });
-        const size = resp.ok ? sizeFromResponse(resp) : null;
+        const size = materialResponseSize(resp);
         try { await resp.body?.cancel(); } catch (_) { /* ignore */ }
         return size;
       } catch (e) {
@@ -162,7 +158,7 @@ Deno.serve(async (req) => {
         chunk.map(async (r) => ({ id: r.id, size: await resolveSize(r.file_url!) })),
       );
       const toUpdate = results.filter((x) => x.size !== null);
-      await Promise.all(
+      const saved = await Promise.all(
         toUpdate.map((x) =>
           supabase
             .from("materials")
@@ -170,11 +166,11 @@ Deno.serve(async (req) => {
             .eq("id", x.id),
         ),
       );
-      updated += toUpdate.length;
+      updated += saved.filter(result => !result.error).length;
     }
 
     return new Response(
-      JSON.stringify({ updated, total: list.length }),
+      JSON.stringify({ updated, total: list.length, unresolved: list.length - updated }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {

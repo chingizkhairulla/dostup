@@ -1,0 +1,16 @@
+[
+  {
+    "ID": "dostup-preview-materials",
+    "AllowedHeaders": ["content-type", "range"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedOrigins": [
+      "http://localhost:8080",
+      "http://127.0.0.1:8080",
+      "http://localhost:8085",
+      "http://127.0.0.1:8085",
+      "https://dostup-git-codex-materials-complex-dostup.vercel.app"
+    ],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+    "MaxAgeSeconds": 300
+  }
+]
